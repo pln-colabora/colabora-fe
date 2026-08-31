@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <main className="grid min-h-dvh bg-background lg:grid-cols-[minmax(0,1fr)_minmax(28rem,38rem)]">
+    <main className="bg-background grid min-h-dvh w-full max-w-full overflow-x-clip lg:grid-cols-[minmax(0,1fr)_minmax(28rem,38rem)]">
       <section className="bg-muted/35 hidden border-r lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
         <div>
           <p className="font-display text-lg font-semibold tracking-tight">
@@ -34,9 +34,9 @@ export default function LoginPage() {
         </p>
       </section>
 
-      <section className="flex min-h-dvh items-center px-6 py-10 sm:px-10 lg:px-14">
+      <section className="flex min-h-dvh items-start px-6 py-6 sm:items-center sm:px-10 sm:py-10 lg:px-14">
         <div className="mx-auto w-full max-w-sm">
-          <div className="mb-12 lg:hidden">
+          <div className="mb-8 lg:hidden">
             <p className="font-display text-lg font-semibold tracking-tight">
               COLABORA
             </p>
