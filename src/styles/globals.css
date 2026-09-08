@@ -5,24 +5,32 @@
 @variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  /* UI palette follows the PLN logo; darker action colors preserve text contrast. */
+  --brand-blue: #00a2b9;
+  --brand-yellow: #fff200;
+  --brand-red: #ed1c24;
+  --brand-ink: #00566b;
+  --brand-surface: #e3f2f5;
+  --background: #f3f6f8;
+  --foreground: #172f3b;
+  --card: #ffffff;
+  --card-foreground: #172f3b;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.92 0.04 86.47);
-  --primary-foreground: oklch(0.31 0.02 86.64);
+  --primary: #006f85;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --muted: #edf3f5;
+  --muted-foreground: #526875;
+  --accent: #e3f2f5;
+  --accent-foreground: #00566b;
+  --destructive: #bd242c;
+  --success: oklch(0.45 0.12 155);
+  --warning: oklch(0.46 0.1 65);
+  --border: #d7e2e7;
+  --input: #c2d2da;
+  --ring: #007f98;
 
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -70,8 +78,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: #64d3e4;
+  --primary-foreground: #07323e;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -79,7 +87,9 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --success: oklch(0.78 0.14 155);
+  --warning: oklch(0.8 0.13 75);
+  --border: oklch(1 0 0 / 20%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
 
@@ -100,6 +110,11 @@
 }
 
 @theme inline {
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-red: var(--brand-red);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-surface: var(--brand-surface);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -114,6 +129,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -204,12 +221,9 @@
   body {
     @apply bg-background text-foreground;
   }
-  *,
-  ::after,
-  ::before,
-  ::backdrop,
-  ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
+  :where(a, button, select, input, textarea, summary):focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 3px;
   }
 }
 
@@ -250,9 +264,6 @@
   button {
     cursor: pointer;
   }
-  [class*="border"] {
-    @apply border-border;
-  }
 }
 
 html,
@@ -261,4 +272,15 @@ body {
 }
 body {
   position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

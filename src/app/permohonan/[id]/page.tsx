@@ -15,11 +15,11 @@ import {
   FileText,
   Eye,
   LockKeyhole,
-  Upload,
   XCircle,
 } from "lucide-react";
 
 import { AppShell } from "@/components/dashboard/app-shell";
+import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +53,7 @@ export default function ApplicationDetailPage() {
   const [application, setApplication] = useState<Application | undefined>(() =>
     getApplications({}).find((item) => item.id === id),
   );
+  const [ready, setReady] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [feedback, setFeedback] = useState("");
 
@@ -61,7 +62,19 @@ export default function ApplicationDetailPage() {
       (window.localStorage.getItem(ROLE_STORAGE_KEY) as RoleId) || "teknik",
     );
     setApplication(getApplications().find((item) => item.id === id));
+    setReady(true);
   }, [id]);
+
+  if (!ready)
+    return (
+      <AppShell active="applications" roleId={roleId} onRoleChange={setRoleId}>
+        <div role="status" className="space-y-4">
+          <p>Memuat detail permohonan...</p>
+          <div className="bg-muted h-24 rounded-md" />
+          <div className="bg-muted h-48 rounded-md" />
+        </div>
+      </AppShell>
+    );
 
   if (!application) {
     return (
@@ -74,7 +87,7 @@ export default function ApplicationDetailPage() {
             Nomor permohonan tidak tersedia pada data demo.
           </p>
           <Button asChild variant="outline" className="mt-6">
-            <Link href="/dashboard">Kembali ke dashboard</Link>
+            <Link href="/dashboard?view=all">Kembali ke permohonan</Link>
           </Button>
         </div>
       </AppShell>
@@ -112,7 +125,7 @@ export default function ApplicationDetailPage() {
     >
       <div className="mx-auto w-full max-w-[1480px] min-w-0">
         <Link
-          href="/dashboard"
+          href="/dashboard?view=all"
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -132,7 +145,7 @@ export default function ApplicationDetailPage() {
                 {application.id}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-4 lg:text-right">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4 lg:text-right">
               <HeaderFact
                 label="Tahap saat ini"
                 value={
@@ -156,17 +169,17 @@ export default function ApplicationDetailPage() {
                 tone={application.sla.tone}
               />
               <HeaderFact
-                label="Update terakhir"
+                label="Terakhir diperbarui"
                 value={application.updatedAt}
               />
-            </div>
+            </dl>
           </div>
         </header>
 
         {feedback ? (
           <div
             role="status"
-            className="mt-5 flex items-start gap-3 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+            className="border-success/30 bg-success/10 text-success mt-5 flex items-start gap-3 border px-4 py-3 text-sm"
           >
             <CheckCircle2
               className="mt-0.5 size-4 shrink-0"
@@ -220,22 +233,22 @@ function CurrentAction({
   if (application.rejected) {
     return (
       <section
-        className="mt-6 border-l-4 border-red-500 bg-red-50 px-5 py-4"
+        className="border-destructive bg-destructive/10 mt-6 border-l-4 px-5 py-4"
         aria-labelledby="current-action-title"
       >
         <div className="flex items-start gap-3">
           <XCircle
-            className="mt-0.5 size-5 shrink-0 text-red-700"
+            className="text-destructive mt-0.5 size-5 shrink-0"
             aria-hidden="true"
           />
           <div>
             <h2
               id="current-action-title"
-              className="font-display font-semibold text-red-900"
+              className="font-display text-destructive font-semibold"
             >
               Permohonan ditolak
             </h2>
-            <p className="mt-1 text-sm text-red-800">
+            <p className="text-destructive mt-1 text-sm">
               NPS menolak permohonan ini. Workflow dihentikan dan tidak ada
               aktivitas lanjutan.
             </p>
@@ -247,22 +260,22 @@ function CurrentAction({
   if (!activity) {
     return (
       <section
-        className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 px-5 py-4"
+        className="border-success bg-success/10 mt-6 border-l-4 px-5 py-4"
         aria-labelledby="current-action-title"
       >
         <div className="flex items-start gap-3">
           <CheckCircle2
-            className="mt-0.5 size-5 shrink-0 text-emerald-700"
+            className="text-success mt-0.5 size-5 shrink-0"
             aria-hidden="true"
           />
           <div>
             <h2
               id="current-action-title"
-              className="font-display font-semibold text-emerald-900"
+              className="font-display text-success font-semibold"
             >
               Permohonan selesai
             </h2>
-            <p className="mt-1 text-sm text-emerald-800">
+            <p className="text-success mt-1 text-sm">
               Seluruh aktivitas dan dokumen penutupan telah lengkap.
             </p>
           </div>
@@ -277,14 +290,14 @@ function CurrentAction({
   const isMonitoring = roleId === "super-user";
   return (
     <section
-      className={`mt-6 border-l-4 px-5 py-4 ${ownsAction ? "border-amber-500 bg-amber-50" : "border-border bg-muted/45"}`}
+      className={`mt-6 border-l-4 px-5 py-4 ${ownsAction ? "border-warning bg-warning/10" : "border-border bg-muted/45"}`}
       aria-labelledby="current-action-title"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           {ownsAction ? (
             <Clock3
-              className="mt-0.5 size-5 shrink-0 text-amber-700"
+              className="text-warning mt-0.5 size-5 shrink-0"
               aria-hidden="true"
             />
           ) : isMonitoring ? (
@@ -300,7 +313,7 @@ function CurrentAction({
           )}
           <div>
             <p
-              className={`text-xs font-semibold tracking-wide uppercase ${ownsAction ? "text-amber-800" : "text-muted-foreground"}`}
+              className={`text-xs font-semibold tracking-wide uppercase ${ownsAction ? "text-warning" : "text-muted-foreground"}`}
             >
               {ownsAction
                 ? "Tindakan Anda dibutuhkan"
@@ -324,7 +337,7 @@ function CurrentAction({
           </div>
         </div>
         {ownsAction && !showForm ? (
-          <Button onClick={onShowForm}>
+          <Button className="min-h-11" onClick={onShowForm}>
             Lanjutkan proses
             <ChevronRight aria-hidden="true" />
           </Button>
@@ -363,15 +376,23 @@ function ActionForm({
     ),
   );
   const [evidenceName, setEvidenceName] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onAdvanced(advanceApplication(application, roleId, values, evidenceName));
+    setSaveError("");
+    try {
+      onAdvanced(advanceApplication(application, roleId, values, evidenceName));
+    } catch {
+      setSaveError(
+        "Aktivitas belum tersimpan. Periksa izin penyimpanan browser, lalu coba simpan kembali. Isian Anda tetap tersedia.",
+      );
+    }
   }
 
   return (
-    <form onSubmit={submit} className="mt-5 border-t border-amber-200 pt-5">
-      <div className="mb-5 grid gap-3 border-b border-amber-200 pb-4 text-sm sm:grid-cols-3">
+    <form onSubmit={submit} className="border-warning/30 mt-5 border-t pt-5">
+      <div className="border-warning/30 mb-5 grid gap-3 border-b pb-4 text-sm sm:grid-cols-3">
         <MiniFact label="Nomor permohonan" value={application.id} mono />
         <MiniFact label="Pelanggan" value={application.customer} />
         <MiniFact label="Lokasi" value={application.location} />
@@ -392,46 +413,48 @@ function ActionForm({
         <div className="mt-5">
           <Label htmlFor={`evidence-${activity.id}`}>
             {activity.evidence}{" "}
-            <span className="text-muted-foreground font-normal">(PDF/JPG)</span>
+            <span className="text-muted-foreground font-normal">
+              (PDF/JPG/PNG)
+            </span>
           </Label>
-          <label
-            htmlFor={`evidence-${activity.id}`}
-            className="border-input bg-background mt-2 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-4 text-center"
-          >
-            <Upload
-              className="text-muted-foreground size-5"
-              aria-hidden="true"
-            />
-            <span className="mt-2 text-sm font-medium">
-              {evidenceName || "Pilih file dummy"}
-            </span>
-            <span className="text-muted-foreground mt-1 text-xs">
-              Nama file akan ditambahkan ke Dokumen & Evidence.
-            </span>
-          </label>
           <Input
             id={`evidence-${activity.id}`}
             type="file"
             accept=".pdf,.jpg,.jpeg,.png"
-            className="sr-only"
+            className="mt-2 h-11"
             required
             onChange={(event) =>
               setEvidenceName(event.target.files?.[0]?.name ?? "")
             }
           />
+          <p className="text-muted-foreground mt-2 text-sm">
+            Demo hanya menyimpan nama berkas, bukan isi dokumen.
+          </p>
         </div>
       ) : null}
       {activity.id === "5" ? (
-        <p className="mt-4 text-xs text-red-700">
+        <p className="text-destructive mt-4 text-xs">
           Keputusan Ditolak akan menghentikan workflow dan tidak dapat
           dilanjutkan pada data demo ini.
         </p>
       ) : null}
+      {saveError && (
+        <p role="alert" className="text-destructive mt-4 text-sm">
+          {saveError}
+        </p>
+      )}
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11"
+          onClick={onCancel}
+        >
           Batal
         </Button>
-        <Button type="submit">Simpan dan selesaikan aktivitas</Button>
+        <Button type="submit" className="min-h-11">
+          Simpan dan selesaikan aktivitas
+        </Button>
       </div>
     </form>
   );
@@ -465,7 +488,7 @@ function FormField({
           id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="border-input bg-background mt-2 h-10 w-full rounded-md border px-3 text-sm"
+          className="border-input bg-background mt-2 h-11 w-full rounded-md border px-3 text-sm"
           required
         >
           {field.options?.map((option) => (
@@ -479,7 +502,7 @@ function FormField({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={field.placeholder}
-          className="bg-background mt-2 h-10"
+          className="bg-background mt-2 h-11"
           required
         />
       )}
@@ -498,14 +521,14 @@ function WorkflowTimeline({ application }: { application: Application }) {
             id="workflow-title"
             className="font-display text-lg font-semibold"
           >
-            Timeline workflow
+            Tahapan proses
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            17 aktivitas utama dan branch yang berlaku.
+            17 aktivitas utama dan percabangan yang berlaku.
           </p>
         </div>
         <span className="text-muted-foreground text-xs">
-          Stage {getCurrentStage(application)} dari 7
+          Tahap {getCurrentStage(application)} dari 7
         </span>
       </div>
       <ol className="mt-5 space-y-0">
@@ -530,7 +553,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <span className="text-muted-foreground mr-2 text-xs">
-                      Stage {stage.id}
+                      Tahap {stage.id}
                     </span>
                     <h3 className="font-display inline font-semibold">
                       {stage.label}
@@ -623,11 +646,11 @@ function getActivityStatus(
 function StageMarker({ status }: { status: ProgressStatus }) {
   const style =
     status === "done"
-      ? "bg-emerald-600 text-white"
+      ? "border border-success/30 bg-success/10 text-success"
       : status === "current"
-        ? "border-2 border-amber-500 bg-amber-50 text-amber-800"
+        ? "border-2 border-warning bg-warning/10 text-warning"
         : status === "rejected"
-          ? "bg-red-600 text-white"
+          ? "border border-destructive/30 bg-destructive/10 text-destructive"
           : "border bg-background text-muted-foreground";
   return (
     <span
@@ -664,17 +687,20 @@ function ActivityStatusIcon({ status }: { status: ProgressStatus }) {
   if (status === "done")
     return (
       <CheckCircle2
-        className="size-4 shrink-0 text-emerald-600"
+        className="text-success size-4 shrink-0"
         aria-hidden="true"
       />
     );
   if (status === "rejected")
     return (
-      <XCircle className="size-4 shrink-0 text-red-600" aria-hidden="true" />
+      <XCircle
+        className="text-destructive size-4 shrink-0"
+        aria-hidden="true"
+      />
     );
   if (status === "current")
     return (
-      <Clock3 className="size-4 shrink-0 text-amber-600" aria-hidden="true" />
+      <Clock3 className="text-warning size-4 shrink-0" aria-hidden="true" />
     );
   return (
     <Circle
@@ -817,7 +843,7 @@ function HistorySection({
         id="history-title"
         className="font-display border-b pb-3 text-base font-semibold"
       >
-        Activity history
+        Riwayat aktivitas
       </h2>
       <ol className="mt-4 space-y-5">
         {history.slice(0, 10).map((item) => (
@@ -850,11 +876,11 @@ function HeaderFact({
 }) {
   const color =
     tone === "late"
-      ? "text-red-700"
+      ? "text-destructive"
       : tone === "due"
-        ? "text-amber-700"
+        ? "text-warning"
         : tone === "done"
-          ? "text-emerald-700"
+          ? "text-success"
           : "";
   return (
     <div>
@@ -894,7 +920,9 @@ function DecisionRow({
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={`font-medium ${danger ? "text-red-700" : ""}`}>{value}</dd>
+      <dd className={`font-medium ${danger ? "text-destructive" : ""}`}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -921,20 +949,4 @@ function displayHistoryDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const style =
-    status === "Ditolak" || status === "Terlambat"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : status === "Selesai"
-        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-        : "border-amber-200 bg-amber-50 text-amber-800";
-  return (
-    <span
-      className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${style}`}
-    >
-      {status}
-    </span>
-  );
 }

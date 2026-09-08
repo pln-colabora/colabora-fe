@@ -49,11 +49,11 @@ export function LoginForm() {
             </option>
           ))}
         </select>
-        <p className="text-muted-foreground text-xs leading-5">
-          Role dapat diganti kembali dari ruang kerja untuk mencoba alur lintas
+        <p className="text-muted-foreground text-sm leading-5">
+          Peran dapat diganti kembali dari ruang kerja untuk mencoba alur lintas
           PIC.
         </p>
-        <div className="border-l-2 pl-3 text-xs leading-5">
+        <div className="border-l-2 pl-3 text-sm leading-5">
           <p className="font-medium">
             {role.lane} — {role.label}
           </p>
@@ -117,7 +117,7 @@ export function LoginForm() {
         </div>
       </div>
 
-      <Button type="submit" size="lg" className="w-full">
+      <Button type="submit" size="lg" className="min-h-11 w-full">
         Masuk
       </Button>
     </form>
