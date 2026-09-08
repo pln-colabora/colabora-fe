@@ -23,6 +23,13 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ROLE_STORAGE_KEY,
@@ -484,17 +491,18 @@ function FormField({
           required
         />
       ) : field.type === "select" ? (
-        <select
-          id={id}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="border-input bg-background mt-2 h-11 w-full rounded-md border px-3 text-sm"
-          required
-        >
-          {field.options?.map((option) => (
-            <option key={option}>{option}</option>
-          ))}
-        </select>
+        <Select value={value} onValueChange={onChange} required>
+          <SelectTrigger id={id} className="bg-background mt-2 h-11 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options?.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : (
         <Input
           id={id}

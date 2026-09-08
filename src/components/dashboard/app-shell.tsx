@@ -13,6 +13,13 @@ import {
 
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ROLE_STORAGE_KEY,
   getRole,
   resetWorkflowDemo,
@@ -53,39 +60,58 @@ export function AppShell({
       >
         Lewati ke konten utama
       </a>
-      <aside className="bg-brand-ink border-t-brand-yellow sticky top-0 hidden h-dvh flex-col border-t-4 text-white lg:flex">
+      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border sticky top-0 hidden h-dvh flex-col border-r lg:flex">
         <Link
           href="/dashboard"
-          className="border-b border-white/15 px-6 py-6 focus-visible:outline-white"
+          className="border-sidebar-border flex min-h-20 flex-col justify-center border-b px-5"
         >
-          <span className="font-display block text-xl font-semibold tracking-tight">
+          <span className="font-display text-primary block text-xl font-bold tracking-tight">
             COLABORA
           </span>
-          <span className="mt-1 block text-sm text-white/80">
+          <span className="text-muted-foreground mt-1 block text-xs">
             Layanan Kolaborasi PLN
           </span>
         </Link>
-        <nav aria-label="Navigasi utama" className="space-y-1 px-3 py-6">
-          {destinations.map(({ id, href, label, icon: Icon }) => (
-            <Link
-              key={id}
-              href={href}
-              aria-current={active === id ? "page" : undefined}
-              className={`font-display flex min-h-12 items-center gap-3 border-l-2 px-3 text-sm font-medium focus-visible:outline-white ${active === id ? "border-brand-yellow bg-white/10 text-white" : "border-transparent text-white/80 hover:bg-white/5 hover:text-white"}`}
-            >
-              <Icon className="size-5" aria-hidden="true" />
-              {label}
-            </Link>
-          ))}
+        <nav aria-label="Navigasi utama" className="px-3 py-5">
+          <p className="text-muted-foreground px-2 pb-2 text-xs font-medium">
+            Menu utama
+          </p>
+          <div className="space-y-1">
+            {destinations.map(({ id, href, label, icon: Icon }) => (
+              <Link
+                key={id}
+                href={href}
+                aria-current={active === id ? "page" : undefined}
+                className={`font-display flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium ${active === id ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+                {label}
+              </Link>
+            ))}
+          </div>
         </nav>
-        <div className="mt-auto border-t border-white/15 px-6 py-5">
+        <div className="border-sidebar-border mt-auto border-t px-5 py-5">
+          <p className="text-muted-foreground mb-3 text-xs font-medium">
+            Akun demo
+          </p>
           <p className="text-sm font-medium">{role.label}</p>
-          <p className="mt-1 text-sm text-white/80">{role.lane}</p>
-          <p className="mt-4 text-xs text-white/70">Lingkungan demo PB/PD</p>
+          <p className="text-muted-foreground mt-1 text-xs">{role.lane}</p>
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-muted-foreground hover:text-foreground mt-3 min-h-10 w-full justify-start px-0 hover:bg-transparent"
+            onClick={() => {
+              window.localStorage.removeItem(ROLE_STORAGE_KEY);
+              router.push("/login");
+            }}
+          >
+            <LogOut className="size-4" aria-hidden="true" />
+            Keluar
+          </Button>
         </div>
       </aside>
       <div className="min-w-0">
-        <header className="bg-card border-t-brand-yellow sticky top-0 z-20 border-t-4 border-b lg:border-t-0">
+        <header className="bg-card sticky top-0 z-20 border-b">
           <div className="mx-auto flex min-h-16 max-w-[1440px] items-center gap-4 px-4 sm:px-6 lg:gap-8">
             <Link href="/dashboard" className="shrink-0 py-2 lg:hidden">
               <span className="font-display text-primary block text-lg font-bold tracking-tight">
@@ -121,22 +147,28 @@ export function AppShell({
                 >
                   Ganti peran demo
                 </label>
-                <select
-                  id="role-switcher"
+                <Select
                   value={roleId}
-                  onChange={(event) => {
-                    const nextRole = event.target.value as RoleId;
+                  onValueChange={(value) => {
+                    const nextRole = value as RoleId;
                     window.localStorage.setItem(ROLE_STORAGE_KEY, nextRole);
                     onRoleChange(nextRole);
                   }}
-                  className="border-input bg-card h-11 w-full rounded-md border px-2 text-sm"
                 >
-                  {roles.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.lane} / {item.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    id="role-switcher"
+                    className="bg-card h-11 w-full"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="end">
+                    {roles.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.lane} / {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   variant="ghost"
                   className="mt-3 min-h-11 w-full justify-start"
@@ -158,7 +190,7 @@ export function AppShell({
             </details>
             <Button
               variant="ghost"
-              className="min-h-11"
+              className="min-h-11 lg:hidden"
               onClick={() => {
                 window.localStorage.removeItem(ROLE_STORAGE_KEY);
                 router.push("/login");

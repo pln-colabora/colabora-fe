@@ -898,6 +898,8 @@ Do not add a UI package just because it has a prettier demo.
 
 Use existing shadcn/Radix primitives first.
 
+Use the shared shadcn components for standard controls such as buttons, inputs, labels, selects, checkboxes, and text areas. Keep raw HTML only when there is no suitable shared primitive or native semantics provide a clear benefit.
+
 Add a dependency only when it materially reduces complexity or supplies a capability the current stack lacks.
 
 **### Data components**
@@ -2833,6 +2835,8 @@ A typical application identity may read:
 
 The product name must remain more prominent than decorative branding.
 
+On the desktop login screen, an operational illustration may fill the left context panel as its background. Keep copy in the naturally quiet area of the artwork and preserve sufficient contrast. When background detail crosses the copy, reposition the artwork and use a restrained semantic-color scrim behind the text region; do not solve it with a visible inset card. Do not place the illustration inside an image frame. Treat it as decorative when the adjacent copy already communicates the same context.
+
 ## 84.3 Color behavior
 
 Use the existing COLABORA teal/blue visual character as the main operational accent unless official product tokens specify otherwise.
@@ -2841,7 +2845,8 @@ Recommended semantic behavior:
 
 - primary COLABORA accent → primary actions and active navigation,
 - PLN blue → informational emphasis where appropriate,
-- PLN yellow → restrained brand or attention accent,
+- PLN yellow → official logo artwork only; do not use it for navigation, borders, buttons, panel accents, or large surfaces,
+- COLABORA cyan/soft blue → secondary brand accent, selected supporting surfaces, and restrained emphasis,
 - green → successful/completed state,
 - orange/amber → work in progress or attention,
 - red → overdue, failed, destructive, or SLA breach,
@@ -2849,7 +2854,7 @@ Recommended semantic behavior:
 
 Do not make every KPI card a different colored surface. Prefer white or neutral card surfaces with semantic color applied to values, status text, small indicators, borders, or icons when useful.
 
-Do not use large yellow backgrounds simply to make the product “look PLN”.
+Do not use yellow as the general application accent. It is visually tiring on operational screens and should remain confined to approved PLN artwork. Use blue or cyan from the same brand family for active navigation and structural accents.
 
 ---
 
@@ -3040,7 +3045,7 @@ If the page already has a clearly visible primary creation button immediately ab
 
 # 91. Current COLABORA Navigation Strategy
 
-Navigation should match the actual number of high-frequency destinations. Do not add a permanent desktop sidebar simply because dashboards commonly use one.
+Navigation should match the actual number of high-frequency destinations. The current approved desktop layout uses a compact persistent sidebar to provide stable orientation and room for future operational modules.
 
 ## When the product currently has only a very small number of main destinations
 
@@ -3066,9 +3071,9 @@ Requirements:
 
 ### Desktop
 
-Use a compact application header or lightweight navigation. Do not consume 232–256px of permanent sidebar space for only two destinations.
+Use a compact 220–232px application sidebar. It must remain visually quiet: white or neutral background, subtle right border, small navigation-group label, visible icon and text labels, and one solid blue active item. Do not use a fully colored sidebar or yellow active indicator.
 
-Introduce a persistent sidebar only when the application grows into multiple operational modules where sidebar navigation materially improves orientation.
+Keep the account or current-role context at the bottom. Do not add fake destinations to make the sidebar appear full. The compact header above the content carries page context and relevant controls.
 
 This is a COLABORA-specific application of the general navigation rule in Section 6.
 

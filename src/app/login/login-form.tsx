@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ROLE_STORAGE_KEY,
   getRole,
   getRoleActivities,
@@ -37,18 +44,21 @@ export function LoginForm() {
     >
       <div className="space-y-2">
         <Label htmlFor="demo-role">Masuk demo sebagai</Label>
-        <select
-          id="demo-role"
+        <Select
           value={roleId}
-          onChange={(event) => setRoleId(event.target.value as RoleId)}
-          className="border-input bg-background focus-visible:ring-ring h-11 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
+          onValueChange={(value) => setRoleId(value as RoleId)}
         >
-          {roles.map((role) => (
-            <option key={role.id} value={role.id}>
-              {role.lane} — {role.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="demo-role" className="bg-background h-11 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {roles.map((role) => (
+              <SelectItem key={role.id} value={role.id}>
+                {role.lane} — {role.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <p className="text-muted-foreground text-sm leading-5">
           Peran dapat diganti kembali dari ruang kerja untuk mencoba alur lintas
           PIC.
@@ -99,9 +109,11 @@ export function LoginForm() {
             className="h-11 pr-11"
             required
           />
-          <button
+          <Button
             type="button"
-            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md outline-none focus-visible:ring-2 focus-visible:ring-inset"
+            variant="ghost"
+            size="icon"
+            className="absolute inset-y-0 right-0 h-full w-11 rounded-l-none"
             aria-label={
               showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"
             }
@@ -113,7 +125,7 @@ export function LoginForm() {
             ) : (
               <Eye className="size-4" aria-hidden="true" />
             )}
-          </button>
+          </Button>
         </div>
       </div>
 

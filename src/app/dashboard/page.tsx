@@ -12,6 +12,13 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ROLE_STORAGE_KEY,
   getActivity,
   getApplicationStatus,
@@ -309,19 +316,29 @@ function DashboardContent() {
                   <label htmlFor="status-filter" className="text-sm">
                     Status
                   </label>
-                  <select
-                    id="status-filter"
-                    className="bg-card h-11 rounded-md border px-3 text-sm"
-                    value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value)}
+                  <Select
+                    value={statusFilter || "all"}
+                    onValueChange={(value) =>
+                      setStatusFilter(value === "all" ? "" : value)
+                    }
                   >
-                    <option value="">Semua status</option>
-                    {Array.from(
-                      new Set(applications.map(getApplicationStatus)),
-                    ).map((status) => (
-                      <option key={status}>{status}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      id="status-filter"
+                      className="bg-card h-11 w-44"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua status</SelectItem>
+                      {Array.from(
+                        new Set(applications.map(getApplicationStatus)),
+                      ).map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {(query || statusFilter) && (
                     <Button
                       variant="ghost"

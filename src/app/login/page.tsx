@@ -14,16 +14,30 @@ export default function LoginPage() {
     <main className="bg-card grid min-h-dvh lg:grid-cols-[minmax(0,1.05fr)_minmax(28rem,1fr)]">
       <section
         aria-labelledby="login-context-title"
-        className="bg-brand-surface border-t-brand-yellow hidden min-w-0 flex-col border-t-4 border-r px-8 py-8 lg:flex xl:px-12"
+        className="bg-brand-surface relative hidden min-w-0 overflow-hidden border-r lg:block"
       >
-        <header>
-          <p className="font-display text-brand-ink text-xl font-semibold tracking-tight">
-            COLABORA
-          </p>
-          <p className="text-brand-ink mt-1 text-sm">Layanan Kolaborasi PLN</p>
-        </header>
-        <div className="my-auto py-10">
-          <div className="mx-auto max-w-lg">
+        <Image
+          src="/illustrations/coordination-grid.webp"
+          alt=""
+          fill
+          priority
+          sizes="(min-width: 1024px) 52vw, 1px"
+          className="object-cover object-left-bottom"
+        />
+        <div
+          aria-hidden="true"
+          className="login-illustration-scrim absolute inset-x-0 top-0 h-[54%]"
+        />
+        <div className="relative z-10 flex min-h-dvh flex-col px-8 py-8 xl:px-12">
+          <header>
+            <p className="font-display text-brand-ink text-xl font-semibold tracking-tight">
+              COLABORA
+            </p>
+            <p className="text-brand-ink mt-1 text-sm">
+              Layanan Kolaborasi PLN
+            </p>
+          </header>
+          <div className="mt-10 w-full max-w-[26rem] xl:mt-14">
             <h2
               id="login-context-title"
               className="font-display text-brand-ink max-w-sm text-3xl leading-tight font-semibold"
@@ -36,25 +50,17 @@ export default function LoginPage() {
               Pantau tahapan proses dan lanjutkan pekerjaan sesuai peran Anda.
             </p>
           </div>
-          <Image
-            src="/illustrations/coordination-grid.webp"
-            alt="Ilustrasi dua petugas berkoordinasi di area jaringan distribusi listrik."
-            width={1448}
-            height={1086}
-            sizes="(min-width: 1024px) 50vw, 1px"
-            className="mx-auto mt-6 h-auto w-full max-w-2xl"
-          />
+          <p className="text-brand-ink/85 mt-auto text-sm">
+            Permohonan PB/PD · Koordinasi antar-PIC
+          </p>
         </div>
-        <p className="text-brand-ink/85 text-sm">
-          Permohonan PB/PD · Koordinasi antar-PIC
-        </p>
       </section>
       <section
         aria-labelledby="login-title"
         className="flex min-w-0 items-center justify-center px-6 py-8 sm:px-10 lg:py-12"
       >
         <div className="w-full max-w-md">
-          <header className="border-t-brand-yellow mb-8 border-t-4 border-b pt-5 pb-6 lg:hidden">
+          <header className="border-t-brand-accent mb-8 border-t-4 border-b pt-5 pb-6 lg:hidden">
             <p className="font-display text-primary text-lg font-semibold tracking-tight">
               COLABORA
             </p>
