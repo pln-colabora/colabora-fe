@@ -5,9 +5,15 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-import { ArrowRight, Clock3, Search, TriangleAlert } from "lucide-react";
+import {
+  ArrowRight,
+  Clock3,
+  FilePlus2,
+  Search,
+  TriangleAlert,
+} from "lucide-react";
 
-import { AppShell } from "@/components/dashboard/app-shell";
+import { AppShell, canCreatePermohonan } from "@/components/dashboard/app-shell";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,9 +131,19 @@ function DashboardContent() {
               )}
             </p>
           </div>
-          <p className="text-muted-foreground text-sm">
-            Data demo / penyimpanan lokal
-          </p>
+          <div className="flex flex-col gap-3 sm:items-end">
+            {ready && canCreatePermohonan(roleId) ? (
+              <Button asChild className="min-h-11 w-full sm:w-auto">
+                <Link href="/permohonan/baru">
+                  <FilePlus2 aria-hidden="true" />
+                  Permohonan baru
+                </Link>
+              </Button>
+            ) : null}
+            <p className="text-muted-foreground text-sm">
+              Data demo / penyimpanan lokal
+            </p>
+          </div>
         </header>
 
         {isHome && (
@@ -473,7 +489,7 @@ function ApplicationListItem({
         <div className="min-w-0">
           <dt className="text-muted-foreground text-sm">Tahap saat ini</dt>
           <dd className="mt-1 truncate">
-            {application.rejected ? "Persetujuan NPS" : stage.shortLabel}
+            {application.rejected ? "Delegasi PK NPS" : stage.shortLabel}
           </dd>
         </div>
         <div className="min-w-0">
@@ -591,7 +607,7 @@ function ApplicationRow({
       )}
       <td className="px-4 py-3">
         <p className="max-w-44 truncate">
-          {application.rejected ? "Persetujuan NPS" : stage.shortLabel}
+          {application.rejected ? "Delegasi PK NPS" : stage.shortLabel}
         </p>
         {activity && !application.rejected ? (
           <p className="text-muted-foreground mt-0.5 max-w-44 truncate text-sm">

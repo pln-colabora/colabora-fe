@@ -157,7 +157,7 @@ export default function ApplicationDetailPage() {
                 label="Tahap saat ini"
                 value={
                   application.rejected
-                    ? "Persetujuan NPS"
+                    ? "Delegasi PK NPS"
                     : stages.find((stage) => stage.id === currentStage)!
                         .shortLabel
                 }
@@ -253,11 +253,11 @@ function CurrentAction({
               id="current-action-title"
               className="font-display text-destructive font-semibold"
             >
-              Permohonan ditolak
+              PK dikembalikan
             </h2>
             <p className="text-destructive mt-1 text-sm">
-              NPS menolak permohonan ini. Workflow dihentikan dan tidak ada
-              aktivitas lanjutan.
+              NPS mengembalikan perintah kerja. Workflow dihentikan dan tidak
+              ada aktivitas lanjutan.
             </p>
           </div>
         </div>
@@ -295,6 +295,7 @@ function CurrentAction({
   const owner = getRole(ownerId);
   const ownsAction = ownerId === roleId;
   const isMonitoring = roleId === "super-user";
+  const isSurvey = activity.id === "2";
   return (
     <section
       className={`mt-6 border-l-4 px-5 py-4 ${ownsAction ? "border-warning bg-warning/10" : "border-border bg-muted/45"}`}
@@ -343,14 +344,21 @@ function CurrentAction({
             </p>
           </div>
         </div>
-        {ownsAction && !showForm ? (
+        {ownsAction && isSurvey ? (
+          <Button asChild className="min-h-11">
+            <Link href={`/permohonan/${application.id}/survei`}>
+              Lanjutkan proses
+              <ChevronRight aria-hidden="true" />
+            </Link>
+          </Button>
+        ) : ownsAction && !showForm ? (
           <Button className="min-h-11" onClick={onShowForm}>
             Lanjutkan proses
             <ChevronRight aria-hidden="true" />
           </Button>
         ) : null}
       </div>
-      {showForm && ownsAction ? (
+      {showForm && ownsAction && !isSurvey ? (
         <ActionForm
           application={application}
           activityId={activity.id}
@@ -441,7 +449,7 @@ function ActionForm({
       ) : null}
       {activity.id === "5" ? (
         <p className="text-destructive mt-4 text-xs">
-          Keputusan Ditolak akan menghentikan workflow dan tidak dapat
+          Keputusan Dikembalikan akan menghentikan workflow dan tidak dapat
           dilanjutkan pada data demo ini.
         </p>
       ) : null}
@@ -821,12 +829,12 @@ function DecisionSummary({ application }: { application: Application }) {
           value={decisionValue(application.decisions.needsPole)}
         />
         <DecisionRow
-          label="Persetujuan NPS"
+          label="Delegasi PK NPS"
           value={
             application.rejected
-              ? "Ditolak"
+              ? "Dikembalikan"
               : application.decisions.npsApproved === true
-                ? "Disetujui"
+                ? "Didelegasikan"
                 : "Belum diputuskan"
           }
           danger={application.rejected}

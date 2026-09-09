@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   ClipboardList,
+  FilePlus2,
   House,
   LogOut,
   RotateCcw,
@@ -27,7 +28,7 @@ import {
   type RoleId,
 } from "@/lib/workflow";
 
-const destinations = [
+const baseDestinations = [
   { id: "dashboard", href: "/dashboard", label: "Beranda", icon: House },
   {
     id: "applications",
@@ -37,9 +38,22 @@ const destinations = [
   },
 ] as const;
 
+const createDestination = {
+  id: "create",
+  href: "/permohonan/baru",
+  label: "Permohonan baru",
+  icon: FilePlus2,
+} as const;
+
+const CREATE_ROLES: RoleId[] = ["pelayanan-pelanggan", "nps"];
+
+export function canCreatePermohonan(roleId: RoleId) {
+  return CREATE_ROLES.includes(roleId);
+}
+
 type AppShellProps = {
   children: React.ReactNode;
-  active: "dashboard" | "applications";
+  active: "dashboard" | "applications" | "create";
   roleId: RoleId;
   onRoleChange: (role: RoleId) => void;
 };
@@ -52,6 +66,9 @@ export function AppShell({
 }: AppShellProps) {
   const router = useRouter();
   const role = getRole(roleId);
+  const destinations = canCreatePermohonan(roleId)
+    ? [...baseDestinations, createDestination]
+    : baseDestinations;
   return (
     <div className="bg-background min-h-dvh lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
       <a
@@ -210,7 +227,10 @@ export function AppShell({
         </main>
         <nav
           aria-label="Navigasi seluler"
-          className="bg-card fixed inset-x-0 bottom-0 z-20 grid grid-cols-2 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
+          className="bg-card fixed inset-x-0 bottom-0 z-20 grid border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
+          style={{
+            gridTemplateColumns: `repeat(${destinations.length}, minmax(0, 1fr))`,
+          }}
         >
           {destinations.map(({ id, href, label, icon: Icon }) => (
             <Link

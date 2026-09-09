@@ -2,17 +2,17 @@ export const ROLE_STORAGE_KEY = "colabora_demo_role";
 export const WORKFLOW_STORAGE_KEY = "colabora_workflow_state_v1";
 
 export type RoleId =
-  | "pelayanan"
+  | "pelayanan-pelanggan"
   | "teknik"
   | "nps"
   | "perencanaan"
   | "konstruksi"
-  | "transaksi"
+  | "transaksi-energi"
   | "jaringan"
   | "pdkb"
   | "vendor-tiang"
   | "vendor-konstruksi"
-  | "vendor-app"
+  | "vendor-sr-app"
   | "super-user";
 
 export type ActionId =
@@ -119,7 +119,7 @@ export const roles: Array<{
 }> = [
   { id: "teknik", label: "Bagian Teknik", lane: "ULP", initials: "BT" },
   {
-    id: "pelayanan",
+    id: "pelayanan-pelanggan",
     label: "Pelayanan Pelanggan",
     lane: "ULP",
     initials: "PP",
@@ -132,7 +132,12 @@ export const roles: Array<{
     initials: "PR",
   },
   { id: "konstruksi", label: "Bagian Konstruksi", lane: "UP3", initials: "KS" },
-  { id: "transaksi", label: "Transaksi Energi", lane: "UP3", initials: "TE" },
+  {
+    id: "transaksi-energi",
+    label: "Transaksi Energi",
+    lane: "UP3",
+    initials: "TE",
+  },
   { id: "jaringan", label: "Bagian Jaringan", lane: "UP3", initials: "JR" },
   { id: "pdkb", label: "Tim PDKB", lane: "UP3", initials: "PD" },
   { id: "vendor-tiang", label: "Vendor Tiang", lane: "Vendor", initials: "VT" },
@@ -142,7 +147,12 @@ export const roles: Array<{
     lane: "Vendor",
     initials: "VK",
   },
-  { id: "vendor-app", label: "Vendor SR/APP", lane: "Vendor", initials: "VA" },
+  {
+    id: "vendor-sr-app",
+    label: "Vendor SR/APP",
+    lane: "Vendor",
+    initials: "VA",
+  },
   {
     id: "super-user",
     label: "Super User / Monitoring",
@@ -166,11 +176,20 @@ export const stages: Array<{ id: StageId; label: string; shortLabel: string }> =
     { id: 7, label: "Penutupan / Selesai", shortLabel: "Penutupan" },
   ];
 
+const isPlgTm = (application: ApplicationSeed) =>
+  application.connectionType.startsWith("PLG TM");
+
+const permohonanOwner = (application: ApplicationSeed): RoleId =>
+  isPlgTm(application) ? "nps" : "pelayanan-pelanggan";
+
+const surveyOwner = (application: ApplicationSeed): RoleId =>
+  isPlgTm(application) ? "perencanaan" : "teknik";
+
 const planningOwner = (): RoleId => "perencanaan";
 
 const energizeOwner = (): RoleId => "jaringan";
 
-const appVendorOwner = (): RoleId => "vendor-app";
+const appVendorOwner = (): RoleId => "vendor-sr-app";
 
 export const activities: ActivityDefinition[] = [
   {
@@ -180,7 +199,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Permohonan PB/PD",
     description:
       "Catat data pelanggan, kebutuhan daya, lokasi, dan evidence awal permohonan.",
-    owner: "pelayanan",
+    owner: permohonanOwner,
     fields: [
       {
         name: "customer",
@@ -204,7 +223,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Survei",
     description:
       "Lengkapi hasil pemeriksaan lapangan sebelum pekerjaan direncanakan.",
-    owner: "teknik",
+    owner: surveyOwner,
     fields: [
       { name: "surveyDate", label: "Tanggal survei", type: "date" },
       { name: "officer", label: "Petugas survei", placeholder: "Nama petugas" },
@@ -306,26 +325,26 @@ export const activities: ActivityDefinition[] = [
   {
     id: "5",
     stage: 3,
-    label: "Persetujuan / Delegasi NPS",
-    shortLabel: "Persetujuan NPS",
+    label: "Delegasi Perintah Kerja NPS",
+    shortLabel: "Delegasi PK NPS",
     description:
-      "Tinjau hasil perencanaan. Penolakan akan menghentikan workflow permohonan.",
+      "Delegasikan PK pekerjaan ke bagian tujuan. Pengembalian PK akan menghentikan workflow permohonan.",
     owner: "nps",
     fields: [
       {
         name: "npsDecision",
-        label: "Keputusan NPS",
+        label: "Keputusan delegasi PK",
         type: "select",
-        options: ["Disetujui", "Ditolak"],
+        options: ["Didelegasikan", "Dikembalikan"],
       },
       {
         name: "notes",
         label: "Catatan keputusan",
         type: "textarea",
-        placeholder: "Alasan atau arahan tindak lanjut",
+        placeholder: "Bagian tujuan PK atau alasan pengembalian",
       },
     ],
-    evidence: "Nota persetujuan sambungan",
+    evidence: "Nota delegasi perintah kerja",
   },
   {
     id: "6",
@@ -386,7 +405,7 @@ export const activities: ActivityDefinition[] = [
     label: "WO Vendor APP",
     shortLabel: "WO Vendor APP",
     description: "Terbitkan work order penyediaan dan pemasangan APP.",
-    owner: "transaksi",
+    owner: "transaksi-energi",
     fields: woFields("APP"),
     evidence: "Dokumen WO Vendor APP",
   },
@@ -397,7 +416,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Reservasi material",
     description:
       "Pastikan material utama tersedia dan telah dipesan dari gudang.",
-    owner: "transaksi",
+    owner: "transaksi-energi",
     fields: [
       {
         name: "material",
@@ -422,7 +441,7 @@ export const activities: ActivityDefinition[] = [
     label: "Perakitan & Tera APP",
     shortLabel: "Perakitan & Tera APP",
     description: "Catat identitas APP serta hasil perakitan dan tera.",
-    owner: "transaksi",
+    owner: "transaksi-energi",
     fields: [
       {
         name: "appNumber",
@@ -568,7 +587,7 @@ export const activities: ActivityDefinition[] = [
     label: "Entri & Mutasi PDL",
     shortLabel: "Entri & Mutasi PDL",
     description: "Catat nomor PDL dan hasil mutasi pelanggan.",
-    owner: "pelayanan",
+    owner: "pelayanan-pelanggan",
     fields: [
       {
         name: "pdlNumber",
@@ -591,7 +610,7 @@ export const activities: ActivityDefinition[] = [
     label: "Arsip AIL / Updating DIJ",
     shortLabel: "Arsip AIL / DIJ",
     description: "Lengkapi nomor AIL dan pembaruan data induk jaringan.",
-    owner: "pelayanan",
+    owner: "pelayanan-pelanggan",
     fields: [
       {
         name: "ailNumber",
@@ -610,7 +629,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Selesai",
     description:
       "Konfirmasi seluruh dokumen akhir lengkap dan tutup permohonan.",
-    owner: "pelayanan",
+    owner: "pelayanan-pelanggan",
     fields: [
       { name: "completionDate", label: "Tanggal selesai", type: "date" },
       {
@@ -927,7 +946,7 @@ const evidenceNames: Partial<Record<ActionId, string[]>> = {
   "2": ["Hasil_Survei.pdf", "Foto_Survei_01.jpg"],
   "3": ["RAB.pdf", "KKO.pdf", "KKF.pdf"],
   "4": ["Bukti_Pembayaran.pdf"],
-  "5": ["Nota_Persetujuan_Sambungan.pdf"],
+  "5": ["Nota_Delegasi_PK.pdf"],
   "6": ["WO_Vendor_Tiang.pdf"],
   "7": ["WO_Konstruksi.pdf"],
   "7b": ["WO_PDKB.pdf"],
@@ -950,7 +969,7 @@ export function getDocuments(application: Application): DocumentItem[] {
   const base = getInitialCompletedActionIds(initialApplication).flatMap(
     (actionId, actionIndex) =>
       (application.rejected && actionId === "5"
-        ? ["Keputusan_Penolakan_NPS.pdf"]
+        ? ["Keputusan_Pengembalian_NPS.pdf"]
         : (evidenceNames[actionId] ?? [])
       ).map((name, fileIndex) => ({
         id: `${application.id}-${actionId}-${fileIndex}`,
@@ -974,7 +993,7 @@ export function getHistory(application: Application): HistoryItem[] {
       id: `${application.id}-${actionId}`,
       at: formatWorkflowDate(application.requestedAt, index),
       title: isRejected
-        ? "Permohonan ditolak NPS"
+        ? "PK dikembalikan NPS"
         : `${activity.shortLabel} selesai`,
       by: `${role.lane} — ${role.label}`,
     };
@@ -1035,7 +1054,7 @@ export function advanceApplication(
   if (application.currentAction === "7")
     decisions.needsPdkb = values.needsPdkb === "Ya";
   if (application.currentAction === "5")
-    decisions.npsApproved = values.npsDecision !== "Ditolak";
+    decisions.npsApproved = values.npsDecision !== "Dikembalikan";
 
   const rejected =
     application.currentAction === "5" && decisions.npsApproved === false;
@@ -1056,7 +1075,7 @@ export function advanceApplication(
     id: `${application.id}-history-${application.currentAction}-${Date.now()}`,
     at: new Date().toISOString(),
     title: rejected
-      ? "Permohonan ditolak NPS"
+      ? "PK dikembalikan NPS"
       : `${activity.shortLabel} selesai`,
     by: `${role.lane} — ${role.label}`,
   };
