@@ -98,7 +98,7 @@ function Unauthorized({ roleId }: { roleId: RoleId }) {
   const role = getRole(roleId);
   return (
     <section
-      className="border-border bg-muted/45 mt-6 border-l-4 px-5 py-4"
+      className="bg-card mt-6 rounded-lg px-5 py-4"
       aria-labelledby="unauthorized-title"
     >
       <div className="flex items-start gap-3">
@@ -323,7 +323,7 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
       {submitted ? (
         <div
           role="status"
-          className="border-primary/30 bg-primary/10 text-primary mt-6 flex items-start gap-3 border px-4 py-3 text-sm"
+          className="border-primary/30 bg-primary/10 text-primary mt-6 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm"
         >
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
