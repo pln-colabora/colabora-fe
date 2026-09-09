@@ -16,7 +16,7 @@ type PermohonanResponse = {
   jenis_permohonan: string;
   jenis_sambungan: string;
   ulp_unit: string;
-  request_date: string;
+  request_date: string | null;
   current_stage: StageId;
   status: string;
   kebutuhan_tiang: boolean | null;
@@ -66,7 +66,7 @@ export function mapApplication(data: PermohonanResponse): Application {
       : data.jenis_sambungan) as Application["connectionType"],
     unit: data.ulp_unit,
     power: "—",
-    requestedAt: data.request_date,
+    requestedAt: data.request_date ?? "",
     updatedAt: "—",
     currentAction:
       active.map((node) => nodeActions[node.workflow_node]).find(Boolean) ??

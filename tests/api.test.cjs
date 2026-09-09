@@ -7,6 +7,7 @@ const ts = require("typescript");
 // Compile the actual integration helpers in memory; no generated files or test dependencies.
 const modules = new Map();
 function load(name) {
+  if (!name.startsWith("@/")) return require(name);
   if (modules.has(name)) return modules.get(name);
   const filename = path.resolve(
     __dirname,
@@ -38,6 +39,7 @@ global.sessionStorage = {
 };
 const api = load("@/lib/api");
 const applications = load("@/lib/applications");
+const utils = load("@/lib/utils");
 const workflow = load("@/lib/workflow");
 const fixture = {
   id: "test-id",
@@ -93,6 +95,24 @@ const json = (data, status = 200) =>
     status,
     headers: { "Content-Type": "application/json" },
   });
+
+test("server projection tolerates a missing request date", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    request_date: null,
+  });
+
+  assert.equal(mapped.requestedAt, "");
+});
+
+test("date formatting tolerates empty and invalid API values", () => {
+  const options = { day: "numeric", month: "short", year: "numeric" };
+
+  assert.equal(utils.formatApiDate(null, options), "—");
+  assert.equal(utils.formatApiDate("not-a-date", options), "—");
+  assert.notEqual(utils.formatApiDate("2026-09-09", options), "—");
+});
+
 beforeEach(() => {
   storage.clear();
   api.saveTokens({

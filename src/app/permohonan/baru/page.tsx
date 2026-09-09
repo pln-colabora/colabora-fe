@@ -176,7 +176,10 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-6">
+    <form
+      onSubmit={handleSubmit}
+      className="bg-card mt-6 rounded-lg border p-5 sm:p-6"
+    >
       <fieldset disabled={busy}>
         <div className="grid gap-4 md:grid-cols-2">
           <Field className="md:col-span-2">

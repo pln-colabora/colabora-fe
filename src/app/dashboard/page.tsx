@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { getApplications } from "@/lib/applications";
 import { useSession } from "@/lib/auth";
+import { formatApiDate } from "@/lib/utils";
 import {
   getActivity,
   getApplicationStatus,
@@ -534,14 +535,14 @@ function ApplicationListItem({ application }: { application: Application }) {
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <time
-          dateTime={application.requestedAt}
+          dateTime={application.requestedAt || undefined}
           className="text-muted-foreground text-sm"
         >
-          {new Intl.DateTimeFormat("id-ID", {
+          {formatApiDate(application.requestedAt, {
             day: "numeric",
             month: "short",
             year: "numeric",
-          }).format(new Date(`${application.requestedAt}T00:00:00`))}
+          })}
         </time>
         <Link
           href={`/permohonan/${application.id}`}
@@ -654,12 +655,12 @@ function ApplicationRow({
       )}
       {compact && (
         <td className="px-4 py-3 whitespace-nowrap">
-          <time dateTime={application.requestedAt}>
-            {new Intl.DateTimeFormat("id-ID", {
+          <time dateTime={application.requestedAt || undefined}>
+            {formatApiDate(application.requestedAt, {
               day: "numeric",
               month: "short",
               year: "numeric",
-            }).format(new Date(`${application.requestedAt}T00:00:00`))}
+            })}
           </time>
         </td>
       )}

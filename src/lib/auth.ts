@@ -33,13 +33,14 @@ export async function login(email: string, password: string) {
   }
 }
 
-export async function logout() {
-  try {
-    await apiRequest("/api/auth/logout", { method: "POST" });
-  } catch (error) {
-    if (!(error instanceof ApiError && error.status === 401)) throw error;
-  }
+export function logout() {
+  // Start revocation while the access token is still available. Local logout
+  // must remain usable when the API is unreachable or the token has expired.
+  const revokeRequest = apiRequest("/api/auth/logout", {
+    method: "POST",
+  }).catch(() => undefined);
   clearSession();
+  return revokeRequest;
 }
 
 // Each page validates the session with the server; browser storage never supplies a role.

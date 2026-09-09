@@ -37,6 +37,7 @@ import {
   getVendorAccounts,
 } from "@/lib/applications";
 import { useSession } from "@/lib/auth";
+import { formatApiDate } from "@/lib/utils";
 import {
   activities,
   nodeActions,
@@ -1098,19 +1099,19 @@ function decisionValue(value?: boolean) {
 }
 function formatDate(date: string) {
   if (!date || Number.isNaN(Date.parse(date))) return "—";
-  return new Intl.DateTimeFormat("id-ID", {
+  return formatApiDate(date, {
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).format(new Date(`${date}T00:00:00`));
+  });
 }
 function displayHistoryDate(value: string) {
   if (!value.includes("T")) return value;
-  return new Intl.DateTimeFormat("id-ID", {
+  return formatApiDate(value, {
     day: "numeric",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  });
 }

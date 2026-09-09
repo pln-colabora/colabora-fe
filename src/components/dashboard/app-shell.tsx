@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -49,22 +47,9 @@ type AppShellProps = {
 
 export function AppShell({ children, active, roleId, user }: AppShellProps) {
   const router = useRouter();
-  const [logoutError, setLogoutError] = useState("");
-  const [loggingOut, setLoggingOut] = useState(false);
-  async function handleLogout() {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    setLogoutError("");
-    try {
-      await logout();
-      router.replace("/login");
-    } catch (error) {
-      setLogoutError(
-        error instanceof Error ? error.message : "Logout gagal. Coba lagi.",
-      );
-    } finally {
-      setLoggingOut(false);
-    }
+  function handleLogout() {
+    void logout();
+    router.replace("/login");
   }
   const role = getRole(roleId);
   const destinations = canCreatePermohonan(roleId)
@@ -121,7 +106,6 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
             variant="ghost"
             className="text-muted-foreground hover:text-foreground mt-3 min-h-10 w-full justify-start px-0 hover:bg-transparent"
             onClick={handleLogout}
-            disabled={loggingOut}
           >
             <LogOut className="size-4" aria-hidden="true" />
             Keluar
@@ -174,7 +158,6 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
               variant="ghost"
               className="min-h-11 lg:hidden"
               onClick={handleLogout}
-              disabled={loggingOut}
             >
               <LogOut aria-hidden="true" />
               Keluar
@@ -186,11 +169,6 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
           tabIndex={-1}
           className="mx-auto w-full max-w-[1440px] min-w-0 overflow-x-clip px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:py-8 lg:pb-8"
         >
-          {logoutError && (
-            <p role="alert" className="text-destructive mb-4 text-sm">
-              {logoutError}
-            </p>
-          )}
           {children}
         </main>
         <nav
