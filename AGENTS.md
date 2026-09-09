@@ -19,7 +19,8 @@ Before modifying code:
 3. Search for existing components, utilities, hooks, types, and patterns that may already solve part of the task.
 4. Read nearby tests when they exist.
 5. Check `DESIGN.md` before any frontend/UI work.
-6. Check project documentation relevant to the feature.
+6. Check `colabora-flow-end-to-end.md` for the workflow domain: the 7 UI stages, per-role/per-jenis ownership, SLA offsets, and decision points.
+7. Check project documentation relevant to the feature.
 
 Prefer understanding the existing system over introducing a new pattern.
 
