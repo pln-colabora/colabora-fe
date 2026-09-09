@@ -130,7 +130,7 @@ export default function ApplicationDetailPage() {
         setShowForm(false);
       }}
     >
-      <div className="mx-auto w-full max-w-[1480px] min-w-0">
+      <div className="mx-auto w-full max-w-[1480px] min-w-0 overflow-x-clip">
         <Link
           href="/dashboard?view=all"
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
@@ -186,7 +186,7 @@ export default function ApplicationDetailPage() {
         {feedback ? (
           <div
             role="status"
-            className="border-success/30 bg-success/10 text-success mt-5 flex items-start gap-3 border px-4 py-3 text-sm"
+            className="border-success-border bg-success-surface text-success mt-5 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm"
           >
             <CheckCircle2
               className="mt-0.5 size-4 shrink-0"
@@ -205,12 +205,12 @@ export default function ApplicationDetailPage() {
           onAdvanced={handleAdvanced}
         />
 
-        <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0 space-y-8">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-6">
             <WorkflowTimeline application={application} />
             <DocumentsSection documents={documents} />
           </div>
-          <aside className="space-y-8">
+          <aside className="space-y-6">
             <ApplicationFacts application={application} />
             <DecisionSummary application={application} />
             <HistorySection history={history} />
@@ -240,7 +240,7 @@ function CurrentAction({
   if (application.rejected) {
     return (
       <section
-        className="border-destructive bg-destructive/10 mt-6 border-l-4 px-5 py-4"
+        className="bg-card mt-6 rounded-lg px-5 py-4"
         aria-labelledby="current-action-title"
       >
         <div className="flex items-start gap-3">
@@ -255,7 +255,7 @@ function CurrentAction({
             >
               PK dikembalikan
             </h2>
-            <p className="text-destructive mt-1 text-sm">
+            <p className="text-muted-foreground mt-1 text-sm">
               NPS mengembalikan perintah kerja. Workflow dihentikan dan tidak
               ada aktivitas lanjutan.
             </p>
@@ -267,7 +267,7 @@ function CurrentAction({
   if (!activity) {
     return (
       <section
-        className="border-success bg-success/10 mt-6 border-l-4 px-5 py-4"
+        className="bg-card mt-6 rounded-lg px-5 py-4"
         aria-labelledby="current-action-title"
       >
         <div className="flex items-start gap-3">
@@ -282,7 +282,7 @@ function CurrentAction({
             >
               Permohonan selesai
             </h2>
-            <p className="text-success mt-1 text-sm">
+            <p className="text-muted-foreground mt-1 text-sm">
               Seluruh aktivitas dan dokumen penutupan telah lengkap.
             </p>
           </div>
@@ -298,10 +298,10 @@ function CurrentAction({
   const isSurvey = activity.id === "2";
   return (
     <section
-      className={`mt-6 border-l-4 px-5 py-4 ${ownsAction ? "border-warning bg-warning/10" : "border-border bg-muted/45"}`}
+      className="bg-card mt-6 rounded-lg px-5 py-4"
       aria-labelledby="current-action-title"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           {ownsAction ? (
             <Clock3
@@ -321,10 +321,10 @@ function CurrentAction({
           )}
           <div>
             <p
-              className={`text-xs font-semibold tracking-wide uppercase ${ownsAction ? "text-warning" : "text-muted-foreground"}`}
+              className={`text-sm font-semibold ${ownsAction ? "text-warning" : "text-muted-foreground"}`}
             >
               {ownsAction
-                ? "Tindakan Anda dibutuhkan"
+                ? "Tindakan diperlukan"
                 : isMonitoring
                   ? "Mode monitoring"
                   : "Menunggu tindakan"}
@@ -345,14 +345,17 @@ function CurrentAction({
           </div>
         </div>
         {ownsAction && isSurvey ? (
-          <Button asChild className="min-h-11">
+          <Button asChild className="min-h-11 w-full shrink-0 sm:w-auto">
             <Link href={`/permohonan/${application.id}/survei`}>
               Lanjutkan proses
               <ChevronRight aria-hidden="true" />
             </Link>
           </Button>
         ) : ownsAction && !showForm ? (
-          <Button className="min-h-11" onClick={onShowForm}>
+          <Button
+            className="min-h-11 w-full shrink-0 sm:w-auto"
+            onClick={onShowForm}
+          >
             Lanjutkan proses
             <ChevronRight aria-hidden="true" />
           </Button>
@@ -406,8 +409,11 @@ function ActionForm({
   }
 
   return (
-    <form onSubmit={submit} className="border-warning/30 mt-5 border-t pt-5">
-      <div className="border-warning/30 mb-5 grid gap-3 border-b pb-4 text-sm sm:grid-cols-3">
+    <form
+      onSubmit={submit}
+      className="border-warning-border mt-5 border-t pt-5"
+    >
+      <div className="border-warning-border mb-5 grid gap-3 border-b pb-4 text-sm sm:grid-cols-3">
         <MiniFact label="Nomor permohonan" value={application.id} mono />
         <MiniFact label="Pelanggan" value={application.customer} />
         <MiniFact label="Lokasi" value={application.location} />
@@ -530,7 +536,10 @@ function WorkflowTimeline({ application }: { application: Application }) {
   const completed = new Set(getInitialCompletedActionIds(application));
   const activeSequence = new Set(getActiveSequence(application));
   return (
-    <section aria-labelledby="workflow-title">
+    <section
+      aria-labelledby="workflow-title"
+      className="bg-card rounded-lg p-5 sm:p-6"
+    >
       <div className="flex items-end justify-between border-b pb-3">
         <div>
           <h2
@@ -577,7 +586,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
                   </div>
                   <StageStatusLabel status={stageStatus} />
                 </div>
-                <ul className="mt-3 divide-y border-y">
+                <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
                   {stageActivities.map((activity) => {
                     const status = getActivityStatus(
                       activity.id,
@@ -662,11 +671,11 @@ function getActivityStatus(
 function StageMarker({ status }: { status: ProgressStatus }) {
   const style =
     status === "done"
-      ? "border border-success/30 bg-success/10 text-success"
+      ? "border border-success-border bg-success-surface text-success"
       : status === "current"
-        ? "border-2 border-warning bg-warning/10 text-warning"
+        ? "border-2 border-warning-border bg-warning-surface text-warning"
         : status === "rejected"
-          ? "border border-destructive/30 bg-destructive/10 text-destructive"
+          ? "border border-destructive-border bg-destructive-surface text-destructive"
           : "border bg-background text-muted-foreground";
   return (
     <span
@@ -744,7 +753,10 @@ function DocumentsSection({
   documents: ReturnType<typeof getDocuments>;
 }) {
   return (
-    <section aria-labelledby="documents-title">
+    <section
+      aria-labelledby="documents-title"
+      className="bg-card rounded-lg p-5 sm:p-6"
+    >
       <div className="border-b pb-3">
         <h2 id="documents-title" className="font-display text-lg font-semibold">
           Dokumen & Evidence
@@ -754,7 +766,7 @@ function DocumentsSection({
         </p>
       </div>
       {documents.length ? (
-        <ul className="divide-y border-b">
+        <ul className="divide-y">
           {documents.map((document) => (
             <li key={document.id} className="flex items-center gap-3 py-3">
               <FileText
@@ -773,7 +785,7 @@ function DocumentsSection({
           ))}
         </ul>
       ) : (
-        <p className="text-muted-foreground border-b py-8 text-sm">
+        <p className="text-muted-foreground py-8 text-sm">
           Belum ada dokumen yang tersedia.
         </p>
       )}
@@ -792,7 +804,7 @@ function ApplicationFacts({ application }: { application: Application }) {
     ["Tanggal permohonan", formatDate(application.requestedAt)],
   ];
   return (
-    <section aria-labelledby="facts-title">
+    <section aria-labelledby="facts-title" className="bg-card rounded-lg p-5">
       <h2
         id="facts-title"
         className="font-display border-b pb-3 text-base font-semibold"
@@ -816,7 +828,10 @@ function ApplicationFacts({ application }: { application: Application }) {
 
 function DecisionSummary({ application }: { application: Application }) {
   return (
-    <section aria-labelledby="decision-title">
+    <section
+      aria-labelledby="decision-title"
+      className="bg-card rounded-lg p-5"
+    >
       <h2
         id="decision-title"
         className="font-display border-b pb-3 text-base font-semibold"
@@ -854,7 +869,7 @@ function HistorySection({
   history: ReturnType<typeof getHistory>;
 }) {
   return (
-    <section aria-labelledby="history-title">
+    <section aria-labelledby="history-title" className="bg-card rounded-lg p-5">
       <h2
         id="history-title"
         className="font-display border-b pb-3 text-base font-semibold"

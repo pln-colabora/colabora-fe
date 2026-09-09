@@ -1,3 +1,5 @@
+import { CircleCheck, Clock3, TriangleAlert } from "lucide-react";
+
 import type { getApplicationStatus } from "@/lib/workflow";
 
 export function StatusBadge({
@@ -5,16 +7,20 @@ export function StatusBadge({
 }: {
   status: ReturnType<typeof getApplicationStatus>;
 }) {
-  const style =
-    status === "Ditolak" || status === "Terlambat"
-      ? "border-destructive/30 bg-destructive/10 text-destructive"
-      : status === "Selesai"
-        ? "border-success/30 bg-success/10 text-success"
-        : "border-warning/30 bg-warning/10 text-warning";
+  const isCritical = status === "Ditolak" || status === "Terlambat";
+  const isComplete = status === "Selesai";
+  const style = isCritical
+    ? "border-destructive-border bg-destructive-surface text-destructive"
+    : isComplete
+      ? "border-success-border bg-success-surface text-success"
+      : "border-warning-border bg-warning-surface text-warning";
+  const Icon = isCritical ? TriangleAlert : isComplete ? CircleCheck : Clock3;
+
   return (
     <span
-      className={`inline-flex rounded-md border px-2 py-1 text-sm font-medium whitespace-nowrap ${style}`}
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm font-semibold whitespace-nowrap ${style}`}
     >
+      <Icon className="size-3.5" aria-hidden="true" />
       {status}
     </span>
   );
