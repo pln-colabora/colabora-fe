@@ -34,7 +34,7 @@ export function LoginForm() {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     window.localStorage.setItem(ROLE_STORAGE_KEY, roleId);
-    router.push("/dashboard?view=mine");
+    router.push("/dashboard");
   }
 
   return (

@@ -105,7 +105,7 @@ function DashboardContent() {
       roleId={roleId}
       onRoleChange={setRoleId}
     >
-      <div className="w-full min-w-0">
+      <div className="w-full max-w-full min-w-0 overflow-x-clip">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -197,54 +197,50 @@ function DashboardContent() {
         )}
 
         {!isHome && ready && (
-          <details className="bg-card mt-6 rounded-lg border px-4 py-2">
-            <summary className="cursor-pointer py-2 text-sm font-medium">
-              Posisi proses aktif / {stages.length} tahap
-            </summary>
-            <section className="mt-7" aria-labelledby="distribution-title">
-              <div className="mb-3 flex items-center justify-between">
-                <h2
-                  id="distribution-title"
-                  className="font-display text-base font-semibold"
-                >
-                  Posisi proses aktif
-                </h2>
-                <span className="text-muted-foreground text-sm">
-                  7 tahap utama
-                </span>
-              </div>
-              <div className="grid grid-cols-2 border sm:grid-cols-4 xl:grid-cols-7">
-                {stages.map((stage) => {
-                  const count = applications.filter(
-                    (application) =>
-                      !application.rejected &&
-                      application.currentAction &&
-                      getCurrentStage(application) === stage.id,
-                  ).length;
-                  return (
-                    <div
-                      key={stage.id}
-                      className="border-r border-b px-4 py-3 last:border-r-0 xl:border-b-0 sm:[&:nth-child(4n)]:border-r-0 xl:[&:nth-child(4n)]:border-r xl:[&:nth-child(7n)]:border-r-0"
-                    >
-                      <p className="text-muted-foreground text-sm">
-                        Tahap {stage.id}
-                      </p>
-                      <p className="mt-1 text-xl font-semibold tabular-nums">
-                        {count}
-                      </p>
-                      <p className="mt-1 text-sm leading-4">
-                        {stage.shortLabel}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          </details>
+          <section
+            className="bg-card mt-6 overflow-hidden rounded-lg"
+            aria-labelledby="distribution-title"
+          >
+            <div className="flex items-center justify-between gap-4 border-b px-4 py-3.5">
+              <h2
+                id="distribution-title"
+                className="font-display text-base font-semibold"
+              >
+                Posisi proses aktif
+              </h2>
+              <span className="text-muted-foreground text-sm">
+                {stages.length} tahap utama
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7">
+              {stages.map((stage) => {
+                const count = applications.filter(
+                  (application) =>
+                    !application.rejected &&
+                    application.currentAction &&
+                    getCurrentStage(application) === stage.id,
+                ).length;
+                return (
+                  <div
+                    key={stage.id}
+                    className="border-r border-b px-4 py-3.5 last:border-r-0 xl:border-b-0 sm:[&:nth-child(4n)]:border-r-0 xl:[&:nth-child(4n)]:border-r xl:[&:nth-child(7n)]:border-r-0"
+                  >
+                    <p className="text-muted-foreground text-xs font-medium">
+                      Tahap {stage.id}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums">
+                      {count}
+                    </p>
+                    <p className="mt-1 text-sm leading-5">{stage.shortLabel}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         <section
-          className="bg-card mt-6 min-w-0 rounded-lg border"
+          className="bg-card mt-6 min-w-0 overflow-hidden rounded-lg"
           aria-labelledby="applications-title"
         >
           <div
@@ -380,9 +376,14 @@ function DashboardContent() {
                   />
                 ))}
               </div>
-              <div className="hidden overflow-x-auto rounded-b-lg lg:block">
+              <div
+                className="focus-visible:ring-ring hidden w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-b-lg focus-visible:ring-2 focus-visible:ring-inset lg:block"
+                role="region"
+                aria-label="Tabel permohonan"
+                tabIndex={0}
+              >
                 <table
-                  className={`w-full border-collapse text-sm ${isHome ? "min-w-[880px]" : "min-w-[1120px]"}`}
+                  className={`w-full table-auto border-collapse text-sm ${isHome ? "min-w-[960px]" : "min-w-[1360px]"}`}
                 >
                   <thead className="bg-muted/60 text-muted-foreground">
                     <tr className="border-b text-left text-sm">
@@ -539,9 +540,9 @@ function SummaryMetric({
             ? "text-success"
             : "text-foreground";
   return (
-    <div className="bg-card rounded-lg border px-4 py-4 lg:px-5 lg:py-5">
+    <div className="bg-card rounded-lg px-4 py-4 lg:px-5 lg:py-5">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-muted-foreground text-sm">{label}</p>
+        <p className="text-foreground text-sm font-medium">{label}</p>
         {danger && value > 0 ? (
           <TriangleAlert
             className="text-destructive size-4"
