@@ -1,6 +1,3 @@
-export const ROLE_STORAGE_KEY = "colabora_demo_role";
-export const WORKFLOW_STORAGE_KEY = "colabora_workflow_state_v1";
-
 export type RoleId =
   | "pelayanan-pelanggan"
   | "teknik"
@@ -13,7 +10,9 @@ export type RoleId =
   | "vendor-tiang"
   | "vendor-konstruksi"
   | "vendor-sr-app"
-  | "super-user";
+  | "super-user"
+  | "admin"
+  | "user";
 
 export type ActionId =
   | "1"
@@ -23,6 +22,7 @@ export type ActionId =
   | "5"
   | "6"
   | "7"
+  | "pk"
   | "7b"
   | "8"
   | "9"
@@ -49,9 +49,8 @@ export type WorkflowDecisions = {
   npsApproved?: boolean;
 };
 
-export type ApplicationSeed = {
+export type ApplicationSummary = {
   id: string;
-  customerId: string;
   customer: string;
   requestType: "Pasang baru" | "Perubahan daya";
   connectionType: ConnectionType;
@@ -66,16 +65,6 @@ export type ApplicationSeed = {
   updatedAt: string;
 };
 
-export type ApplicationOverride = {
-  currentAction?: ActionId | null;
-  decisions?: WorkflowDecisions;
-  rejected?: boolean;
-  completed?: boolean;
-  updatedAt?: string;
-  history?: HistoryItem[];
-  documents?: DocumentItem[];
-};
-
 export type HistoryItem = {
   id: string;
   at: string;
@@ -86,11 +75,39 @@ export type HistoryItem = {
 export type DocumentItem = {
   id: string;
   name: string;
-  actionId: ActionId;
+  actionId: ActionId | undefined;
   addedAt: string;
 };
 
-export type Application = ApplicationSeed & ApplicationOverride;
+export type WorkflowNode = {
+  workflow_node: string;
+  activity_number: number | null;
+  stage_number: StageId;
+  status: "locked" | "available" | "in_progress" | "completed" | "skipped";
+  sla_deadline: string | null;
+  sla_status: "none" | "on_time" | "due_soon" | "overdue";
+  completed_at: string | null;
+  completed_by: string | null;
+  payload: Record<string, unknown>;
+};
+export type AvailableAction = {
+  workflow_node: string;
+  activity_number: number | null;
+  stage_number: StageId;
+  method: string;
+  path: string;
+};
+export type Application = ApplicationSummary & {
+  number: string;
+  phone: string;
+  status: string;
+  currentStage: StageId;
+  completed: boolean;
+  nodes: WorkflowNode[];
+  availableActions: AvailableAction[];
+  history: HistoryItem[];
+  documents: DocumentItem[];
+};
 
 export type FieldDefinition = {
   name: string;
@@ -98,6 +115,8 @@ export type FieldDefinition = {
   type?: "text" | "date" | "textarea" | "select" | "number";
   placeholder?: string;
   options?: string[];
+  required?: boolean;
+  maxLength?: number;
 };
 
 export type ActivityDefinition = {
@@ -106,7 +125,7 @@ export type ActivityDefinition = {
   label: string;
   shortLabel: string;
   description: string;
-  owner: RoleId | ((application: ApplicationSeed) => RoleId);
+  owner: RoleId | ((application: ApplicationSummary) => RoleId);
   fields: FieldDefinition[];
   evidence?: string;
 };
@@ -117,6 +136,8 @@ export const roles: Array<{
   lane: string;
   initials: string;
 }> = [
+  { id: "admin", label: "Admin", lane: "Administrasi", initials: "AD" },
+  { id: "user", label: "User", lane: "Pengguna", initials: "US" },
   { id: "teknik", label: "Bagian Teknik", lane: "ULP", initials: "BT" },
   {
     id: "pelayanan-pelanggan",
@@ -176,20 +197,30 @@ export const stages: Array<{ id: StageId; label: string; shortLabel: string }> =
     { id: 7, label: "Penutupan / Selesai", shortLabel: "Penutupan" },
   ];
 
-const isPlgTm = (application: ApplicationSeed) =>
+const isPlgTm = (application: ApplicationSummary) =>
   application.connectionType.startsWith("PLG TM");
 
-const permohonanOwner = (application: ApplicationSeed): RoleId =>
+const permohonanOwner = (application: ApplicationSummary): RoleId =>
   isPlgTm(application) ? "nps" : "pelayanan-pelanggan";
 
-const surveyOwner = (application: ApplicationSeed): RoleId =>
+const surveyOwner = (application: ApplicationSummary): RoleId =>
   isPlgTm(application) ? "perencanaan" : "teknik";
 
-const planningOwner = (): RoleId => "perencanaan";
+const planningOwner = surveyOwner;
 
-const energizeOwner = (): RoleId => "jaringan";
+const energizeOwner = (application: ApplicationSummary): RoleId =>
+  isPlgTm(application) ? "jaringan" : "teknik";
 
-const appVendorOwner = (): RoleId => "vendor-sr-app";
+const appVendorOwner = (application: ApplicationSummary): RoleId =>
+  isPlgTm(application) ? "vendor-konstruksi" : "vendor-sr-app";
+
+const notesField: FieldDefinition = {
+  name: "notes",
+  label: "Catatan",
+  type: "textarea",
+  required: false,
+  maxLength: 2000,
+};
 
 export const activities: ActivityDefinition[] = [
   {
@@ -198,23 +229,9 @@ export const activities: ActivityDefinition[] = [
     label: "Permohonan PB/PD",
     shortLabel: "Permohonan PB/PD",
     description:
-      "Catat data pelanggan, kebutuhan daya, lokasi, dan evidence awal permohonan.",
+      "Catat data pelanggan, jenis sambungan, dan lokasi permohonan.",
+    fields: [],
     owner: permohonanOwner,
-    fields: [
-      {
-        name: "customer",
-        label: "Nama pelanggan",
-        placeholder: "Nama pelanggan",
-      },
-      { name: "phone", label: "No. HP / telepon", placeholder: "08xxxxxxxxxx" },
-      {
-        name: "notes",
-        label: "Catatan permohonan",
-        type: "textarea",
-        placeholder: "Catatan operasional",
-      },
-    ],
-    evidence: "Evidence permohonan",
   },
   {
     id: "2",
@@ -223,33 +240,17 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Survei",
     description:
       "Lengkapi hasil pemeriksaan lapangan sebelum pekerjaan direncanakan.",
-    owner: surveyOwner,
     fields: [
-      { name: "surveyDate", label: "Tanggal survei", type: "date" },
-      { name: "officer", label: "Petugas survei", placeholder: "Nama petugas" },
       {
-        name: "coordinates",
-        label: "Titik koordinat GPS",
-        placeholder: "-7.2575, 112.7521",
+        name: "surveyed_at",
+        label: "Tanggal survei",
+        type: "date",
+        required: true,
       },
-      {
-        name: "condition",
-        label: "Kondisi jaringan eksisting",
-        type: "select",
-        options: [
-          "Layak diperluas",
-          "Perlu penguatan",
-          "Perlu kajian lanjutan",
-        ],
-      },
-      {
-        name: "notes",
-        label: "Catatan hasil survei",
-        type: "textarea",
-        placeholder: "Kondisi lapangan dan rekomendasi",
-      },
+      notesField,
     ],
-    evidence: "Evidence hasil survei",
+    evidence: "Evidence aktivitas",
+    owner: surveyOwner,
   },
   {
     id: "3",
@@ -258,69 +259,37 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "RAB, KKO & KKF",
     description:
       "Susun perencanaan teknis dan tentukan apakah pemasangan tiang diperlukan.",
-    owner: planningOwner,
     fields: [
       {
-        name: "estimate",
-        label: "Estimasi pekerjaan",
-        type: "textarea",
-        placeholder: "Ringkasan estimasi pekerjaan",
-      },
-      {
-        name: "rab",
-        label: "Nilai RAB (Rp)",
-        type: "number",
-        placeholder: "0",
-      },
-      {
-        name: "technicalNotes",
-        label: "Catatan teknis",
-        type: "textarea",
-        placeholder: "Dasar perhitungan dan catatan teknis",
-      },
-      {
-        name: "needsPole",
+        name: "kebutuhan_tiang",
         label: "Kebutuhan tiang",
         type: "select",
         options: ["Ya", "Tidak"],
+        required: true,
       },
+      notesField,
     ],
-    evidence: "Dokumen RAB, KKO & KKF",
+    evidence: "Evidence aktivitas",
+    owner: planningOwner,
   },
   {
     id: "4",
     stage: 3,
     label: "Permohonan Perluasan",
     shortLabel: "Permohonan perluasan",
-    description:
-      "Siapkan PK pekerjaan dan bukti pembayaran pelanggan untuk proses NPS.",
-    owner: "nps",
+    description: "Lengkapi evidence perluasan dan keputusan delegasi PK NPS.",
     fields: [
       {
-        name: "cost",
-        label: "Perkiraan biaya penyambungan (Rp)",
-        type: "number",
-        placeholder: "0",
-      },
-      {
-        name: "length",
-        label: "Panjang jaringan diperlukan (m)",
-        type: "number",
-        placeholder: "0",
-      },
-      {
-        name: "workOrder",
-        label: "Nomor PK pekerjaan",
-        placeholder: "PK/UP3/2026/...",
-      },
-      {
-        name: "targetDivision",
-        label: "Bagian tujuan PK",
+        name: "nps_delegation_status",
+        label: "Delegasi PK NPS",
         type: "select",
-        options: ["Perencanaan", "Konstruksi", "Transaksi Energi"],
+        options: ["Didelegasikan", "Dikembalikan"],
+        required: true,
       },
+      notesField,
     ],
-    evidence: "Bukti pembayaran pelanggan",
+    evidence: "Evidence aktivitas",
+    owner: "nps",
   },
   {
     id: "5",
@@ -329,22 +298,9 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Delegasi PK NPS",
     description:
       "Delegasikan PK pekerjaan ke bagian tujuan. Pengembalian PK akan menghentikan workflow permohonan.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "nps",
-    fields: [
-      {
-        name: "npsDecision",
-        label: "Keputusan delegasi PK",
-        type: "select",
-        options: ["Didelegasikan", "Dikembalikan"],
-      },
-      {
-        name: "notes",
-        label: "Catatan keputusan",
-        type: "textarea",
-        placeholder: "Bagian tujuan PK atau alasan pengembalian",
-      },
-    ],
-    evidence: "Nota delegasi perintah kerja",
   },
   {
     id: "6",
@@ -353,9 +309,9 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "WO Vendor Tiang",
     description:
       "Terbitkan work order pemasangan tiang sesuai hasil perencanaan.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "perencanaan",
-    fields: woFields("Tiang"),
-    evidence: "Dokumen WO Vendor Tiang",
   },
   {
     id: "7",
@@ -364,17 +320,18 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "WO Vendor Konstruksi",
     description:
       "Terbitkan WO konstruksi dan tentukan kebutuhan dukungan PDKB.",
-    owner: "konstruksi",
     fields: [
-      ...woFields("Konstruksi"),
       {
-        name: "needsPdkb",
+        name: "perlu_pdkb",
         label: "Perlu PDKB",
         type: "select",
         options: ["Ya", "Tidak"],
+        required: true,
       },
+      notesField,
     ],
-    evidence: "Dokumen WO Vendor Konstruksi",
+    evidence: "Evidence aktivitas",
+    owner: "konstruksi",
   },
   {
     id: "7b",
@@ -382,22 +339,19 @@ export const activities: ActivityDefinition[] = [
     label: "WO PDKB",
     shortLabel: "WO PDKB",
     description: "Terbitkan penugasan Tim PDKB sebelum konstruksi dimulai.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "konstruksi",
-    fields: [
-      {
-        name: "woNumber",
-        label: "Nomor WO PDKB",
-        placeholder: "WO-PDKB/UP3/2026/...",
-      },
-      {
-        name: "team",
-        label: "Tim PDKB yang ditugaskan",
-        placeholder: "Tim PDKB",
-      },
-      { name: "target", label: "Target selesai", type: "date" },
-      { name: "scope", label: "Lingkup pekerjaan PDKB", type: "textarea" },
-    ],
-    evidence: "Dokumen WO PDKB",
+  },
+  {
+    id: "pk",
+    stage: 4,
+    label: "PK Vendor Pelaksana",
+    shortLabel: "PK Vendor",
+    description: "Terbitkan perintah kerja vendor pelaksana.",
+    owner: "konstruksi",
+    fields: [notesField],
+    evidence: "Evidence PK vendor",
   },
   {
     id: "8",
@@ -405,9 +359,9 @@ export const activities: ActivityDefinition[] = [
     label: "WO Vendor APP",
     shortLabel: "WO Vendor APP",
     description: "Terbitkan work order penyediaan dan pemasangan APP.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "transaksi-energi",
-    fields: woFields("APP"),
-    evidence: "Dokumen WO Vendor APP",
   },
   {
     id: "9",
@@ -416,24 +370,24 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Reservasi material",
     description:
       "Pastikan material utama tersedia dan telah dipesan dari gudang.",
-    owner: "transaksi-energi",
     fields: [
       {
-        name: "material",
-        label: "Material utama",
-        placeholder: "Nama material",
+        name: "reservation_notes",
+        label: "Catatan reservasi material",
+        type: "textarea",
+        required: false,
+        maxLength: 2000,
       },
-      { name: "quantity", label: "Jumlah", type: "number", placeholder: "0" },
-      { name: "warehouse", label: "Gudang", placeholder: "Gudang asal" },
       {
-        name: "availability",
-        label: "Status ketersediaan",
-        type: "select",
-        options: ["Tersedia", "Tersedia sebagian", "Menunggu pengadaan"],
+        name: "tera_notes",
+        label: "Catatan perakitan dan tera APP",
+        type: "textarea",
+        required: false,
+        maxLength: 2000,
       },
-      { name: "reservedAt", label: "Tanggal reservasi", type: "date" },
     ],
-    evidence: "Bukti reservasi material",
+    evidence: "Evidence aktivitas",
+    owner: "transaksi-energi",
   },
   {
     id: "10",
@@ -441,29 +395,9 @@ export const activities: ActivityDefinition[] = [
     label: "Perakitan & Tera APP",
     shortLabel: "Perakitan & Tera APP",
     description: "Catat identitas APP serta hasil perakitan dan tera.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "transaksi-energi",
-    fields: [
-      {
-        name: "appNumber",
-        label: "Nomor seri APP",
-        placeholder: "Nomor APP / kWh meter",
-      },
-      { name: "appType", label: "Tipe APP", placeholder: "Tipe perangkat" },
-      {
-        name: "assembly",
-        label: "Status perakitan",
-        type: "select",
-        options: ["Selesai", "Perlu perbaikan"],
-      },
-      {
-        name: "calibration",
-        label: "Status tera",
-        type: "select",
-        options: ["Lulus", "Tidak lulus"],
-      },
-      { name: "date", label: "Tanggal tera", type: "date" },
-    ],
-    evidence: "BA Tera APP",
   },
   {
     id: "11",
@@ -472,25 +406,9 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Pemasangan tiang",
     description:
       "Dokumentasikan pemasangan tiang dari kondisi awal hingga selesai.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "vendor-tiang",
-    fields: [
-      { name: "wo", label: "Nomor WO", placeholder: "WO-TIANG/..." },
-      {
-        name: "poleCount",
-        label: "Jumlah tiang",
-        type: "number",
-        placeholder: "0",
-      },
-      { name: "startDate", label: "Tanggal mulai", type: "date" },
-      { name: "endDate", label: "Tanggal selesai", type: "date" },
-      {
-        name: "progress",
-        label: "Progress",
-        type: "select",
-        options: ["100% — Selesai", "Tertunda — Perlu tindak lanjut"],
-      },
-    ],
-    evidence: "Foto sebelum, pekerjaan & setelah",
   },
   {
     id: "12",
@@ -499,20 +417,9 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Pelaksanaan konstruksi",
     description:
       "Laporkan realisasi scope, waktu, kendala, dan dokumentasi konstruksi.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "vendor-konstruksi",
-    fields: [
-      { name: "wo", label: "Nomor WO", placeholder: "WO-KONSTRUKSI/..." },
-      { name: "scope", label: "Realisasi scope pekerjaan", type: "textarea" },
-      { name: "startDate", label: "Tanggal mulai", type: "date" },
-      { name: "endDate", label: "Tanggal selesai", type: "date" },
-      {
-        name: "obstacle",
-        label: "Kendala",
-        type: "textarea",
-        placeholder: "Tidak ada / jelaskan kendala",
-      },
-    ],
-    evidence: "Dokumentasi konstruksi",
   },
   {
     id: "12b",
@@ -520,13 +427,9 @@ export const activities: ActivityDefinition[] = [
     label: "Dokumentasi PDKB",
     shortLabel: "Dokumentasi PDKB",
     description: "Lengkapi dokumentasi pendampingan PDKB dan BAPL.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "pdkb",
-    fields: [
-      { name: "team", label: "Tim PDKB", placeholder: "Nama tim" },
-      { name: "workDate", label: "Tanggal pekerjaan", type: "date" },
-      { name: "notes", label: "Catatan pelaksanaan", type: "textarea" },
-    ],
-    evidence: "Foto PDKB & BAPL",
   },
   {
     id: "13",
@@ -534,25 +437,18 @@ export const activities: ActivityDefinition[] = [
     label: "Pengoperasian Jaringan Listrik",
     shortLabel: "Pengoperasian jaringan",
     description: "Catat pengujian dan hasil pengoperasian jaringan listrik.",
-    owner: energizeOwner,
     fields: [
-      { name: "operationDate", label: "Tanggal pengoperasian", type: "date" },
-      { name: "officer", label: "Petugas", placeholder: "Nama petugas / tim" },
       {
-        name: "testResult",
-        label: "Hasil pengujian",
-        type: "select",
-        options: ["Lulus dan siap dioperasikan", "Perlu perbaikan"],
+        name: "operation_result",
+        label: "Hasil pengoperasian jaringan",
+        type: "textarea",
+        required: true,
+        maxLength: 500,
       },
-      {
-        name: "dcTest",
-        label: "DC Test",
-        type: "select",
-        options: ["Tidak diperlukan", "Lulus", "Tidak lulus"],
-      },
-      { name: "notes", label: "Catatan", type: "textarea" },
+      notesField,
     ],
-    evidence: "BA Pengujian & dokumentasi",
+    evidence: "Evidence aktivitas",
+    owner: energizeOwner,
   },
   {
     id: "14",
@@ -561,48 +457,19 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Pemasangan SR/APP",
     description:
       "Lengkapi identitas meter, hasil pemasangan, dan status penyalaan.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: appVendorOwner,
-    fields: [
-      { name: "meter", label: "Nomor meter", placeholder: "Nomor meter" },
-      { name: "vendor", label: "Vendor", placeholder: "Nama vendor" },
-      { name: "installDate", label: "Tanggal pemasangan", type: "date" },
-      {
-        name: "installStatus",
-        label: "Status pemasangan",
-        type: "select",
-        options: ["Selesai", "Perlu perbaikan"],
-      },
-      {
-        name: "energizeStatus",
-        label: "Status penyalaan",
-        type: "select",
-        options: ["Menyala", "Belum menyala"],
-      },
-    ],
-    evidence: "BA Penyalaan & dokumentasi",
   },
   {
     id: "15",
     stage: 7,
     label: "Entri & Mutasi PDL",
     shortLabel: "Entri & Mutasi PDL",
-    description: "Catat nomor PDL dan hasil mutasi pelanggan.",
+    description: "Lengkapi evidence penutupan PDL, arsip AIL, dan DIJ.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "pelayanan-pelanggan",
-    fields: [
-      {
-        name: "pdlNumber",
-        label: "Nomor PDL",
-        placeholder: "PDL/ULP/2026/...",
-      },
-      { name: "entryDate", label: "Tanggal entri", type: "date" },
-      {
-        name: "mutationStatus",
-        label: "Status mutasi",
-        type: "select",
-        options: ["Berhasil", "Perlu koreksi"],
-      },
-    ],
-    evidence: "Bukti mutasi PDL",
   },
   {
     id: "16",
@@ -610,17 +477,9 @@ export const activities: ActivityDefinition[] = [
     label: "Arsip AIL / Updating DIJ",
     shortLabel: "Arsip AIL / DIJ",
     description: "Lengkapi nomor AIL dan pembaruan data induk jaringan.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "pelayanan-pelanggan",
-    fields: [
-      {
-        name: "ailNumber",
-        label: "Nomor AIL",
-        placeholder: "AIL/ULP/2026/...",
-      },
-      { name: "dijDate", label: "Tanggal update DIJ", type: "date" },
-      { name: "notes", label: "Catatan arsip", type: "textarea" },
-    ],
-    evidence: "Arsip AIL & dokumen akhir",
   },
   {
     id: "17",
@@ -629,483 +488,74 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Selesai",
     description:
       "Konfirmasi seluruh dokumen akhir lengkap dan tutup permohonan.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
     owner: "pelayanan-pelanggan",
-    fields: [
-      { name: "completionDate", label: "Tanggal selesai", type: "date" },
-      {
-        name: "confirmation",
-        label: "Konfirmasi penutupan",
-        type: "select",
-        options: ["Seluruh data dan dokumen lengkap"],
-      },
-      { name: "notes", label: "Catatan penutupan", type: "textarea" },
-    ],
-    evidence: "Dokumen penutupan",
   },
 ];
 
-function woFields(kind: string): FieldDefinition[] {
-  return [
-    {
-      name: "woNumber",
-      label: "Nomor WO",
-      placeholder: `WO-${kind.toUpperCase()}/UP3/2026/...`,
-    },
-    { name: "vendor", label: "Vendor", placeholder: `Vendor ${kind}` },
-    { name: "issuedAt", label: "Tanggal diterbitkan", type: "date" },
-    { name: "target", label: "Target pekerjaan", type: "date" },
-    {
-      name: "scope",
-      label: "Scope pekerjaan",
-      type: "textarea",
-      placeholder: "Lingkup pekerjaan yang ditugaskan",
-    },
-  ];
-}
-
-export const applicationSeeds: ApplicationSeed[] = [
-  seed(
-    "0156",
-    "Siti Marlina",
-    "JTR",
-    "ULP Taman",
-    "2",
-    {},
-    "safe",
-    "2 hari tersisa",
-    "29 Agu 2026, 14:32",
-  ),
-  seed(
-    "0155",
-    "Bengkel Sumber Jaya",
-    "JTM / Gardu",
-    "ULP Menganti",
-    "12",
-    { needsPole: false, npsApproved: true, needsPdkb: false },
-    "late",
-    "Terlambat 1 hari",
-    "29 Agu 2026, 11:08",
-  ),
-  seed(
-    "0154",
-    "PT Cipta Pangan",
-    "PLG TM <5 GWNG",
-    "ULP Karang Pilang",
-    "3",
-    {},
-    "due",
-    "Berakhir hari ini",
-    "28 Agu 2026, 16:45",
-  ),
-  seed(
-    "0153",
-    "Rudi Hartono",
-    "JTR",
-    "ULP Taman",
-    "3",
-    {},
-    "safe",
-    "3 hari tersisa",
-    "28 Agu 2026, 10:20",
-  ),
-  seed(
-    "0152",
-    "CV Lintas Karya",
-    "PLG TM >5 GWNG",
-    "ULP Menganti",
-    "5",
-    { needsPole: true },
-    "due",
-    "1 hari tersisa",
-    "27 Agu 2026, 15:17",
-  ),
-  seed(
-    "0151",
-    "Masjid Al-Ikhlas",
-    "JTR",
-    "ULP Karang Pilang",
-    "7",
-    { needsPole: false, npsApproved: true },
-    "safe",
-    "2 hari tersisa",
-    "27 Agu 2026, 09:40",
-  ),
-  seed(
-    "0150",
-    "PT Prima Logistik",
-    "PLG TM <5 GWNG",
-    "ULP Taman",
-    "6",
-    { needsPole: true, npsApproved: true },
-    "late",
-    "Terlambat 2 hari",
-    "26 Agu 2026, 13:55",
-  ),
-  seed(
-    "0149",
-    "Koperasi Maju Bersama",
-    "JTR",
-    "ULP Menganti",
-    "9",
-    { needsPole: false, npsApproved: true, needsPdkb: false },
-    "safe",
-    "4 hari tersisa",
-    "26 Agu 2026, 08:31",
-  ),
-  seed(
-    "0148",
-    "Gudang Sejahtera",
-    "PLG TM >5 GWNG",
-    "ULP Karang Pilang",
-    "11",
-    { needsPole: true, npsApproved: true, needsPdkb: false },
-    "due",
-    "1 hari tersisa",
-    "25 Agu 2026, 17:10",
-  ),
-  seed(
-    "0147",
-    "Klinik Medika Utama",
-    "JTR",
-    "ULP Taman",
-    "12b",
-    { needsPole: false, npsApproved: true, needsPdkb: true },
-    "safe",
-    "3 hari tersisa",
-    "25 Agu 2026, 12:04",
-  ),
-  seed(
-    "0146",
-    "PT Sentosa Kimia",
-    "PLG TM <5 GWNG",
-    "ULP Menganti",
-    "13",
-    { needsPole: true, npsApproved: true, needsPdkb: true },
-    "due",
-    "Berakhir hari ini",
-    "24 Agu 2026, 16:22",
-  ),
-  seed(
-    "0145",
-    "Perumahan Taman Asri",
-    "JTR",
-    "ULP Karang Pilang",
-    "14",
-    { needsPole: false, npsApproved: true, needsPdkb: false },
-    "late",
-    "Terlambat 1 hari",
-    "24 Agu 2026, 09:18",
-  ),
-  seed(
-    "0144",
-    "Toko Berkah Abadi",
-    "JTR",
-    "ULP Taman",
-    "15",
-    { needsPole: false, npsApproved: true, needsPdkb: false },
-    "safe",
-    "2 hari tersisa",
-    "23 Agu 2026, 14:01",
-  ),
-  {
-    ...seed(
-      "0143",
-      "PT Surya Nusantara",
-      "PLG TM <5 GWNG",
-      "ULP Menganti",
-      null,
-      { needsPole: true, npsApproved: true, needsPdkb: false },
-      "done",
-      "Selesai",
-      "22 Agu 2026, 10:45",
-    ),
-    requestedAt: "2026-08-06",
-  },
-  {
-    ...seed(
-      "0142",
-      "Dewi Anggraini",
-      "JTM / Gardu",
-      "ULP Karang Pilang",
-      "5",
-      { needsPole: true, npsApproved: false },
-      "done",
-      "Proses dihentikan",
-      "21 Agu 2026, 13:12",
-    ),
-    rejected: true,
-  },
-];
-
-function seed(
-  suffix: string,
-  customer: string,
-  connectionType: ConnectionType,
-  unit: string,
-  currentAction: ActionId | null,
-  decisions: WorkflowDecisions,
-  tone: ApplicationSeed["sla"]["tone"],
-  slaLabel: string,
-  updatedAt: string,
-): ApplicationSeed {
-  const numeric = Number(suffix);
-  return {
-    id: `PBPD-2026-${suffix}`,
-    customerId: `53${String(numeric).padStart(10, "0")}`,
-    customer,
-    requestType: numeric % 3 === 0 ? "Perubahan daya" : "Pasang baru",
-    connectionType,
-    unit,
-    location: `${numeric % 2 === 0 ? "Jl. Raya" : "Jl. Industri"} No. ${(numeric % 97) + 1}, Surabaya`,
-    power: connectionType.startsWith("PLG TM")
-      ? `${555 + (numeric % 6) * 345} kVA`
-      : `${7_700 + (numeric % 5) * 6_900} VA`,
-    requestedAt: `2026-08-${String(8 + (156 - numeric)).padStart(2, "0")}`,
-    currentAction,
-    decisions,
-    sla: { tone, label: slaLabel },
-    updatedAt,
-  };
-}
-
+// Presentation mapping only. Node state and action permissions come from the API.
+export const nodeActions: Record<string, ActionId> = {
+  permohonan: "1",
+  survei: "2",
+  rab_kko_kkf: "3",
+  kebutuhan_tiang: "3",
+  permohonan_perluasan: "4",
+  nps_delegation: "5",
+  wo_tiang: "6",
+  wo_konstruksi: "7",
+  wo_pdkb: "7b",
+  pk_vendor: "pk",
+  wo_app: "8",
+  reservasi_material: "9",
+  tera_app: "10",
+  pemasangan_tiang: "11",
+  pelaksanaan_konstruksi: "12",
+  pdkb_documentation: "12b",
+  energize_jaringan: "13",
+  pemasangan_sr_app: "14",
+  entri_mutasi_pdl: "15",
+  arsip_ail: "16",
+  selesai: "17",
+};
 export function getActivity(id: ActionId | null | undefined) {
   return activities.find((activity) => activity.id === id);
 }
-
 export function getOwner(
   activity: ActivityDefinition,
-  application: ApplicationSeed,
+  application: ApplicationSummary,
 ): RoleId {
   return typeof activity.owner === "function"
     ? activity.owner(application)
     : activity.owner;
 }
-
 export function getRole(id: RoleId) {
-  return roles.find((role) => role.id === id) ?? roles[0];
-}
-
-export function getRoleActivities(
-  roleId: RoleId,
-  application: ApplicationSeed = applicationSeeds[0],
-) {
-  if (roleId === "super-user") return [];
-  return activities.filter(
-    (activity) => getOwner(activity, application) === roleId,
+  return (
+    roles.find((role) => role.id === id) ?? {
+      id,
+      label: id,
+      lane: "—",
+      initials: "",
+    }
   );
 }
-
-export function getActiveSequence(
-  application: Pick<ApplicationSeed, "decisions">,
-): ActionId[] {
-  return activities
-    .filter((activity) => {
-      if (
-        (activity.id === "6" || activity.id === "11") &&
-        application.decisions.needsPole === false
-      )
-        return false;
-      if (
-        (activity.id === "7b" || activity.id === "12b") &&
-        application.decisions.needsPdkb !== true
-      )
-        return false;
-      return true;
-    })
-    .map((activity) => activity.id);
+export function getCurrentStage(application: Application) {
+  return application.currentStage;
 }
-
-export function getCurrentStage(application: Application): StageId {
-  if (application.currentAction)
-    return getActivity(application.currentAction)?.stage ?? 1;
-  return 7;
-}
-
 export function getApplicationStatus(application: Application) {
-  if (application.rejected) return "Ditolak";
-  if (!application.currentAction || application.completed) return "Selesai";
-  if (application.sla.tone === "late") return "Terlambat";
-  return "Menunggu tindakan";
-}
-
-export function getInitialCompletedActionIds(
-  application: Application,
-): ActionId[] {
-  const sequence = getActiveSequence(application);
-  if (application.rejected) {
-    const rejectedIndex = sequence.indexOf("5");
-    return sequence.slice(0, rejectedIndex + 1);
-  }
-  if (!application.currentAction) return sequence;
-  const currentIndex = sequence.indexOf(application.currentAction);
-  return currentIndex < 0 ? [] : sequence.slice(0, currentIndex);
-}
-
-const evidenceNames: Partial<Record<ActionId, string[]>> = {
-  "1": ["Permohonan_PBPD.pdf"],
-  "2": ["Hasil_Survei.pdf", "Foto_Survei_01.jpg"],
-  "3": ["RAB.pdf", "KKO.pdf", "KKF.pdf"],
-  "4": ["Bukti_Pembayaran.pdf"],
-  "5": ["Nota_Delegasi_PK.pdf"],
-  "6": ["WO_Vendor_Tiang.pdf"],
-  "7": ["WO_Konstruksi.pdf"],
-  "7b": ["WO_PDKB.pdf"],
-  "8": ["WO_Vendor_APP.pdf"],
-  "9": ["Reservasi_Material.pdf"],
-  "10": ["BA_Tera.pdf"],
-  "11": ["Dokumentasi_Pemasangan_Tiang.jpg"],
-  "12": ["Dokumentasi_Konstruksi.jpg"],
-  "12b": ["BAPL_PDKB.pdf", "Dokumentasi_PDKB.jpg"],
-  "13": ["BA_Pengujian.pdf"],
-  "14": ["BA_Penyalaan.pdf"],
-  "15": ["Mutasi_PDL.pdf"],
-  "16": ["Arsip_AIL_DIJ.pdf"],
-  "17": ["Dokumen_Penutupan.pdf"],
-};
-
-export function getDocuments(application: Application): DocumentItem[] {
-  const initialApplication =
-    applicationSeeds.find((item) => item.id === application.id) ?? application;
-  const base = getInitialCompletedActionIds(initialApplication).flatMap(
-    (actionId, actionIndex) =>
-      (application.rejected && actionId === "5"
-        ? ["Keputusan_Pengembalian_NPS.pdf"]
-        : (evidenceNames[actionId] ?? [])
-      ).map((name, fileIndex) => ({
-        id: `${application.id}-${actionId}-${fileIndex}`,
-        name,
-        actionId,
-        addedAt: formatWorkflowDate(application.requestedAt, actionIndex + 1),
-      })),
+  return (
+    (
+      {
+        in_progress: "Menunggu tindakan",
+        returned: "Ditolak",
+        completed: "Selesai",
+      } as Record<string, string>
+    )[application.status] ?? application.status
   );
-  return [...base, ...(application.documents ?? [])];
 }
-
-export function getHistory(application: Application): HistoryItem[] {
-  const initialApplication =
-    applicationSeeds.find((item) => item.id === application.id) ?? application;
-  const completed = getInitialCompletedActionIds(initialApplication);
-  const base = completed.map((actionId, index) => {
-    const activity = getActivity(actionId)!;
-    const role = getRole(getOwner(activity, application));
-    const isRejected = application.rejected && actionId === "5";
-    return {
-      id: `${application.id}-${actionId}`,
-      at: formatWorkflowDate(application.requestedAt, index),
-      title: isRejected
-        ? "PK dikembalikan NPS"
-        : `${activity.shortLabel} selesai`,
-      by: `${role.lane} — ${role.label}`,
-    };
-  });
-  return [...base, ...(application.history ?? [])].reverse();
+export function getDocuments(application: Application) {
+  return application.documents;
 }
-
-function formatWorkflowDate(date: string, offset: number) {
-  const value = new Date(`${date}T09:14:00`);
-  value.setDate(value.getDate() + offset);
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(value);
-}
-
-export function readOverrides(): Record<string, ApplicationOverride> {
-  if (typeof window === "undefined") return {};
-  try {
-    return JSON.parse(
-      window.localStorage.getItem(WORKFLOW_STORAGE_KEY) ?? "{}",
-    );
-  } catch {
-    return {};
-  }
-}
-
-export function getApplications(overrides = readOverrides()): Application[] {
-  return applicationSeeds.map((seedItem) => ({
-    ...seedItem,
-    ...(overrides[seedItem.id] ?? {}),
-    decisions: {
-      ...seedItem.decisions,
-      ...(overrides[seedItem.id]?.decisions ?? {}),
-    },
-  }));
-}
-
-export function advanceApplication(
-  application: Application,
-  roleId: RoleId,
-  values: Record<string, string>,
-  evidenceName?: string,
-) {
-  if (!application.currentAction) return application;
-  const activity = getActivity(application.currentAction);
-  if (!activity || getOwner(activity, application) !== roleId)
-    return application;
-
-  const overrides = readOverrides();
-  const current = overrides[application.id] ?? {};
-  const decisions: WorkflowDecisions = { ...application.decisions };
-  if (application.currentAction === "3")
-    decisions.needsPole = values.needsPole === "Ya";
-  if (application.currentAction === "7")
-    decisions.needsPdkb = values.needsPdkb === "Ya";
-  if (application.currentAction === "5")
-    decisions.npsApproved = values.npsDecision !== "Dikembalikan";
-
-  const rejected =
-    application.currentAction === "5" && decisions.npsApproved === false;
-  const sequence = getActiveSequence({ decisions });
-  const actionIndex = sequence.indexOf(application.currentAction);
-  const nextAction = rejected
-    ? application.currentAction
-    : (sequence[actionIndex + 1] ?? null);
-  const now = new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date());
-  const role = getRole(roleId);
-  const history: HistoryItem = {
-    id: `${application.id}-history-${application.currentAction}-${Date.now()}`,
-    at: new Date().toISOString(),
-    title: rejected
-      ? "PK dikembalikan NPS"
-      : `${activity.shortLabel} selesai`,
-    by: `${role.lane} — ${role.label}`,
-  };
-  const documents = evidenceName
-    ? [
-        ...(current.documents ?? []),
-        {
-          id: `${application.id}-upload-${application.currentAction}-${Date.now()}`,
-          name: evidenceName,
-          actionId: application.currentAction,
-          addedAt: now,
-        },
-      ]
-    : current.documents;
-
-  overrides[application.id] = {
-    ...current,
-    currentAction: nextAction,
-    completed: !rejected && nextAction === null,
-    rejected,
-    decisions,
-    updatedAt: now,
-    history: [...(current.history ?? []), history],
-    documents,
-  };
-  window.localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(overrides));
-  return getApplications(overrides).find((item) => item.id === application.id)!;
-}
-
-export function resetWorkflowDemo() {
-  if (typeof window !== "undefined")
-    window.localStorage.removeItem(WORKFLOW_STORAGE_KEY);
+export function getHistory(application: Application) {
+  return application.history;
 }

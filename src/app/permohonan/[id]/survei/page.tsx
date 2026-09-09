@@ -1,70 +1,69 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
-import { ArrowLeft, Eye, Info, LockKeyhole } from "lucide-react";
+import { ArrowLeft, Eye, LockKeyhole } from "lucide-react";
 
+import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { getApplication } from "@/lib/applications";
+import { useSession } from "@/lib/auth";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  ROLE_STORAGE_KEY,
   getActivity,
-  getApplications,
   getOwner,
   getRole,
   type Application,
-  type RoleId,
 } from "@/lib/workflow";
-
-const conditions = [
-  "Layak diperluas",
-  "Perlu penguatan",
-  "Perlu kajian lanjutan",
-];
-
-type SurveyValues = {
-  surveyDate: string;
-  officer: string;
-  coordinates: string;
-  condition: string;
-  notes: string;
-};
 
 export default function SurveyPage() {
   const params = useParams<{ id: string }>();
-  const id = decodeURIComponent(params.id);
-  const [roleId, setRoleId] = useState<RoleId>("teknik");
-  const [application, setApplication] = useState<Application | undefined>(() =>
-    getApplications({}).find((item) => item.id === id),
-  );
+  const id = params.id;
+  const { user, error: sessionError } = useSession();
+  const router = useRouter();
+  const roleId = user?.role ?? "user";
+  const [application, setApplication] = useState<Application>();
   const [ready, setReady] = useState(false);
-
+  const [error, setError] = useState("");
   useEffect(() => {
-    setRoleId(
-      (window.localStorage.getItem(ROLE_STORAGE_KEY) as RoleId) || "teknik",
-    );
-    setApplication(getApplications().find((item) => item.id === id));
-    setReady(true);
-  }, [id]);
+    if (!user) return;
+    let cancelled = false;
+    setReady(false);
+    setApplication(undefined);
+    setError("");
+    getApplication(id)
+      .then((data) => {
+        if (!cancelled) {
+          setApplication(data);
+          setReady(true);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setError(
+            error instanceof Error ? error.message : "Gagal memuat survei.",
+          );
+          setReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user]);
 
   if (!ready) {
     return (
-      <AppShell active="applications" roleId={roleId} onRoleChange={setRoleId}>
+      <AppShell active="applications" roleId={roleId} user={user}>
         <div role="status" className="space-y-4">
-          <p>Memuat formulir survei...</p>
+          <p role={sessionError ? "alert" : "status"}>
+            {sessionError || "Memuat formulir survei..."}
+          </p>
+          {sessionError && (
+            <Button onClick={() => window.location.reload()}>Coba lagi</Button>
+          )}
           <div className="bg-muted h-24 rounded-md" />
           <div className="bg-muted h-64 rounded-md" />
         </div>
@@ -74,14 +73,21 @@ export default function SurveyPage() {
 
   if (!application) {
     return (
-      <AppShell active="applications" roleId={roleId} onRoleChange={setRoleId}>
+      <AppShell active="applications" roleId={roleId} user={user}>
         <div className="mx-auto max-w-3xl border px-6 py-16 text-center">
           <h1 className="font-display text-xl font-semibold">
-            Permohonan tidak ditemukan
+            Detail survei belum tersedia
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Nomor permohonan tidak tersedia pada data demo.
+            {error || "Permohonan tidak ditemukan."}
           </p>
+          <Button
+            variant="outline"
+            className="mt-6 mr-2"
+            onClick={() => window.location.reload()}
+          >
+            Coba lagi
+          </Button>
           <Button asChild variant="outline" className="mt-6">
             <Link href="/dashboard?view=all">Kembali ke permohonan</Link>
           </Button>
@@ -93,12 +99,19 @@ export default function SurveyPage() {
   const surveyActivity = getActivity("2")!;
   const ownerId = getOwner(surveyActivity, application);
   const owner = getRole(ownerId);
-  const isActive = application.currentAction === "2" && !application.rejected;
-  const ownsAction = ownerId === roleId;
+  const action = application.availableActions.find(
+    (action) => action.workflow_node === "survei",
+  );
+  const isActive = application.nodes.some(
+    (node) =>
+      node.workflow_node === "survei" &&
+      (node.status === "available" || node.status === "in_progress"),
+  );
+  const ownsAction = !!action;
   const isMonitoring = roleId === "super-user";
 
   return (
-    <AppShell active="applications" roleId={roleId} onRoleChange={setRoleId}>
+    <AppShell active="applications" roleId={roleId} user={user}>
       <div className="mx-auto w-full max-w-3xl min-w-0">
         <Link
           href={`/permohonan/${application.id}`}
@@ -140,156 +153,16 @@ export default function SurveyPage() {
             body={`Survei dikerjakan oleh ${owner.lane} — ${owner.label} sesuai jenis sambungan ${application.connectionType}.`}
           />
         ) : (
-          <SurveyForm application={application} />
+          <ActionForm
+            key={application.id}
+            application={application}
+            action={action!}
+            onCancel={() => router.push(`/permohonan/${id}`)}
+            onSaved={() => router.push(`/permohonan/${id}`)}
+          />
         )}
       </div>
     </AppShell>
-  );
-}
-
-function SurveyForm({ application }: { application: Application }) {
-  const [values, setValues] = useState<SurveyValues>({
-    surveyDate: "",
-    officer: "",
-    coordinates: "",
-    condition: conditions[0],
-    notes: "",
-  });
-  const [evidenceName, setEvidenceName] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-
-  function update<K extends keyof SurveyValues>(key: K, value: SurveyValues[K]) {
-    setValues((current) => ({ ...current, [key]: value }));
-    setSubmitted(false);
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    // Slicing only: penyimpanan menunggu integrasi API COLABORA.
-    setSubmitted(true);
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="mt-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <Label htmlFor="surveyDate">Tanggal survei</Label>
-          <Input
-            id="surveyDate"
-            type="date"
-            value={values.surveyDate}
-            onChange={(event) => update("surveyDate", event.target.value)}
-            className="bg-background mt-2 h-11"
-            required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="officer">Petugas survei</Label>
-          <Input
-            id="officer"
-            value={values.officer}
-            onChange={(event) => update("officer", event.target.value)}
-            placeholder="Nama petugas"
-            className="mt-2 h-11"
-            required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="coordinates">Titik koordinat GPS</Label>
-          <Input
-            id="coordinates"
-            value={values.coordinates}
-            onChange={(event) => update("coordinates", event.target.value)}
-            placeholder="-7.2575, 112.7521"
-            className="mt-2 h-11 font-mono"
-            required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="condition">Kondisi jaringan eksisting</Label>
-          <Select
-            value={values.condition}
-            onValueChange={(value) => update("condition", value)}
-          >
-            <SelectTrigger
-              id="condition"
-              className="bg-background mt-2 h-11 w-full"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {conditions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="md:col-span-2">
-          <Label htmlFor="notes">Catatan hasil survei</Label>
-          <Textarea
-            id="notes"
-            value={values.notes}
-            onChange={(event) => update("notes", event.target.value)}
-            placeholder="Kondisi lapangan dan rekomendasi"
-            className="bg-background mt-2 min-h-24"
-            required
-          />
-        </div>
-      </div>
-
-      <div className="mt-5">
-        <Label htmlFor="evidence">
-          Evidence hasil survei{" "}
-          <span className="text-muted-foreground font-normal">
-            (PDF/JPG/PNG)
-          </span>
-        </Label>
-        <Input
-          id="evidence"
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          className="mt-2 h-11"
-          required
-          onChange={(event) => {
-            setEvidenceName(event.target.files?.[0]?.name ?? "");
-            setSubmitted(false);
-          }}
-        />
-        {evidenceName ? (
-          <p className="text-muted-foreground mt-2 text-sm">
-            Berkas dipilih: {evidenceName}
-          </p>
-        ) : null}
-      </div>
-
-      {submitted ? (
-        <div
-          role="status"
-          className="border-primary/30 bg-primary/10 text-primary mt-6 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm"
-        >
-          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            Hasil survei lengkap dan tervalidasi. Belum tersimpan — integrasi
-            penyimpanan ke API COLABORA belum tersedia.
-          </span>
-        </div>
-      ) : null}
-
-      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button asChild type="button" variant="outline" className="min-h-11">
-          <Link href={`/permohonan/${application.id}`}>Batal</Link>
-        </Button>
-        <Button type="submit" className="min-h-11">
-          Simpan hasil survei
-        </Button>
-      </div>
-    </form>
   );
 }
 

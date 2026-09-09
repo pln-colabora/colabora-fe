@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -13,7 +13,10 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
-import { AppShell, canCreatePermohonan } from "@/components/dashboard/app-shell";
+import {
+  AppShell,
+  canCreatePermohonan,
+} from "@/components/dashboard/app-shell";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,17 +27,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getApplications } from "@/lib/applications";
+import { useSession } from "@/lib/auth";
 import {
-  ROLE_STORAGE_KEY,
   getActivity,
   getApplicationStatus,
-  getApplications,
   getCurrentStage,
   getOwner,
   getRole,
   stages,
   type Application,
-  type RoleId,
 } from "@/lib/workflow";
 
 type View = "all" | "mine";
@@ -59,31 +61,43 @@ function DashboardContent() {
   const view: View = searchParams.get("view") === "mine" ? "mine" : "all";
   const [ready, setReady] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
-  const [roleId, setRoleId] = useState<RoleId>("teknik");
+  const { user, error: sessionError } = useSession();
+  const roleId = user?.role ?? "user";
+  const [loadError, setLoadError] = useState("");
+  const [reload, setReload] = useState(0);
   const [applications, setApplications] = useState<Application[]>([]);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    setRoleId(
-      (window.localStorage.getItem(ROLE_STORAGE_KEY) as RoleId) || "teknik",
-    );
-    setApplications(getApplications());
-    setReady(true);
-  }, []);
+    if (!user) return;
+    let cancelled = false;
+    setReady(false);
+    setLoadError("");
+    getApplications()
+      .then((data) => {
+        if (!cancelled) {
+          setApplications(data);
+          setReady(true);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setLoadError(
+            error instanceof Error ? error.message : "Gagal memuat permohonan.",
+          );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, reload]);
 
-  const roleQueue = useMemo(
-    () =>
-      roleId === "super-user"
-        ? applications
-        : applications.filter((application) => isOwnedBy(application, roleId)),
-    [applications, roleId],
-  );
+  const roleQueue = applications.filter(isOwnedBy);
   const filteredApplications = (
     view === "mine" ? roleQueue : applications
   ).filter((application) => {
     const search = query.trim().toLocaleLowerCase("id-ID");
     return (
-      `${application.id} ${application.customer} ${application.unit}`
+      `${application.number} ${application.id} ${application.customer} ${application.unit}`
         .toLocaleLowerCase("id-ID")
         .includes(search) &&
       (!statusFilter || getApplicationStatus(application) === statusFilter)
@@ -99,17 +113,17 @@ function DashboardContent() {
     (item) => getApplicationStatus(item) === "Selesai",
   ).length;
   const activeCount = applications.filter(
-    (item) => !item.rejected && item.currentAction,
+    (item) => item.status === "in_progress",
   ).length;
   const overdueCount = applications.filter(
-    (item) => item.sla.tone === "late" && item.currentAction,
+    (item) => item.sla.tone === "late" && item.status === "in_progress",
   ).length;
 
   return (
     <AppShell
       active={isHome ? "dashboard" : "applications"}
       roleId={roleId}
-      onRoleChange={setRoleId}
+      user={user}
     >
       <div className="w-full max-w-full min-w-0 overflow-x-clip">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -122,7 +136,7 @@ function DashboardContent() {
                 <>
                   Selamat datang,{" "}
                   <strong className="text-foreground font-semibold">
-                    {role.label}
+                    {user?.name ?? "..."}
                   </strong>
                   .
                 </>
@@ -141,11 +155,26 @@ function DashboardContent() {
               </Button>
             ) : null}
             <p className="text-muted-foreground text-sm">
-              Data demo / penyimpanan lokal
+              Data backend COLABORA
             </p>
           </div>
         </header>
 
+        {(loadError || sessionError) && (
+          <div role="alert" className="text-destructive mt-4 text-sm">
+            {loadError || sessionError}{" "}
+            <Button
+              variant="outline"
+              onClick={() =>
+                sessionError
+                  ? window.location.reload()
+                  : setReload((value) => value + 1)
+              }
+            >
+              Coba lagi
+            </Button>
+          </div>
+        )}
         {isHome && (
           <>
             <p className="text-muted-foreground mt-2 text-sm">
@@ -155,14 +184,14 @@ function DashboardContent() {
                 : "Permohonan PB/PD"}
             </p>
             <section
-              aria-label="Ringkasan seluruh permohonan demo"
+              aria-label="Ringkasan seluruh permohonan"
               className="mt-6 grid grid-cols-2 gap-3 lg:gap-4 xl:grid-cols-4"
             >
               <SummaryMetric
                 tone="primary"
                 label="Total permohonan"
                 value={applications.length}
-                detail="Seluruh data demo"
+                detail="Seluruh permohonan yang dapat diakses"
                 ready={ready}
               />
               <SummaryMetric
@@ -371,15 +400,19 @@ function DashboardContent() {
           {!ready ? (
             <div role="status" className="space-y-3 p-5">
               <p className="text-muted-foreground text-sm">
-                Memuat permohonan...
+                {loadError || sessionError
+                  ? "Data permohonan belum tersedia."
+                  : "Memuat permohonan..."}
               </p>
-              {[1, 2, 3].map((row) => (
-                <div
-                  key={row}
-                  className="bg-muted h-16 rounded-md"
-                  aria-hidden="true"
-                />
-              ))}
+              {!loadError &&
+                !sessionError &&
+                [1, 2, 3].map((row) => (
+                  <div
+                    key={row}
+                    className="bg-muted h-16 rounded-md"
+                    aria-hidden="true"
+                  />
+                ))}
             </div>
           ) : visibleApplications.length > 0 ? (
             <>
@@ -388,7 +421,6 @@ function DashboardContent() {
                   <ApplicationListItem
                     key={application.id}
                     application={application}
-                    roleId={roleId}
                   />
                 ))}
               </div>
@@ -430,7 +462,6 @@ function DashboardContent() {
                         compact={isHome}
                         key={application.id}
                         application={application}
-                        roleId={roleId}
                       />
                     ))}
                   </tbody>
@@ -446,7 +477,7 @@ function DashboardContent() {
               </p>
               <p className="text-muted-foreground mt-1 text-sm">
                 {applications.length === 0
-                  ? "Belum ada data permohonan di browser ini."
+                  ? "Belum ada permohonan yang dapat diakses akun ini."
                   : "Ubah pencarian, reset filter, atau pilih Semua permohonan."}
               </p>
             </div>
@@ -457,19 +488,13 @@ function DashboardContent() {
   );
 }
 
-function ApplicationListItem({
-  application,
-  roleId,
-}: {
-  application: Application;
-  roleId: RoleId;
-}) {
+function ApplicationListItem({ application }: { application: Application }) {
   const activity = getActivity(application.currentAction);
   const stage = stages.find(
     (item) => item.id === getCurrentStage(application),
   )!;
   const owner = activity ? getRole(getOwner(activity, application)) : null;
-  const owned = isOwnedBy(application, roleId);
+  const owned = isOwnedBy(application);
 
   return (
     <article className="min-w-0 py-4">
@@ -480,7 +505,7 @@ function ApplicationListItem({
             {application.requestType} / {application.unit}
           </p>
           <p className="text-muted-foreground mt-1 truncate font-mono text-sm">
-            {application.id}
+            {application.number}
           </p>
         </div>
         <StatusBadge status={getApplicationStatus(application)} />
@@ -576,11 +601,9 @@ function SummaryMetric({
 
 function ApplicationRow({
   application,
-  roleId,
   compact = false,
 }: {
   application: Application;
-  roleId: RoleId;
   compact?: boolean;
 }) {
   const activity = getActivity(application.currentAction);
@@ -588,13 +611,13 @@ function ApplicationRow({
     (item) => item.id === getCurrentStage(application),
   )!;
   const owner = activity ? getRole(getOwner(activity, application)) : null;
-  const owned = isOwnedBy(application, roleId);
+  const owned = isOwnedBy(application);
   const status = getApplicationStatus(application);
 
   return (
     <tr className="hover:bg-muted/35 border-b last:border-b-0">
       <td className="px-4 py-3 font-mono text-sm font-medium whitespace-nowrap">
-        {application.id}
+        {application.number}
       </td>
       <td className="px-4 py-3">
         <p className="max-w-48 truncate font-medium">{application.customer}</p>
@@ -675,13 +698,6 @@ function SlaIndicator({ application }: { application: Application }) {
   );
 }
 
-function isOwnedBy(application: Application, roleId: RoleId) {
-  if (
-    !application.currentAction ||
-    application.rejected ||
-    roleId === "super-user"
-  )
-    return false;
-  const activity = getActivity(application.currentAction);
-  return activity ? getOwner(activity, application) === roleId : false;
+function isOwnedBy(application: Application) {
+  return application.availableActions.length > 0;
 }

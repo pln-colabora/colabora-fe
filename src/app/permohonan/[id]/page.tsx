@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -18,11 +18,10 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -30,53 +29,111 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  ROLE_STORAGE_KEY,
+  assignVendor,
+  getApplication,
+  getApplicationDocuments,
+  getApplicationHistory,
+  getVendorAccounts,
+} from "@/lib/applications";
+import { useSession } from "@/lib/auth";
+import {
   activities,
-  advanceApplication,
-  getActiveSequence,
+  nodeActions,
   getActivity,
   getApplicationStatus,
-  getApplications,
   getCurrentStage,
   getDocuments,
   getHistory,
-  getInitialCompletedActionIds,
   getOwner,
   getRole,
   stages,
   type ActionId,
   type Application,
-  type FieldDefinition,
   type RoleId,
   type StageId,
 } from "@/lib/workflow";
 
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
-  const id = decodeURIComponent(params.id);
-  const [roleId, setRoleId] = useState<RoleId>("teknik");
-  const [application, setApplication] = useState<Application | undefined>(() =>
-    getApplications({}).find((item) => item.id === id),
-  );
+  const id = params.id;
+  const { user, error: sessionError } = useSession();
+  const roleId = user?.role ?? "user";
+  const [application, setApplication] = useState<Application>();
+  const [loadError, setLoadError] = useState("");
+  const [relatedError, setRelatedError] = useState("");
+  const [relatedLoading, setRelatedLoading] = useState(true);
+  const [reload, setReload] = useState(0);
   const [ready, setReady] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    setRoleId(
-      (window.localStorage.getItem(ROLE_STORAGE_KEY) as RoleId) || "teknik",
-    );
-    setApplication(getApplications().find((item) => item.id === id));
-    setReady(true);
-  }, [id]);
+    if (!user) return;
+    let cancelled = false;
+    setReady(false);
+    setLoadError("");
+    setRelatedError("");
+    setApplication(undefined);
+    getApplication(id)
+      .then((data) => {
+        if (!cancelled) {
+          setApplication(data);
+          setReady(true);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error ? error.message : "Gagal memuat detail.",
+          );
+          setReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user, reload]);
+
+  const loadedNodes = application?.nodes;
+  useEffect(() => {
+    if (!loadedNodes) return;
+    let cancelled = false;
+    setRelatedError("");
+    setRelatedLoading(true);
+    Promise.all([getApplicationDocuments(id), getApplicationHistory(id)])
+      .then(([documents, history]) => {
+        if (!cancelled)
+          setApplication((current) =>
+            current ? { ...current, documents, history } : current,
+          );
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setRelatedError(
+            error instanceof Error
+              ? error.message
+              : "Gagal memuat dokumen dan riwayat.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setRelatedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, loadedNodes]);
 
   if (!ready)
     return (
-      <AppShell active="applications" roleId={roleId} onRoleChange={setRoleId}>
+      <AppShell active="applications" roleId={roleId} user={user}>
         <div role="status" className="space-y-4">
-          <p>Memuat detail permohonan...</p>
+          <p role={sessionError ? "alert" : "status"}>
+            {sessionError || "Memuat detail permohonan..."}
+          </p>
+          {sessionError && (
+            <Button onClick={() => window.location.reload()}>Coba lagi</Button>
+          )}
           <div className="bg-muted h-24 rounded-md" />
           <div className="bg-muted h-48 rounded-md" />
         </div>
@@ -85,14 +142,21 @@ export default function ApplicationDetailPage() {
 
   if (!application) {
     return (
-      <AppShell active="applications" roleId={roleId} onRoleChange={setRoleId}>
+      <AppShell active="applications" roleId={roleId} user={user}>
         <div className="mx-auto max-w-3xl border px-6 py-16 text-center">
           <h1 className="font-display text-xl font-semibold">
-            Permohonan tidak ditemukan
+            Detail permohonan belum tersedia
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Nomor permohonan tidak tersedia pada data demo.
+            {loadError || "Permohonan tidak ditemukan."}
           </p>
+          <Button
+            variant="outline"
+            className="mt-6 mr-2"
+            onClick={() => setReload((value) => value + 1)}
+          >
+            Coba lagi
+          </Button>
           <Button asChild variant="outline" className="mt-6">
             <Link href="/dashboard?view=all">Kembali ke permohonan</Link>
           </Button>
@@ -112,24 +176,19 @@ export default function ApplicationDetailPage() {
   function handleAdvanced(nextApplication: Application) {
     setApplication(nextApplication);
     setShowForm(false);
-    setFeedback(
-      nextApplication.rejected
-        ? "Keputusan tersimpan. Workflow permohonan dihentikan."
-        : nextApplication.currentAction
-          ? `Aktivitas selesai. Permohonan diteruskan ke ${getRole(getOwner(getActivity(nextApplication.currentAction)!, nextApplication)).label}.`
-          : "Seluruh proses selesai. Permohonan telah ditutup.",
-    );
+    setFeedback("Aktivitas tersimpan. Status terbaru diterima dari server.");
+    getApplication(id)
+      .then(setApplication)
+      .catch((error: unknown) =>
+        setFeedback(
+          "Aktivitas tersimpan, tetapi penyegaran gagal: " +
+            (error instanceof Error ? error.message : "Coba muat ulang."),
+        ),
+      );
   }
 
   return (
-    <AppShell
-      active="applications"
-      roleId={roleId}
-      onRoleChange={(nextRole) => {
-        setRoleId(nextRole);
-        setShowForm(false);
-      }}
-    >
+    <AppShell active="applications" roleId={roleId} user={user}>
       <div className="mx-auto w-full max-w-[1480px] min-w-0 overflow-x-clip">
         <Link
           href="/dashboard?view=all"
@@ -149,7 +208,7 @@ export default function ApplicationDetailPage() {
                 <StatusBadge status={getApplicationStatus(application)} />
               </div>
               <p className="text-muted-foreground mt-2 font-mono text-xs">
-                {application.id}
+                {application.number}
               </p>
             </div>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4 lg:text-right">
@@ -205,19 +264,195 @@ export default function ApplicationDetailPage() {
           onAdvanced={handleAdvanced}
         />
 
+        <VendorAssignment
+          application={application}
+          roleId={roleId}
+          onSaved={handleAdvanced}
+        />
+        {relatedError && (
+          <p role="alert" className="text-destructive mt-4 text-sm">
+            {relatedError}{" "}
+            <Button
+              variant="outline"
+              onClick={() => setReload((value) => value + 1)}
+            >
+              Coba lagi
+            </Button>
+          </p>
+        )}
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
             <WorkflowTimeline application={application} />
-            <DocumentsSection documents={documents} />
+            <DocumentsSection
+              documents={documents}
+              loading={relatedLoading}
+              error={relatedError}
+            />
           </div>
           <aside className="space-y-6">
             <ApplicationFacts application={application} />
             <DecisionSummary application={application} />
-            <HistorySection history={history} />
+            <HistorySection
+              history={history}
+              loading={relatedLoading}
+              error={relatedError}
+            />
           </aside>
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function VendorAssignment({
+  application,
+  roleId,
+  onSaved,
+}: {
+  application: Application;
+  roleId: RoleId;
+  onSaved: (application: Application) => void;
+}) {
+  const [vendorId, setVendorId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [vendors, setVendors] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [reload, setReload] = useState(0);
+  const vendorRole =
+    roleId === "perencanaan" && application.decisions.needsPole === true
+      ? "vendor-tiang"
+      : roleId === "konstruksi"
+        ? "vendor-konstruksi"
+        : roleId === "transaksi-energi" &&
+            !application.connectionType.startsWith("PLG TM")
+          ? "vendor-sr-app"
+          : null;
+  useEffect(() => {
+    if (!vendorRole || !open) return;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getVendorAccounts(vendorRole)
+      .then((data) => {
+        if (!cancelled) setVendors(data);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setError(
+            error instanceof Error
+              ? error.message
+              : "Daftar vendor gagal dimuat.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vendorRole, open, reload]);
+  if (
+    !vendorRole ||
+    application.decisions.npsApproved !== true ||
+    application.completed ||
+    application.rejected
+  )
+    return null;
+  return (
+    <details
+      className="bg-card mt-4 rounded-lg p-5"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer text-sm font-medium">
+        Penugasan {getRole(vendorRole).label}
+      </summary>
+      <p className="text-muted-foreground mt-2 text-sm">
+        Vendor hanya dapat mengakses permohonan setelah akunnya ditugaskan.
+        Penugasan diperiksa oleh server dan hanya dapat dibuat sekali.
+      </p>
+      <form
+        className="mt-4"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (busy || saved) return;
+          setBusy(true);
+          setError("");
+          try {
+            const updated = await assignVendor(
+              application.id,
+              vendorId.trim(),
+              vendorRole,
+            );
+            setSaved(true);
+            onSaved(updated);
+          } catch (error) {
+            setError(
+              error instanceof Error
+                ? error.message
+                : "Penugasan vendor gagal.",
+            );
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <label htmlFor="vendor-account" className="text-sm font-medium">
+          Akun {getRole(vendorRole).label}
+        </label>
+        <Select
+          value={vendorId}
+          onValueChange={setVendorId}
+          required
+          disabled={busy || saved || loading}
+        >
+          <SelectTrigger id="vendor-account" className="mt-2 h-11 w-full">
+            <SelectValue
+              placeholder={loading ? "Memuat vendor..." : "Pilih akun vendor"}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {vendors.map((vendor) => (
+              <SelectItem key={vendor.id} value={vendor.id}>
+                {vendor.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!loading && !error && !vendors.length && (
+          <p className="text-muted-foreground mt-2 text-sm">
+            Belum ada akun vendor untuk peran ini.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="text-destructive mt-2 text-sm">
+            {error}{" "}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReload((value) => value + 1)}
+            >
+              Muat ulang vendor
+            </Button>
+          </p>
+        )}
+        {saved && (
+          <p role="status" className="text-success mt-2 text-sm">
+            Vendor berhasil ditugaskan.
+          </p>
+        )}
+        <Button
+          className="mt-3"
+          disabled={busy || saved || !vendorId || loading}
+        >
+          {busy ? "Menyimpan..." : "Tugaskan vendor"}
+        </Button>
+      </form>
+    </details>
   );
 }
 
@@ -236,7 +471,16 @@ function CurrentAction({
   onCancel: () => void;
   onAdvanced: (application: Application) => void;
 }) {
-  const activity = getActivity(application.currentAction);
+  const [selectedNode, setSelectedNode] = useState("");
+  const available = application.availableActions.filter(
+    (action) => !action.path.endsWith("/vendor-assignments"),
+  );
+  const action =
+    available.find((action) => action.workflow_node === selectedNode) ??
+    available[0];
+  const activity = getActivity(
+    action ? nodeActions[action.workflow_node] : application.currentAction,
+  );
   if (application.rejected) {
     return (
       <section
@@ -264,7 +508,7 @@ function CurrentAction({
       </section>
     );
   }
-  if (!activity) {
+  if (application.completed || !activity) {
     return (
       <section
         className="bg-card mt-6 rounded-lg px-5 py-4"
@@ -280,10 +524,14 @@ function CurrentAction({
               id="current-action-title"
               className="font-display text-success font-semibold"
             >
-              Permohonan selesai
+              {application.completed
+                ? "Permohonan selesai"
+                : "Tidak ada tindakan tersedia"}
             </h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Seluruh aktivitas dan dokumen penutupan telah lengkap.
+              {application.completed
+                ? "Seluruh aktivitas dan dokumen penutupan telah lengkap."
+                : "Status aktivitas mengikuti data server."}
             </p>
           </div>
         </div>
@@ -293,7 +541,7 @@ function CurrentAction({
 
   const ownerId = getOwner(activity, application);
   const owner = getRole(ownerId);
-  const ownsAction = ownerId === roleId;
+  const ownsAction = !!action;
   const isMonitoring = roleId === "super-user";
   const isSurvey = activity.id === "2";
   return (
@@ -301,6 +549,35 @@ function CurrentAction({
       className="bg-card mt-6 rounded-lg px-5 py-4"
       aria-labelledby="current-action-title"
     >
+      {available.length > 1 && (
+        <div className="mb-4">
+          <label
+            htmlFor="available-action"
+            className="mb-2 block text-sm font-medium"
+          >
+            Aktivitas yang dapat Anda kerjakan
+          </label>
+          <Select
+            value={action?.workflow_node}
+            onValueChange={(value) => {
+              setSelectedNode(value);
+              onCancel();
+            }}
+          >
+            <SelectTrigger id="available-action" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {available.map((item) => (
+                <SelectItem key={item.workflow_node} value={item.workflow_node}>
+                  {getActivity(nodeActions[item.workflow_node])?.label ??
+                    item.workflow_node}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           {ownsAction ? (
@@ -364,177 +641,17 @@ function CurrentAction({
       {showForm && ownsAction && !isSurvey ? (
         <ActionForm
           application={application}
-          activityId={activity.id}
-          roleId={roleId}
+          key={action!.workflow_node}
+          action={action!}
           onCancel={onCancel}
-          onAdvanced={onAdvanced}
+          onSaved={onAdvanced}
         />
       ) : null}
     </section>
   );
 }
 
-function ActionForm({
-  application,
-  activityId,
-  roleId,
-  onCancel,
-  onAdvanced,
-}: {
-  application: Application;
-  activityId: ActionId;
-  roleId: RoleId;
-  onCancel: () => void;
-  onAdvanced: (application: Application) => void;
-}) {
-  const activity = getActivity(activityId)!;
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      activity.fields.map((field) => [field.name, field.options?.[0] ?? ""]),
-    ),
-  );
-  const [evidenceName, setEvidenceName] = useState("");
-  const [saveError, setSaveError] = useState("");
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaveError("");
-    try {
-      onAdvanced(advanceApplication(application, roleId, values, evidenceName));
-    } catch {
-      setSaveError(
-        "Aktivitas belum tersimpan. Periksa izin penyimpanan browser, lalu coba simpan kembali. Isian Anda tetap tersedia.",
-      );
-    }
-  }
-
-  return (
-    <form
-      onSubmit={submit}
-      className="border-warning-border mt-5 border-t pt-5"
-    >
-      <div className="border-warning-border mb-5 grid gap-3 border-b pb-4 text-sm sm:grid-cols-3">
-        <MiniFact label="Nomor permohonan" value={application.id} mono />
-        <MiniFact label="Pelanggan" value={application.customer} />
-        <MiniFact label="Lokasi" value={application.location} />
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {activity.fields.map((field) => (
-          <FormField
-            key={field.name}
-            field={field}
-            value={values[field.name] ?? ""}
-            onChange={(value) =>
-              setValues((current) => ({ ...current, [field.name]: value }))
-            }
-          />
-        ))}
-      </div>
-      {activity.evidence ? (
-        <div className="mt-5">
-          <Label htmlFor={`evidence-${activity.id}`}>
-            {activity.evidence}{" "}
-            <span className="text-muted-foreground font-normal">
-              (PDF/JPG/PNG)
-            </span>
-          </Label>
-          <Input
-            id={`evidence-${activity.id}`}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            className="mt-2 h-11"
-            required
-            onChange={(event) =>
-              setEvidenceName(event.target.files?.[0]?.name ?? "")
-            }
-          />
-          <p className="text-muted-foreground mt-2 text-sm">
-            Demo hanya menyimpan nama berkas, bukan isi dokumen.
-          </p>
-        </div>
-      ) : null}
-      {activity.id === "5" ? (
-        <p className="text-destructive mt-4 text-xs">
-          Keputusan Dikembalikan akan menghentikan workflow dan tidak dapat
-          dilanjutkan pada data demo ini.
-        </p>
-      ) : null}
-      {saveError && (
-        <p role="alert" className="text-destructive mt-4 text-sm">
-          {saveError}
-        </p>
-      )}
-      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-11"
-          onClick={onCancel}
-        >
-          Batal
-        </Button>
-        <Button type="submit" className="min-h-11">
-          Simpan dan selesaikan aktivitas
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function FormField({
-  field,
-  value,
-  onChange,
-}: {
-  field: FieldDefinition;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const id = `field-${field.name}`;
-  const wrapperClass = field.type === "textarea" ? "md:col-span-2" : "";
-  return (
-    <div className={wrapperClass}>
-      <Label htmlFor={id}>{field.label}</Label>
-      {field.type === "textarea" ? (
-        <Textarea
-          id={id}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={field.placeholder}
-          className="bg-background mt-2 min-h-24"
-          required
-        />
-      ) : field.type === "select" ? (
-        <Select value={value} onValueChange={onChange} required>
-          <SelectTrigger id={id} className="bg-background mt-2 h-11 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {field.options?.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Input
-          id={id}
-          type={field.type ?? "text"}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={field.placeholder}
-          className="bg-background mt-2 h-11"
-          required
-        />
-      )}
-    </div>
-  );
-}
-
 function WorkflowTimeline({ application }: { application: Application }) {
-  const completed = new Set(getInitialCompletedActionIds(application));
-  const activeSequence = new Set(getActiveSequence(application));
   return (
     <section
       aria-labelledby="workflow-title"
@@ -561,7 +678,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
           const stageActivities = activities.filter(
             (activity) => activity.stage === stage.id,
           );
-          const stageStatus = getStageStatus(stage.id, application, completed);
+          const stageStatus = getStageStatus(stage.id, application);
           return (
             <li
               key={stage.id}
@@ -588,12 +705,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
                 </div>
                 <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
                   {stageActivities.map((activity) => {
-                    const status = getActivityStatus(
-                      activity.id,
-                      application,
-                      completed,
-                      activeSequence,
-                    );
+                    const status = getActivityStatus(activity.id, application);
                     const owner = getRole(getOwner(activity, application));
                     return (
                       <li
@@ -628,43 +740,49 @@ type ProgressStatus = "done" | "current" | "future" | "skipped" | "rejected";
 function getStageStatus(
   stageId: StageId,
   application: Application,
-  completed: Set<ActionId>,
 ): ProgressStatus {
   if (application.rejected && stageId === 3) return "rejected";
-  const applicable = activities.filter(
-    (activity) =>
-      activity.stage === stageId &&
-      getActiveSequence(application).includes(activity.id),
+  const nodes = application.nodes.filter(
+    (node) => node.stage_number === stageId,
   );
   if (
-    applicable.length > 0 &&
-    applicable.every((activity) => completed.has(activity.id))
+    nodes.length &&
+    nodes.every(
+      (node) => node.status === "completed" || node.status === "skipped",
+    )
   )
     return "done";
   if (
-    application.currentAction &&
-    getActivity(application.currentAction)?.stage === stageId
+    nodes.some(
+      (node) => node.status === "available" || node.status === "in_progress",
+    )
   )
     return "current";
-  if (!application.currentAction && stageId === 7) return "done";
   return "future";
 }
 
 function getActivityStatus(
   id: ActionId,
   application: Application,
-  completed: Set<ActionId>,
-  activeSequence: Set<ActionId>,
 ): ProgressStatus {
   if (application.rejected && id === "5") return "rejected";
+  const nodes = application.nodes.filter(
+    (node) => nodeActions[node.workflow_node] === id,
+  );
+  if (!nodes.length) return "future";
+  if (nodes.every((node) => node.status === "skipped")) return "skipped";
   if (
-    (id === "7b" || id === "12b") &&
-    application.decisions.needsPdkb === undefined
+    nodes.every(
+      (node) => node.status === "completed" || node.status === "skipped",
+    )
   )
-    return "future";
-  if (!activeSequence.has(id)) return "skipped";
-  if (completed.has(id)) return "done";
-  if (application.currentAction === id) return "current";
+    return "done";
+  if (
+    nodes.some(
+      (node) => node.status === "available" || node.status === "in_progress",
+    )
+  )
+    return "current";
   return "future";
 }
 
@@ -749,7 +867,11 @@ function activityStatusLabel(status: ProgressStatus) {
 
 function DocumentsSection({
   documents,
+  loading,
+  error,
 }: {
+  loading: boolean;
+  error: string;
   documents: ReturnType<typeof getDocuments>;
 }) {
   return (
@@ -765,7 +887,15 @@ function DocumentsSection({
           Hanya dokumen dari aktivitas yang telah diselesaikan.
         </p>
       </div>
-      {documents.length ? (
+      {loading ? (
+        <p role="status" className="text-muted-foreground py-8 text-sm">
+          Memuat dokumen...
+        </p>
+      ) : error ? (
+        <p className="text-destructive py-8 text-sm">
+          Dokumen belum berhasil dimuat.
+        </p>
+      ) : documents.length ? (
         <ul className="divide-y">
           {documents.map((document) => (
             <li key={document.id} className="flex items-center gap-3 py-3">
@@ -780,7 +910,7 @@ function DocumentsSection({
                   {document.addedAt}
                 </p>
               </div>
-              <span className="text-muted-foreground text-xs">Dummy</span>
+              <span className="text-muted-foreground text-xs">Tersimpan</span>
             </li>
           ))}
         </ul>
@@ -795,7 +925,8 @@ function DocumentsSection({
 
 function ApplicationFacts({ application }: { application: Application }) {
   const facts = [
-    ["ID pelanggan", application.customerId],
+    ["Nomor permohonan", application.number],
+    ["No. HP / telepon", application.phone],
     ["Jenis permohonan", application.requestType],
     ["Jenis sambungan", application.connectionType],
     ["Unit / ULP", application.unit],
@@ -865,7 +996,11 @@ function DecisionSummary({ application }: { application: Application }) {
 
 function HistorySection({
   history,
+  loading,
+  error,
 }: {
+  loading: boolean;
+  error: string;
   history: ReturnType<typeof getHistory>;
 }) {
   return (
@@ -876,22 +1011,37 @@ function HistorySection({
       >
         Riwayat aktivitas
       </h2>
-      <ol className="mt-4 space-y-5">
-        {history.slice(0, 10).map((item) => (
-          <li
-            key={item.id}
-            className="before:bg-border relative pl-5 text-sm before:absolute before:top-1.5 before:left-0 before:size-2 before:rounded-full"
-          >
-            <p className="text-muted-foreground text-xs">
-              {displayHistoryDate(item.at)}
-            </p>
-            <p className="mt-1 font-medium">{item.title}</p>
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              oleh {item.by}
-            </p>
-          </li>
-        ))}
-      </ol>
+      {loading ? (
+        <p role="status" className="text-muted-foreground mt-4 text-sm">
+          Memuat riwayat...
+        </p>
+      ) : error ? (
+        <p className="text-destructive mt-4 text-sm">
+          Riwayat belum berhasil dimuat.
+        </p>
+      ) : history.length === 0 ? (
+        <p className="text-muted-foreground mt-4 text-sm">
+          Belum ada riwayat aktivitas.
+        </p>
+      ) : null}
+      {!loading && !error && (
+        <ol className="mt-4 space-y-5">
+          {history.slice(0, 10).map((item) => (
+            <li
+              key={item.id}
+              className="before:bg-border relative pl-5 text-sm before:absolute before:top-1.5 before:left-0 before:size-2 before:rounded-full"
+            >
+              <p className="text-muted-foreground text-xs">
+                {displayHistoryDate(item.at)}
+              </p>
+              <p className="mt-1 font-medium">{item.title}</p>
+              <p className="text-muted-foreground mt-0.5 text-xs">
+                oleh {item.by}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }
@@ -921,24 +1071,6 @@ function HeaderFact({
   );
 }
 
-function MiniFact({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div>
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className={`mt-1 truncate ${mono ? "font-mono text-xs" : ""}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
 function DecisionRow({
   label,
   value,
@@ -965,6 +1097,7 @@ function decisionValue(value?: boolean) {
       : "Belum diputuskan";
 }
 function formatDate(date: string) {
+  if (!date || Number.isNaN(Date.parse(date))) return "—";
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "long",

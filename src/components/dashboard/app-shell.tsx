@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -9,24 +11,11 @@ import {
   FilePlus2,
   House,
   LogOut,
-  RotateCcw,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ROLE_STORAGE_KEY,
-  getRole,
-  resetWorkflowDemo,
-  roles,
-  type RoleId,
-} from "@/lib/workflow";
+import { logout, type User } from "@/lib/auth";
+import { getRole, type RoleId } from "@/lib/workflow";
 
 const baseDestinations = [
   { id: "dashboard", href: "/dashboard", label: "Beranda", icon: House },
@@ -55,16 +44,28 @@ type AppShellProps = {
   children: React.ReactNode;
   active: "dashboard" | "applications" | "create";
   roleId: RoleId;
-  onRoleChange: (role: RoleId) => void;
+  user?: User | null;
 };
 
-export function AppShell({
-  children,
-  active,
-  roleId,
-  onRoleChange,
-}: AppShellProps) {
+export function AppShell({ children, active, roleId, user }: AppShellProps) {
   const router = useRouter();
+  const [logoutError, setLogoutError] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError("");
+    try {
+      await logout();
+      router.replace("/login");
+    } catch (error) {
+      setLogoutError(
+        error instanceof Error ? error.message : "Logout gagal. Coba lagi.",
+      );
+    } finally {
+      setLoggingOut(false);
+    }
+  }
   const role = getRole(roleId);
   const destinations = canCreatePermohonan(roleId)
     ? [...baseDestinations, createDestination]
@@ -108,19 +109,19 @@ export function AppShell({
           </div>
         </nav>
         <div className="border-sidebar-border mt-auto border-t px-5 py-5">
-          <p className="text-muted-foreground mb-3 text-xs font-medium">
-            Akun demo
+          <p className="text-muted-foreground mb-3 text-xs font-medium">Akun</p>
+          <p className="text-sm font-medium">
+            {user?.name ?? "Memuat akun..."}
           </p>
-          <p className="text-sm font-medium">{role.label}</p>
-          <p className="text-muted-foreground mt-1 text-xs">{role.lane}</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {user?.unit || "—"}
+          </p>
           <Button
             type="button"
             variant="ghost"
             className="text-muted-foreground hover:text-foreground mt-3 min-h-10 w-full justify-start px-0 hover:bg-transparent"
-            onClick={() => {
-              window.localStorage.removeItem(ROLE_STORAGE_KEY);
-              router.push("/login");
-            }}
+            onClick={handleLogout}
+            disabled={loggingOut}
           >
             <LogOut className="size-4" aria-hidden="true" />
             Keluar
@@ -145,7 +146,7 @@ export function AppShell({
               <summary className="hover:bg-accent flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0 text-sm">
                   <span className="text-muted-foreground block text-xs">
-                    Peran demo
+                    Peran
                   </span>
                   <span className="hidden max-w-48 truncate font-medium lg:block">
                     {role.label}
@@ -158,60 +159,22 @@ export function AppShell({
                 />
               </summary>
               <div className="bg-popover absolute top-full right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border p-4 shadow-md">
-                <label
-                  htmlFor="role-switcher"
-                  className="mb-2 block text-sm font-medium"
-                >
-                  Ganti peran demo
-                </label>
-                <Select
-                  value={roleId}
-                  onValueChange={(value) => {
-                    const nextRole = value as RoleId;
-                    window.localStorage.setItem(ROLE_STORAGE_KEY, nextRole);
-                    onRoleChange(nextRole);
-                  }}
-                >
-                  <SelectTrigger
-                    id="role-switcher"
-                    className="bg-card h-11 w-full"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent align="end">
-                    {roles.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.lane} / {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  className="mt-3 min-h-11 w-full justify-start"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Reset data demo? Semua perubahan aktivitas di browser ini akan dihapus dan data awal dipulihkan.",
-                      )
-                    ) {
-                      resetWorkflowDemo();
-                      window.location.reload();
-                    }
-                  }}
-                >
-                  <RotateCcw aria-hidden="true" />
-                  Reset demo
-                </Button>
+                <p className="text-sm font-medium">
+                  {user?.name ?? "Memuat akun..."}
+                </p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  {user?.email}
+                </p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  {role.label} — {user?.unit || "—"}
+                </p>
               </div>
             </details>
             <Button
               variant="ghost"
               className="min-h-11 lg:hidden"
-              onClick={() => {
-                window.localStorage.removeItem(ROLE_STORAGE_KEY);
-                router.push("/login");
-              }}
+              onClick={handleLogout}
+              disabled={loggingOut}
             >
               <LogOut aria-hidden="true" />
               Keluar
@@ -223,6 +186,11 @@ export function AppShell({
           tabIndex={-1}
           className="mx-auto w-full max-w-[1440px] min-w-0 overflow-x-clip px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:py-8 lg:pb-8"
         >
+          {logoutError && (
+            <p role="alert" className="text-destructive mb-4 text-sm">
+              {logoutError}
+            </p>
+          )}
           {children}
         </main>
         <nav

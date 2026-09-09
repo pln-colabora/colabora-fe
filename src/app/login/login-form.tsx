@@ -16,25 +16,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ROLE_STORAGE_KEY,
-  getRole,
-  getRoleActivities,
-  roles,
-  type RoleId,
-} from "@/lib/workflow";
+import { login } from "@/lib/auth";
 
-export function LoginForm() {
+export function LoginForm({
+  accounts = [],
+}: {
+  accounts?: Array<{ name: string; email: string; password: string }>;
+}) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [roleId, setRoleId] = useState<RoleId>("teknik");
-  const role = getRole(roleId);
-  const roleActivities = getRoleActivities(roleId);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    window.localStorage.setItem(ROLE_STORAGE_KEY, roleId);
-    router.push("/dashboard");
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await login(email, password);
+      setPassword("");
+      router.replace("/dashboard");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Login gagal.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -42,45 +50,39 @@ export function LoginForm() {
       className="mt-6 space-y-4 sm:mt-8 sm:space-y-5"
       onSubmit={handleSubmit}
     >
-      <div className="space-y-2">
-        <Label htmlFor="demo-role">Masuk demo sebagai</Label>
-        <Select
-          value={roleId}
-          onValueChange={(value) => setRoleId(value as RoleId)}
-        >
-          <SelectTrigger id="demo-role" className="bg-background h-11 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {roles.map((role) => (
-              <SelectItem key={role.id} value={role.id}>
-                {role.lane} — {role.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-muted-foreground text-sm leading-5">
-          Peran dapat diganti kembali dari ruang kerja untuk mencoba alur lintas
-          PIC.
-        </p>
-        <div className="border-l-2 pl-3 text-sm leading-5">
-          <p className="font-medium">
-            {role.lane} — {role.label}
+      {accounts.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="development-account">Akun development</Label>
+          <Select
+            onValueChange={(email) => {
+              const account = accounts.find((item) => item.email === email);
+              if (account) {
+                setEmail(account.email);
+                setPassword(account.password);
+              }
+            }}
+            disabled={busy}
+          >
+            <SelectTrigger
+              id="development-account"
+              className="bg-background h-11 w-full"
+            >
+              <SelectValue placeholder="Pilih akun pengujian" />
+            </SelectTrigger>
+            <SelectContent>
+              {accounts.map((account) => (
+                <SelectItem key={account.email} value={account.email}>
+                  {account.name} — {account.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-sm">
+            Pilihan akun mengisi kredensial. Login tetap diverifikasi oleh
+            server.
           </p>
-          {roleId === "super-user" ? (
-            <p className="text-muted-foreground mt-1">
-              Memantau seluruh permohonan dan detail workflow tanpa mengubah
-              aktivitas.
-            </p>
-          ) : (
-            <p className="text-muted-foreground mt-1">
-              Menangani {roleActivities.length} aktivitas:{" "}
-              {roleActivities.map((activity) => activity.shortLabel).join(", ")}
-              .
-            </p>
-          )}
         </div>
-      </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
@@ -90,7 +92,9 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           placeholder="nama@perusahaan.co.id"
-          defaultValue="demo@colabora.local"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          disabled={busy}
           className="h-11"
           required
         />
@@ -105,7 +109,9 @@ export function LoginForm() {
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
             placeholder="Masukkan kata sandi"
-            defaultValue="demo1234"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={busy}
             className="h-11 pr-11"
             required
           />
@@ -129,8 +135,18 @@ export function LoginForm() {
         </div>
       </div>
 
-      <Button type="submit" size="lg" className="min-h-11 w-full">
-        Masuk
+      {error && (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      )}
+      <Button
+        type="submit"
+        size="lg"
+        className="min-h-11 w-full"
+        disabled={busy}
+      >
+        {busy ? "Memverifikasi..." : "Masuk"}
       </Button>
     </form>
   );

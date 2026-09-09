@@ -72,13 +72,18 @@ export default function LoginPage() {
             id="login-title"
             className="font-display text-2xl font-semibold sm:text-3xl"
           >
-            Masuk ke demo
+            Masuk ke COLABORA
           </h1>
           <p className="text-muted-foreground mt-2 text-sm leading-6">
-            Pilih peran untuk mencoba alur permohonan PB/PD. Data dan perubahan
-            hanya tersimpan di browser ini.
+            Masuk dengan akun Anda untuk melanjutkan permohonan PB/PD.
           </p>
-          <LoginForm />
+          <LoginForm
+            accounts={
+              process.env.NODE_ENV === "development"
+                ? JSON.parse(process.env.COLABORA_DEV_ACCOUNTS || "[]")
+                : []
+            }
+          />
         </div>
       </section>
     </main>
