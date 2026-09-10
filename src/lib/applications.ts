@@ -200,6 +200,10 @@ export async function uploadEvidence(
         if (event.total)
           onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
       },
+      // The current gateway omits CORS headers on its 413 response, so the
+      // browser reports that response as a network failure.
+      networkErrorMessage:
+        "Ukuran konten terlalu besar. Kurangi ukuran berkas lalu coba lagi.",
     })
   ).data;
 }

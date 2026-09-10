@@ -505,7 +505,7 @@ function CurrentAction({
   const isSurvey = activity.id === "2";
   return (
     <section
-      className="bg-card mt-6 rounded-lg px-5 py-4"
+      className="bg-card mt-6 min-w-0 rounded-lg px-5 py-4"
       aria-labelledby="current-action-title"
     >
       {available.length > 1 && (
@@ -538,7 +538,7 @@ function CurrentAction({
         </div>
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           {ownsAction ? (
             <Clock3
               className="text-warning mt-0.5 size-5 shrink-0"
@@ -555,7 +555,7 @@ function CurrentAction({
               aria-hidden="true"
             />
           )}
-          <div>
+          <div className="min-w-0">
             <p
               className={`text-sm font-semibold ${ownsAction ? "text-warning" : "text-muted-foreground"}`}
             >

@@ -192,10 +192,10 @@ export function ActionForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(submit)}
-        className="border-warning-border mt-5 border-t pt-5"
+        className="border-border mt-5 min-w-0 border-t pt-5"
         noValidate
       >
-        <fieldset disabled={busy}>
+        <fieldset className="min-w-0" disabled={busy}>
           <div className="grid gap-4 md:grid-cols-2">
             {activity.fields.map((definition) => (
               <FormField
@@ -265,7 +265,7 @@ export function ActionForm({
             control={form.control}
             name="files"
             render={({ field }) => (
-              <FormItem className="mt-5">
+              <FormItem className="mt-5 min-w-0">
                 <FormLabel>Evidence aktivitas</FormLabel>
                 <FormControl>
                   <EvidenceUploader
@@ -284,7 +284,10 @@ export function ActionForm({
           />
 
           {form.formState.errors.root?.message && (
-            <p role="alert" className="text-destructive mt-4 text-sm">
+            <p
+              role="alert"
+              className="text-destructive mt-4 min-w-0 break-words text-sm"
+            >
               {form.formState.errors.root.message}
             </p>
           )}
@@ -292,12 +295,15 @@ export function ActionForm({
             <Button
               type="button"
               variant="outline"
-              className="min-h-11"
+              className="min-h-11 w-full sm:w-auto"
               onClick={onCancel}
             >
               Batal
             </Button>
-            <Button type="submit" className="min-h-11">
+            <Button
+              type="submit"
+              className="h-auto min-h-11 w-full whitespace-normal sm:w-auto"
+            >
               {busy ? "Menyimpan..." : "Simpan dan selesaikan aktivitas"}
             </Button>
           </div>

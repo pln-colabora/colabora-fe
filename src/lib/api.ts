@@ -22,12 +22,14 @@ declare module "axios" {
     skipAuth?: boolean;
     skipRefresh?: boolean;
     retriedAfterRefresh?: boolean;
+    networkErrorMessage?: string;
   }
 
   interface InternalAxiosRequestConfig {
     skipAuth?: boolean;
     skipRefresh?: boolean;
     retriedAfterRefresh?: boolean;
+    networkErrorMessage?: string;
   }
 }
 
@@ -74,7 +76,14 @@ function getErrorDetail(body: unknown) {
 function toApiError(error: AxiosError) {
   if (!error.response) {
     return new Error(
-      "Tidak dapat menghubungi API COLABORA. Periksa koneksi lalu coba lagi.",
+      error.config?.networkErrorMessage ??
+        "Tidak dapat menghubungi API COLABORA. Periksa koneksi lalu coba lagi.",
+    );
+  }
+  if (error.response.status === 413) {
+    return new ApiError(
+      "Ukuran konten terlalu besar. Kurangi ukuran berkas lalu coba lagi.",
+      413,
     );
   }
   return new ApiError(

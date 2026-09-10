@@ -368,6 +368,28 @@ test("upload uses multipart bytes with backend field names", async () => {
   );
 });
 
+test("upload reports an oversized payload when the gateway hides its 413 response", async () => {
+  const file = new File(["test evidence"], "test.pdf", {
+    type: "application/pdf",
+  });
+  global.fetch = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+  await assert.rejects(
+    () => applications.uploadEvidence(file),
+    /Ukuran konten terlalu besar/,
+  );
+});
+
+test("HTTP 413 has a clear upload-size message", async () => {
+  global.fetch = async () => new Response(null, { status: 413 });
+  await assert.rejects(
+    () => applications.uploadEvidence(new File(["test"], "test.pdf")),
+    (error) =>
+      error.status === 413 && /Ukuran konten terlalu besar/.test(error.message),
+  );
+});
+
 test("history title is derived from workflow_node instead of action", async () => {
   global.fetch = async () =>
     json({

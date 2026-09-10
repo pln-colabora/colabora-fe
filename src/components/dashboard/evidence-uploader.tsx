@@ -51,7 +51,7 @@ export function EvidenceUploader({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="w-full min-w-0 max-w-full space-y-3">
       <div
         {...controlProps}
         role="button"
@@ -125,11 +125,11 @@ export function EvidenceUploader({
       </div>
 
       {files.length > 0 && (
-        <div aria-live="polite">
+        <div className="min-w-0" aria-live="polite">
           <p className="mb-2 text-sm font-medium">
             {files.length} berkas dipilih
           </p>
-          <ul className="space-y-2">
+          <ul className="min-w-0 space-y-2">
             {files.map((file) => {
               const status = statuses.get(file);
               return (
