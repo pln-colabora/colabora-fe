@@ -13,6 +13,7 @@ import {
   type EvidenceFileStatus,
 } from "@/components/dashboard/evidence-uploader";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Form,
   FormControl,
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { submitAction, uploadEvidence } from "@/lib/applications";
+import { isValidDateValue } from "@/lib/utils";
 import {
   getActivity,
   nodeActions,
@@ -55,10 +57,7 @@ function createActionSchema(fields: FieldDefinition[]) {
         );
       if (field.type === "date")
         schema = schema.refine(
-          (value) =>
-            !value ||
-            (/^\d{4}-\d{2}-\d{2}$/.test(value) &&
-              !Number.isNaN(Date.parse(value))),
+          (value) => !value || isValidDateValue(value),
           "Format tanggal tidak valid.",
         );
       if (field.type === "number")
@@ -251,6 +250,13 @@ export function ActionForm({
                           ))}
                         </SelectContent>
                       </Select>
+                    ) : definition.type === "date" ? (
+                      <FormControl>
+                        <DatePicker
+                          {...field}
+                          disabled={busy}
+                        />
+                      </FormControl>
                     ) : (
                       <FormControl>
                         <Input

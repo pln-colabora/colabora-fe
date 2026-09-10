@@ -66,14 +66,14 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
     ? [...baseDestinations, createDestination]
     : baseDestinations;
   return (
-    <div className="bg-background min-h-dvh w-full max-w-full overflow-x-clip lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
+    <div className="bg-background min-h-dvh w-full max-w-full lg:pl-[232px]">
       <a
         href="#main-content"
         className="bg-background fixed top-2 left-2 z-50 -translate-y-24 rounded-md border p-3 focus:translate-y-0"
       >
         Lewati ke konten utama
       </a>
-      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border sticky top-0 hidden h-dvh max-h-dvh flex-col self-start overflow-y-auto border-r lg:flex">
+      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col overflow-y-auto border-r lg:flex">
         <Link
           href="/dashboard"
           className="border-sidebar-border flex min-h-20 flex-col justify-center border-b px-5"
@@ -120,7 +120,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
         </div>
       </aside>
       <div className="max-w-full min-w-0">
-        <header className="bg-card sticky top-0 z-20 border-b">
+        <header className="bg-card fixed inset-x-0 top-0 z-40 border-b lg:left-[232px]">
           <div className="mx-auto flex min-h-16 w-full max-w-[1440px] min-w-0 items-center gap-2 px-3 sm:gap-4 sm:px-6 lg:gap-8">
             <Link href="/dashboard" className="shrink-0 py-2 lg:hidden">
               <span className="font-display text-primary block text-lg font-bold tracking-tight">
@@ -171,7 +171,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-[1440px] min-w-0 overflow-x-clip px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:py-8 lg:pb-8"
+          className="mx-auto w-full max-w-[1440px] min-w-0 overflow-x-clip px-4 pt-24 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:pt-24 lg:pb-8"
         >
           {children}
         </main>
