@@ -75,7 +75,8 @@ Daftar 15 akun yang diberikan disimpan di `.env.local` yang diabaikan Git, melal
 
 ## File dan perubahan
 
-- `src/lib/api.ts`: native fetch, token, refresh, error terpusat.
+- `src/lib/api.ts`: instance Axios, interceptor token/refresh, retry, dan error terpusat.
+- `src/hooks`: lifecycle request untuk session, daftar dashboard, dan detail permohonan.
 - `src/lib/auth.ts`: login/logout dan hook session yang dipakai halaman.
 - `src/lib/applications.ts`: endpoint permohonan, evidence, history, assignment, dan mapping API/UI.
 - `src/lib/workflow.ts`: metadata tahap/label/PIC/form; seed, overrides, transisi lokal, history dan evidence palsu dihapus.

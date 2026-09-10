@@ -1,19 +1,32 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo } from "react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, LockKeyhole } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 
 import {
   AppShell,
   canCreatePermohonan,
 } from "@/components/dashboard/app-shell";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -21,8 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSession } from "@/hooks/use-session";
 import { createApplication } from "@/lib/applications";
-import { useSession } from "@/lib/auth";
 import { getRole, type RoleId } from "@/lib/workflow";
 
 const jenisByRole: Partial<Record<RoleId, string[]>> = {
@@ -30,17 +43,35 @@ const jenisByRole: Partial<Record<RoleId, string[]>> = {
   nps: ["PLG TM <5 GWNG", "PLG TM >5 GWNG"],
 };
 
-const requestTypes = ["Pasang baru", "Perubahan daya"];
-const units = ["ULP Taman", "ULP Menganti", "ULP Karang Pilang"];
+const requestTypes = ["Pasang baru", "Perubahan daya"] as const;
+const units = ["ULP Taman", "ULP Menganti", "ULP Karang Pilang"] as const;
 
-type FormValues = {
-  customer: string;
-  phone: string;
-  requestType: string;
-  connectionType: string;
-  unit: string;
-  location: string;
-};
+const baseSchema = z.object({
+  customer: z
+    .string()
+    .trim()
+    .min(2, "Nama pelanggan minimal 2 karakter.")
+    .max(150, "Nama pelanggan maksimal 150 karakter."),
+  phone: z
+    .string()
+    .trim()
+    .min(8, "Nomor telepon minimal 8 karakter.")
+    .max(20, "Nomor telepon maksimal 20 karakter.")
+    .regex(
+      /^[0-9+()\-\s]+$/,
+      "Nomor telepon hanya boleh berisi angka dan tanda telepon umum.",
+    ),
+  requestType: z.enum(requestTypes),
+  connectionType: z.string().min(1, "Jenis sambungan wajib dipilih."),
+  unit: z.enum(units),
+  location: z
+    .string()
+    .trim()
+    .min(2, "Lokasi minimal 2 karakter.")
+    .max(255, "Lokasi maksimal 255 karakter."),
+});
+
+type FormValues = z.infer<typeof baseSchema>;
 
 export default function ApplicationCreatePage() {
   const { user, error } = useSession();
@@ -126,29 +157,33 @@ function Unauthorized({ roleId }: { roleId: RoleId }) {
 }
 
 function CreateForm({ roleId }: { roleId: RoleId }) {
-  const connectionOptions = jenisByRole[roleId] ?? [];
-  const [values, setValues] = useState<FormValues>({
-    customer: "",
-    phone: "",
-    requestType: requestTypes[0],
-    connectionType: connectionOptions[0] ?? "",
-    unit: units[0],
-    location: "",
-  });
+  const connectionOptions = useMemo(() => jenisByRole[roleId] ?? [], [roleId]);
+  const schema = useMemo(
+    () =>
+      baseSchema.refine(
+        (values) => connectionOptions.includes(values.connectionType),
+        {
+          path: ["connectionType"],
+          message: "Jenis sambungan tidak sesuai kewenangan peran.",
+        },
+      ),
+    [connectionOptions],
+  );
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      customer: "",
+      phone: "",
+      requestType: requestTypes[0],
+      connectionType: connectionOptions[0] ?? "",
+      unit: units[0],
+      location: "",
+    },
+  });
+  const busy = form.formState.isSubmitting;
 
-  function update<K extends keyof FormValues>(key: K, value: FormValues[K]) {
-    setValues((current) => ({ ...current, [key]: value }));
-    setSaveError("");
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setSaveError("");
+  async function handleSubmit(values: FormValues) {
     try {
       const application = await createApplication({
         pelanggan_nama: values.customer,
@@ -166,161 +201,189 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
           ? { ulp_unit: values.unit }
           : {}),
       });
+      toast.success("Permohonan berhasil dibuat.");
       router.push("/permohonan/" + application.id);
     } catch (error) {
-      setSaveError(
-        error instanceof Error ? error.message : "Gagal menyimpan permohonan.",
-      );
-      setBusy(false);
+      const message =
+        error instanceof Error ? error.message : "Gagal menyimpan permohonan.";
+      form.setError("root", { message });
+      toast.error(message);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-card mt-6 rounded-lg border p-5 sm:p-6"
-    >
-      <fieldset disabled={busy}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field className="md:col-span-2">
-            <Label htmlFor="customer">Nama pelanggan</Label>
-            <Input
-              id="customer"
-              minLength={2}
-              maxLength={150}
-              value={values.customer}
-              onChange={(event) => update("customer", event.target.value)}
-              placeholder="Nama pelanggan"
-              className="mt-2 h-11"
-              required
-            />
-          </Field>
+    <Card className="mt-6 rounded-lg">
+      <CardContent className="p-5 sm:p-6">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} noValidate>
+            <fieldset disabled={busy}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="customer"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Nama pelanggan</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Nama pelanggan"
+                          className="h-11"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-          <Field>
-            <Label htmlFor="phone">No. HP / telepon</Label>
-            <Input
-              id="phone"
-              minLength={8}
-              maxLength={20}
-              type="tel"
-              value={values.phone}
-              onChange={(event) => update("phone", event.target.value)}
-              placeholder="08xxxxxxxxxx"
-              className="mt-2 h-11"
-              required
-            />
-          </Field>
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>No. HP / telepon</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="tel"
+                          placeholder="08xxxxxxxxxx"
+                          className="h-11"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-          <Field>
-            <Label htmlFor="requestType">Jenis permohonan</Label>
-            <Select
-              value={values.requestType}
-              onValueChange={(value) => update("requestType", value)}
-            >
-              <SelectTrigger
-                id="requestType"
-                className="bg-background mt-2 h-11 w-full"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {requestTypes.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+                <FormField
+                  control={form.control}
+                  name="requestType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Jenis permohonan</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={busy}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background h-11 w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {requestTypes.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-          <Field>
-            <Label htmlFor="connectionType">Jenis sambungan</Label>
-            <Select
-              value={values.connectionType}
-              onValueChange={(value) => update("connectionType", value)}
-            >
-              <SelectTrigger
-                id="connectionType"
-                className="bg-background mt-2 h-11 w-full"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {connectionOptions.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground mt-2 text-sm">
-              Pilihan dibatasi sesuai kewenangan peran {getRole(roleId).label}.
-            </p>
-          </Field>
+                <FormField
+                  control={form.control}
+                  name="connectionType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Jenis sambungan</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={busy}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background h-11 w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {connectionOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Pilihan dibatasi sesuai kewenangan peran{" "}
+                        {getRole(roleId).label}.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-          {roleId === "nps" && (
-            <Field>
-              <Label htmlFor="unit">Unit / ULP</Label>
-              <Select
-                value={values.unit}
-                onValueChange={(value) => update("unit", value)}
-              >
-                <SelectTrigger
-                  id="unit"
-                  className="bg-background mt-2 h-11 w-full"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {units.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          )}
+                {roleId === "nps" && (
+                  <FormField
+                    control={form.control}
+                    name="unit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Unit / ULP</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={busy}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="bg-background h-11 w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {units.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
-          <Field className="md:col-span-2">
-            <Label htmlFor="location">Lokasi</Label>
-            <Input
-              id="location"
-              minLength={2}
-              maxLength={255}
-              value={values.location}
-              onChange={(event) => update("location", event.target.value)}
-              placeholder="Jl. ... No. ..., Surabaya"
-              className="mt-2 h-11"
-              required
-            />
-          </Field>
-        </div>
+                <FormField
+                  control={form.control}
+                  name="location"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Lokasi</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Jl. ... No. ..., Surabaya"
+                          className="h-11"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-        {saveError && (
-          <p role="alert" className="text-destructive mt-4 text-sm">
-            {saveError}
-          </p>
-        )}
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button asChild type="button" variant="outline" className="min-h-11">
-            <Link href="/dashboard?view=all">Batal</Link>
-          </Button>
-          <Button type="submit" className="min-h-11">
-            {busy ? "Menyimpan..." : "Simpan permohonan"}
-          </Button>
-        </div>
-      </fieldset>
-    </form>
+              {form.formState.errors.root?.message && (
+                <p role="alert" className="text-destructive mt-4 text-sm">
+                  {form.formState.errors.root.message}
+                </p>
+              )}
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button asChild variant="outline" className="min-h-11">
+                  <Link href="/dashboard?view=all">Batal</Link>
+                </Button>
+                <Button type="submit" className="min-h-11">
+                  {busy ? "Menyimpan..." : "Simpan permohonan"}
+                </Button>
+              </div>
+            </fieldset>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   );
-}
-
-function Field({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <div className={className}>{children}</div>;
 }

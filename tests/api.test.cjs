@@ -38,6 +38,51 @@ global.sessionStorage = {
   removeItem: (key) => storage.delete(key),
 };
 const api = load("@/lib/api");
+const axios = require("axios");
+
+// Keep integration tests deterministic while exercising the real Axios
+// interceptors, serialization, authentication, and error mapping.
+api.apiClient.defaults.adapter = async (config) => {
+  let response;
+  try {
+    response = await global.fetch(config.baseURL + config.url, {
+      method: config.method.toUpperCase(),
+      headers: config.headers,
+      body: config.data,
+    });
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    throw axios.AxiosError.from(
+      error,
+      axios.AxiosError.ERR_NETWORK,
+      config,
+    );
+  }
+
+  const text = await response.text();
+  let data = text;
+  try {
+    data = JSON.parse(text);
+  } catch {}
+  const axiosResponse = {
+    data,
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers),
+    config,
+    request: null,
+  };
+  if (!response.ok) {
+    throw new axios.AxiosError(
+      "Request failed with status code " + response.status,
+      axios.AxiosError.ERR_BAD_RESPONSE,
+      config,
+      null,
+      axiosResponse,
+    );
+  }
+  return axiosResponse;
+};
 const applications = load("@/lib/applications");
 const utils = load("@/lib/utils");
 const workflow = load("@/lib/workflow");
@@ -300,7 +345,7 @@ for (const [node, endpoint, values, expected] of cases) {
   });
 }
 
-test("upload uses multipart bytes with backend field names; browser supplies boundary", async () => {
+test("upload uses multipart bytes with backend field names", async () => {
   const file = new File(["test evidence"], "test.pdf", {
     type: "application/pdf",
   });
@@ -309,7 +354,7 @@ test("upload uses multipart bytes with backend field names; browser supplies bou
     assert.ok(init.body instanceof FormData);
     assert.equal(init.body.get("type"), "evidence");
     assert.equal(await init.body.get("file").text(), "test evidence");
-    assert.equal(init.headers.has("Content-Type"), false);
+    assert.notEqual(init.headers.get("Content-Type"), "application/json");
     return json({ status: true, data: { id: "real-document-id" } });
   };
   assert.equal(

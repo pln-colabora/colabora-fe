@@ -1,9 +1,22 @@
 "use client";
-import { useRef, useState, type FormEvent } from "react";
+
+import { useMemo, useRef } from "react";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -18,7 +31,71 @@ import {
   nodeActions,
   type Application,
   type AvailableAction,
+  type FieldDefinition,
 } from "@/lib/workflow";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const acceptedFile = /\.(pdf|jpe?g|png)$/i;
+
+function createActionSchema(fields: FieldDefinition[]) {
+  const shape = Object.fromEntries(
+    fields.map((field) => {
+      let schema = z.string().trim();
+      if (field.required)
+        schema = schema.min(1, `${field.label} wajib diisi.`);
+      if (field.maxLength)
+        schema = schema.max(
+          field.maxLength,
+          `${field.label} maksimal ${field.maxLength} karakter.`,
+        );
+      if (field.type === "date")
+        schema = schema.refine(
+          (value) =>
+            !value ||
+            (/^\d{4}-\d{2}-\d{2}$/.test(value) &&
+              !Number.isNaN(Date.parse(value))),
+          "Format tanggal tidak valid.",
+        );
+      if (field.type === "number")
+        schema = schema.refine(
+          (value) => !value || Number.isFinite(Number(value)),
+          "Nilai harus berupa angka.",
+        );
+      if (field.type === "select" && field.options)
+        schema = schema.refine(
+          (value) => !value || field.options?.includes(value),
+          "Pilihan tidak valid.",
+        );
+      return [field.name, schema];
+    }),
+  ) as Record<string, z.ZodString>;
+
+  return z.object({
+    values: z.object(shape),
+    files: z
+      .array(
+        z
+          .custom<File>(
+            (value) => typeof File !== "undefined" && value instanceof File,
+            "Berkas evidence tidak valid.",
+          )
+          .refine(
+            (file) => file.size <= MAX_FILE_SIZE,
+            "Ukuran setiap evidence maksimal 10 MB.",
+          )
+          .refine(
+            (file) => acceptedFile.test(file.name),
+            "Evidence harus berupa PDF, JPG, JPEG, atau PNG.",
+          ),
+      )
+      .min(1, "Pilih minimal satu evidence."),
+  });
+}
+
+type ActionFormValues = {
+  values: Record<string, string>;
+  files: File[];
+};
 
 export function ActionForm({
   application,
@@ -42,162 +119,169 @@ export function ActionForm({
       } as Record<string, string>
     )[action.workflow_node] ?? action.workflow_node;
   const activity = getActivity(nodeActions[formNode]);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [files, setFiles] = useState<File[]>([]);
+  const schema = useMemo(
+    () => createActionSchema(activity?.fields ?? []),
+    [activity],
+  );
+  const form = useForm<ActionFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      values: Object.fromEntries(
+        (activity?.fields ?? []).map((field) => [field.name, ""]),
+      ),
+      files: [],
+    },
+  });
   const uploads = useRef(new Map<File, string>());
-  const submitting = useRef(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const busy = form.formState.isSubmitting;
+
   if (!activity)
     return (
       <p role="alert">Formulir aktivitas belum tersedia. Muat ulang detail.</p>
     );
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submitting.current) return;
-    submitting.current = true;
-    setBusy(true);
-    setError("");
+
+  async function submit(data: ActionFormValues) {
     try {
-      if (files.length === 0) throw new Error("Pilih minimal satu evidence.");
-      for (const file of files) {
-        if (file.size > 10 * 1024 * 1024)
-          throw new Error("Ukuran setiap evidence maksimal 10 MB.");
+      for (const file of data.files) {
         if (!uploads.current.has(file))
           uploads.current.set(file, (await uploadEvidence(file)).id);
       }
       const updated = await submitAction(
         application.id,
         action,
-        values,
-        files.map((file) => uploads.current.get(file)!),
+        data.values,
+        data.files.map((file) => uploads.current.get(file)!),
       );
+      toast.success("Aktivitas berhasil disimpan.");
       onSaved(updated);
     } catch (error) {
-      setError(
-        error instanceof Error ? error.message : "Aktivitas gagal disimpan.",
-      );
-    } finally {
-      submitting.current = false;
-      setBusy(false);
+      const message =
+        error instanceof Error ? error.message : "Aktivitas gagal disimpan.";
+      form.setError("root", { message });
+      toast.error(message);
     }
   }
+
   return (
-    <form
-      onSubmit={submit}
-      className="border-warning-border mt-5 border-t pt-5"
-    >
-      <fieldset disabled={busy}>
-        <div className="grid gap-4 md:grid-cols-2">
-          {activity.fields.map((field) => (
-            <div
-              key={field.name}
-              className={field.type === "textarea" ? "md:col-span-2" : ""}
-            >
-              <Label htmlFor={"field-" + field.name}>
-                {field.label}
-                {!field.required && (
-                  <span className="text-muted-foreground font-normal">
-                    {" "}
-                    (opsional)
-                  </span>
-                )}
-              </Label>
-              {field.type === "textarea" ? (
-                <Textarea
-                  id={"field-" + field.name}
-                  value={values[field.name] ?? ""}
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [field.name]: event.target.value,
-                    }))
-                  }
-                  required={field.required}
-                  maxLength={field.maxLength}
-                  className="bg-background mt-2 min-h-24"
-                />
-              ) : field.type === "select" ? (
-                <Select
-                  value={values[field.name] ?? ""}
-                  onValueChange={(value) =>
-                    setValues((current) => ({
-                      ...current,
-                      [field.name]: value,
-                    }))
-                  }
-                  required={field.required}
-                  disabled={busy}
-                >
-                  <SelectTrigger
-                    id={"field-" + field.name}
-                    className="bg-background mt-2 h-11 w-full"
+    <Form {...form}>
+      <form
+        onSubmit={form.handleSubmit(submit)}
+        className="border-warning-border mt-5 border-t pt-5"
+        noValidate
+      >
+        <fieldset disabled={busy}>
+          <div className="grid gap-4 md:grid-cols-2">
+            {activity.fields.map((definition) => (
+              <FormField
+                key={definition.name}
+                control={form.control}
+                name={`values.${definition.name}`}
+                render={({ field }) => (
+                  <FormItem
+                    className={
+                      definition.type === "textarea" ? "md:col-span-2" : ""
+                    }
                   >
-                    <SelectValue placeholder="Pilih keputusan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {field.options?.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  id={"field-" + field.name}
-                  type={field.type ?? "text"}
-                  value={values[field.name] ?? ""}
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [field.name]: event.target.value,
-                    }))
-                  }
-                  required={field.required}
-                  maxLength={field.maxLength}
-                  className="bg-background mt-2 h-11"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="mt-5">
-          <Label htmlFor="evidence">
-            Evidence aktivitas (PDF/JPG/PNG, maksimal 10 MB per berkas)
-          </Label>
-          <Input
-            id="evidence"
-            type="file"
-            multiple
-            accept=".pdf,.jpg,.jpeg,.png"
-            required
-            className="mt-2 h-11"
-            onChange={(event) => {
-              setFiles(Array.from(event.target.files ?? []));
-              setError("");
-            }}
+                    <FormLabel>
+                      {definition.label}
+                      {!definition.required && (
+                        <span className="text-muted-foreground font-normal">
+                          {" "}
+                          (opsional)
+                        </span>
+                      )}
+                    </FormLabel>
+                    {definition.type === "textarea" ? (
+                      <FormControl>
+                        <Textarea
+                          maxLength={definition.maxLength}
+                          className="bg-background min-h-24"
+                          {...field}
+                        />
+                      </FormControl>
+                    ) : definition.type === "select" ? (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={busy}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background h-11 w-full">
+                            <SelectValue placeholder="Pilih keputusan" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {definition.options?.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <FormControl>
+                        <Input
+                          type={definition.type ?? "text"}
+                          maxLength={definition.maxLength}
+                          className="bg-background h-11"
+                          {...field}
+                        />
+                      </FormControl>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ))}
+          </div>
+
+          <FormField
+            control={form.control}
+            name="files"
+            render={({ field }) => (
+              <FormItem className="mt-5">
+                <FormLabel>
+                  Evidence aktivitas (PDF/JPG/PNG, maksimal 10 MB per berkas)
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    ref={field.ref}
+                    name={field.name}
+                    onBlur={field.onBlur}
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="h-11"
+                    onChange={(event) =>
+                      field.onChange(Array.from(event.target.files ?? []))
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
-        {error && (
-          <p role="alert" className="text-destructive mt-4 text-sm">
-            {error}
-          </p>
-        )}
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11"
-            onClick={onCancel}
-          >
-            Batal
-          </Button>
-          <Button type="submit" className="min-h-11">
-            {busy ? "Menyimpan..." : "Simpan dan selesaikan aktivitas"}
-          </Button>
-        </div>
-      </fieldset>
-    </form>
+
+          {form.formState.errors.root?.message && (
+            <p role="alert" className="text-destructive mt-4 text-sm">
+              {form.formState.errors.root.message}
+            </p>
+          )}
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={onCancel}
+            >
+              Batal
+            </Button>
+            <Button type="submit" className="min-h-11">
+              {busy ? "Menyimpan..." : "Simpan dan selesaikan aktivitas"}
+            </Button>
+          </div>
+        </fieldset>
+      </form>
+    </Form>
   );
 }

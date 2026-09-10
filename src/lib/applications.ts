@@ -168,7 +168,7 @@ export async function createApplication(payload: CreateApplicationRequest) {
     (
       await apiRequest<PermohonanResponse>("/api/permohonan", {
         method: "POST",
-        body: JSON.stringify(payload),
+        data: payload,
       })
     ).data,
   );
@@ -180,7 +180,7 @@ export async function uploadEvidence(file: File) {
   return (
     await apiRequest<DocumentResponse>("/api/documents", {
       method: "POST",
-      body,
+      data: body,
     })
   ).data;
 }
@@ -232,7 +232,7 @@ export async function submitAction(
     (
       await apiRequest<PermohonanResponse>(path, {
         method: "POST",
-        body: JSON.stringify(payload),
+        data: payload,
       })
     ).data,
   );
@@ -249,10 +249,10 @@ export async function assignVendor(
         `/api/permohonan/${encodeURIComponent(id)}/vendor-assignments`,
         {
           method: "POST",
-          body: JSON.stringify({
+          data: {
             vendor_id: vendorId,
             vendor_role: vendorRole,
-          }),
+          },
         },
       )
     ).data,

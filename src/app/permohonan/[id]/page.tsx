@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeft,
   Check,
@@ -17,11 +18,22 @@ import {
   LockKeyhole,
   XCircle,
 } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
@@ -29,14 +41,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useApplication } from "@/hooks/use-application";
+import { useSession } from "@/hooks/use-session";
 import {
   assignVendor,
-  getApplication,
-  getApplicationDocuments,
-  getApplicationHistory,
   getVendorAccounts,
 } from "@/lib/applications";
-import { useSession } from "@/lib/auth";
 import { formatApiDate } from "@/lib/utils";
 import {
   activities,
@@ -60,70 +70,17 @@ export default function ApplicationDetailPage() {
   const id = params.id;
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
-  const [application, setApplication] = useState<Application>();
-  const [loadError, setLoadError] = useState("");
-  const [relatedError, setRelatedError] = useState("");
-  const [relatedLoading, setRelatedLoading] = useState(true);
-  const [reload, setReload] = useState(0);
-  const [ready, setReady] = useState(false);
+  const {
+    application,
+    setApplication,
+    loading,
+    error: loadError,
+    relatedError,
+    relatedLoading,
+    reload,
+  } = useApplication(id, !!user, true);
+  const ready = !!application || !loading;
   const [showForm, setShowForm] = useState(false);
-  const [feedback, setFeedback] = useState("");
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    setReady(false);
-    setLoadError("");
-    setRelatedError("");
-    setApplication(undefined);
-    getApplication(id)
-      .then((data) => {
-        if (!cancelled) {
-          setApplication(data);
-          setReady(true);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setLoadError(
-            error instanceof Error ? error.message : "Gagal memuat detail.",
-          );
-          setReady(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id, user, reload]);
-
-  const loadedNodes = application?.nodes;
-  useEffect(() => {
-    if (!loadedNodes) return;
-    let cancelled = false;
-    setRelatedError("");
-    setRelatedLoading(true);
-    Promise.all([getApplicationDocuments(id), getApplicationHistory(id)])
-      .then(([documents, history]) => {
-        if (!cancelled)
-          setApplication((current) =>
-            current ? { ...current, documents, history } : current,
-          );
-      })
-      .catch((error: unknown) => {
-        if (!cancelled)
-          setRelatedError(
-            error instanceof Error
-              ? error.message
-              : "Gagal memuat dokumen dan riwayat.",
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setRelatedLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id, loadedNodes]);
 
   if (!ready)
     return (
@@ -154,7 +111,7 @@ export default function ApplicationDetailPage() {
           <Button
             variant="outline"
             className="mt-6 mr-2"
-            onClick={() => setReload((value) => value + 1)}
+            onClick={reload}
           >
             Coba lagi
           </Button>
@@ -177,15 +134,7 @@ export default function ApplicationDetailPage() {
   function handleAdvanced(nextApplication: Application) {
     setApplication(nextApplication);
     setShowForm(false);
-    setFeedback("Aktivitas tersimpan. Status terbaru diterima dari server.");
-    getApplication(id)
-      .then(setApplication)
-      .catch((error: unknown) =>
-        setFeedback(
-          "Aktivitas tersimpan, tetapi penyegaran gagal: " +
-            (error instanceof Error ? error.message : "Coba muat ulang."),
-        ),
-      );
+    reload();
   }
 
   return (
@@ -243,19 +192,6 @@ export default function ApplicationDetailPage() {
           </div>
         </header>
 
-        {feedback ? (
-          <div
-            role="status"
-            className="border-success-border bg-success-surface text-success mt-5 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm"
-          >
-            <CheckCircle2
-              className="mt-0.5 size-4 shrink-0"
-              aria-hidden="true"
-            />
-            <span>{feedback}</span>
-          </div>
-        ) : null}
-
         <CurrentAction
           application={application}
           roleId={roleId}
@@ -275,7 +211,7 @@ export default function ApplicationDetailPage() {
             {relatedError}{" "}
             <Button
               variant="outline"
-              onClick={() => setReload((value) => value + 1)}
+              onClick={reload}
             >
               Coba lagi
             </Button>
@@ -305,6 +241,12 @@ export default function ApplicationDetailPage() {
   );
 }
 
+const vendorAssignmentSchema = z.object({
+  vendorId: z.string().trim().min(1, "Akun vendor wajib dipilih."),
+});
+
+type VendorAssignmentValues = z.infer<typeof vendorAssignmentSchema>;
+
 function VendorAssignment({
   application,
   roleId,
@@ -314,8 +256,6 @@ function VendorAssignment({
   roleId: RoleId;
   onSaved: (application: Application) => void;
 }) {
-  const [vendorId, setVendorId] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [vendors, setVendors] = useState<Array<{ id: string; name: string }>>(
@@ -324,6 +264,11 @@ function VendorAssignment({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [reload, setReload] = useState(0);
+  const form = useForm<VendorAssignmentValues>({
+    resolver: zodResolver(vendorAssignmentSchema),
+    defaultValues: { vendorId: "" },
+  });
+  const busy = form.formState.isSubmitting;
   const vendorRole =
     roleId === "perencanaan" && application.decisions.needsPole === true
       ? "vendor-tiang"
@@ -376,13 +321,13 @@ function VendorAssignment({
         Vendor hanya dapat mengakses permohonan setelah akunnya ditugaskan.
         Penugasan diperiksa oleh server dan hanya dapat dibuat sekali.
       </p>
-      <form
-        className="mt-4"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (busy || saved) return;
-          setBusy(true);
-          setError("");
+      <Form {...form}>
+        <form
+          className="mt-4"
+          noValidate
+          onSubmit={form.handleSubmit(async ({ vendorId }) => {
+            if (saved) return;
+            form.clearErrors("root");
           try {
             const updated = await assignVendor(
               application.id,
@@ -390,40 +335,50 @@ function VendorAssignment({
               vendorRole,
             );
             setSaved(true);
+            toast.success("Vendor berhasil ditugaskan.");
             onSaved(updated);
-          } catch (error) {
-            setError(
-              error instanceof Error
-                ? error.message
-                : "Penugasan vendor gagal.",
-            );
-          } finally {
-            setBusy(false);
+          } catch (requestError) {
+            const message =
+              requestError instanceof Error
+                ? requestError.message
+                : "Penugasan vendor gagal.";
+            form.setError("root", { message });
+            toast.error(message);
           }
-        }}
-      >
-        <label htmlFor="vendor-account" className="text-sm font-medium">
-          Akun {getRole(vendorRole).label}
-        </label>
-        <Select
-          value={vendorId}
-          onValueChange={setVendorId}
-          required
-          disabled={busy || saved || loading}
+          })}
         >
-          <SelectTrigger id="vendor-account" className="mt-2 h-11 w-full">
-            <SelectValue
-              placeholder={loading ? "Memuat vendor..." : "Pilih akun vendor"}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {vendors.map((vendor) => (
-              <SelectItem key={vendor.id} value={vendor.id}>
-                {vendor.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <FormField
+            control={form.control}
+            name="vendorId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Akun {getRole(vendorRole).label}</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  disabled={busy || saved || loading}
+                >
+                  <FormControl>
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue
+                        placeholder={
+                          loading ? "Memuat vendor..." : "Pilih akun vendor"
+                        }
+                      />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {vendors.map((vendor) => (
+                      <SelectItem key={vendor.id} value={vendor.id}>
+                        {vendor.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         {!loading && !error && !vendors.length && (
           <p className="text-muted-foreground mt-2 text-sm">
             Belum ada akun vendor untuk peran ini.
@@ -441,18 +396,16 @@ function VendorAssignment({
             </Button>
           </p>
         )}
-        {saved && (
-          <p role="status" className="text-success mt-2 text-sm">
-            Vendor berhasil ditugaskan.
-          </p>
-        )}
-        <Button
-          className="mt-3"
-          disabled={busy || saved || !vendorId || loading}
-        >
-          {busy ? "Menyimpan..." : "Tugaskan vendor"}
-        </Button>
-      </form>
+          {form.formState.errors.root?.message && (
+            <p role="alert" className="text-destructive mt-2 text-sm">
+              {form.formState.errors.root.message}
+            </p>
+          )}
+          <Button className="mt-3" disabled={busy || saved || loading}>
+            {busy ? "Menyimpan..." : "Tugaskan vendor"}
+          </Button>
+        </form>
+      </Form>
     </details>
   );
 }

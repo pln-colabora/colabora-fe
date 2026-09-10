@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -27,8 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getApplications } from "@/lib/applications";
-import { useSession } from "@/lib/auth";
+import { useApplications } from "@/hooks/use-applications";
+import { useSession } from "@/hooks/use-session";
 import { formatApiDate } from "@/lib/utils";
 import {
   getActivity,
@@ -60,37 +60,17 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const isHome = !searchParams.has("view");
   const view: View = searchParams.get("view") === "mine" ? "mine" : "all";
-  const [ready, setReady] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
-  const [loadError, setLoadError] = useState("");
-  const [reload, setReload] = useState(0);
-  const [applications, setApplications] = useState<Application[]>([]);
+  const {
+    applications,
+    loading: applicationsLoading,
+    error: loadError,
+    reload,
+  } = useApplications(!!user);
+  const ready = !applicationsLoading;
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    setReady(false);
-    setLoadError("");
-    getApplications()
-      .then((data) => {
-        if (!cancelled) {
-          setApplications(data);
-          setReady(true);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled)
-          setLoadError(
-            error instanceof Error ? error.message : "Gagal memuat permohonan.",
-          );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, reload]);
 
   const roleQueue = applications.filter(isOwnedBy);
   const filteredApplications = (
@@ -169,7 +149,7 @@ function DashboardContent() {
               onClick={() =>
                 sessionError
                   ? window.location.reload()
-                  : setReload((value) => value + 1)
+                  : reload()
               }
             >
               Coba lagi

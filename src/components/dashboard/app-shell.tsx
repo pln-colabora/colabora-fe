@@ -10,6 +10,7 @@ import {
   House,
   LogOut,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { logout, type User } from "@/lib/auth";
@@ -49,6 +50,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
   const router = useRouter();
   function handleLogout() {
     void logout();
+    toast.success("Berhasil keluar.");
     router.replace("/login");
   }
   const role = getRole(roleId);

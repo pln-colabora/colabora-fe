@@ -30,7 +30,9 @@ Lint hanya memeriksa sumber, tanpa mengubah file. Untuk memformat perubahan tert
 - `src/components/dashboard/`: shell navigasi dan tampilan status bersama. Tambahkan tujuan navigasi melalui daftar `destinations` agar desktop dan seluler tetap selaras.
 - `src/components/ui/`: primitif antarmuka yang sudah tersedia.
 - `src/lib/workflow.ts`: metadata presentasi tahap, label, PIC, dan field form.
-- `src/lib/api.ts`, `src/lib/auth.ts`, `src/lib/applications.ts`: request, session backend, endpoint, serta mapping API/UI.
+- `src/lib/api.ts`, `src/lib/auth.ts`, `src/lib/applications.ts`: klien Axios, session backend, endpoint, serta mapping API/UI.
+- `src/hooks`: state dan lifecycle data React untuk session, dashboard, dan detail permohonan.
+- Form memakai React Hook Form, schema Zod, primitive shadcn, dan toast untuk hasil aksi pengguna.
 - `src/components/dashboard/action-form.tsx`: form aktivitas bersama untuk detail dan survei; upload multipart dan submit memakai available action backend.
 - `src/styles/globals.css`: token warna, tipografi, fokus keyboard, dan reduced motion. Gunakan token semantik untuk status, termasuk tema gelap.
 

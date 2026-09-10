@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
@@ -10,13 +8,12 @@ import { ArrowLeft, Eye, LockKeyhole } from "lucide-react";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { Button } from "@/components/ui/button";
-import { getApplication } from "@/lib/applications";
-import { useSession } from "@/lib/auth";
+import { useApplication } from "@/hooks/use-application";
+import { useSession } from "@/hooks/use-session";
 import {
   getActivity,
   getOwner,
   getRole,
-  type Application,
 } from "@/lib/workflow";
 
 export default function SurveyPage() {
@@ -25,34 +22,8 @@ export default function SurveyPage() {
   const { user, error: sessionError } = useSession();
   const router = useRouter();
   const roleId = user?.role ?? "user";
-  const [application, setApplication] = useState<Application>();
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    setReady(false);
-    setApplication(undefined);
-    setError("");
-    getApplication(id)
-      .then((data) => {
-        if (!cancelled) {
-          setApplication(data);
-          setReady(true);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setError(
-            error instanceof Error ? error.message : "Gagal memuat survei.",
-          );
-          setReady(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id, user]);
+  const { application, loading, error, reload } = useApplication(id, !!user);
+  const ready = !!application || !loading;
 
   if (!ready) {
     return (
@@ -84,7 +55,7 @@ export default function SurveyPage() {
           <Button
             variant="outline"
             className="mt-6 mr-2"
-            onClick={() => window.location.reload()}
+            onClick={reload}
           >
             Coba lagi
           </Button>
