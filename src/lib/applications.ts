@@ -150,7 +150,14 @@ export async function getApplicationHistory(id: string) {
   const { data } = await apiRequest<ActivityLog[]>(
     `/api/permohonan/${encodeURIComponent(id)}/logs`,
   );
+  const seen = new Set<string>();
   return data
+    .filter((log) => {
+      const key = `${log.created_at}|${log.workflow_node ?? ""}|${log.actor}|${log.detail ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .map((log) => {
       const activity = getActivity(
         nodeActions[log.workflow_node ?? ""],

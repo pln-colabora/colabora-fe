@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Clock3,
   FilePlus2,
+  LoaderCircle,
   Search,
   TriangleAlert,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
   AppShell,
   canCreatePermohonan,
 } from "@/components/dashboard/app-shell";
+import { DashboardSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useApplications } from "@/hooks/use-applications";
 import { useSession } from "@/hooks/use-session";
 import { formatApiDate } from "@/lib/utils";
@@ -46,9 +49,7 @@ export default function DashboardPage() {
   return (
     <Suspense
       fallback={
-        <p role="status" className="p-6">
-          Memuat permohonan...
-        </p>
+        <DashboardSkeleton />
       }
     >
       <DashboardContent />
@@ -142,17 +143,21 @@ function DashboardContent() {
         </header>
 
         {(loadError || sessionError) && (
-          <div role="alert" className="text-destructive mt-4 text-sm">
+          <div role="alert" aria-live="assertive" className="text-destructive mt-4 flex flex-wrap items-center gap-3 text-sm">
             {loadError || sessionError}{" "}
             <Button
               variant="outline"
+              disabled={applicationsLoading}
               onClick={() =>
                 sessionError
                   ? window.location.reload()
                   : reload()
               }
             >
-              Coba lagi
+              {applicationsLoading && (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              )}
+              {applicationsLoading ? "Memuat..." : "Coba lagi"}
             </Button>
           </div>
         )}
@@ -268,6 +273,7 @@ function DashboardContent() {
         <section
           className="bg-card mt-6 min-w-0 overflow-hidden rounded-lg"
           aria-labelledby="applications-title"
+          aria-busy={!ready}
         >
           <div
             className={
@@ -379,7 +385,7 @@ function DashboardContent() {
           </div>
 
           {!ready ? (
-            <div role="status" className="space-y-3 p-5">
+            <div role="status" aria-busy="true" className="space-y-3 p-5">
               <p className="text-muted-foreground text-sm">
                 {loadError || sessionError
                   ? "Data permohonan belum tersedia."
@@ -388,10 +394,9 @@ function DashboardContent() {
               {!loadError &&
                 !sessionError &&
                 [1, 2, 3].map((row) => (
-                  <div
+                  <Skeleton
                     key={row}
-                    className="bg-muted h-16 rounded-md"
-                    aria-hidden="true"
+                    className="h-16 w-full"
                   />
                 ))}
             </div>
@@ -596,7 +601,7 @@ function ApplicationRow({
   const status = getApplicationStatus(application);
 
   return (
-    <tr className="hover:bg-muted/35 border-b last:border-b-0">
+    <tr className="hover:bg-muted/35 border-b transition-colors duration-150 last:border-b-0">
       <td className="px-4 py-3 font-mono text-sm font-medium whitespace-nowrap">
         {application.number}
       </td>

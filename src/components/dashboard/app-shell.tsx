@@ -81,9 +81,6 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
           <span className="font-display text-primary block text-xl font-bold tracking-tight">
             COLABORA
           </span>
-          <span className="text-muted-foreground mt-1 block text-xs">
-            Layanan Kolaborasi PLN
-          </span>
         </Link>
         <nav aria-label="Navigasi utama" className="px-3 py-5">
           <p className="text-muted-foreground px-2 pb-2 text-xs font-medium">
@@ -128,9 +125,6 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
             <Link href="/dashboard" className="shrink-0 py-2 lg:hidden">
               <span className="font-display text-primary block text-lg font-bold tracking-tight">
                 COLABORA
-              </span>
-              <span className="text-muted-foreground hidden text-sm sm:block">
-                Layanan Kolaborasi PLN
               </span>
             </Link>
             <p className="text-muted-foreground hidden text-sm lg:block">
@@ -196,7 +190,9 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
               className={`flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center gap-1 border-t-2 px-2 text-xs font-medium ${active === id ? "border-primary bg-accent text-primary" : "text-muted-foreground border-transparent"}`}
             >
               <Icon className="size-[1.15rem] shrink-0" aria-hidden="true" />
-              <span className="max-w-full truncate leading-4">{mobileLabel}</span>
+              <span className="max-w-full truncate leading-4">
+                {mobileLabel}
+              </span>
             </Link>
           ))}
         </nav>

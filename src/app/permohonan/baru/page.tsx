@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, LockKeyhole } from "lucide-react";
+import { ArrowLeft, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -15,6 +15,7 @@ import {
   AppShell,
   canCreatePermohonan,
 } from "@/components/dashboard/app-shell";
+import { FormPageSkeleton } from "@/components/dashboard/page-skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -81,16 +82,14 @@ export default function ApplicationCreatePage() {
   if (!ready) {
     return (
       <AppShell active="create" roleId={roleId} user={user}>
-        <div role="status" className="space-y-4">
-          <p role={error ? "alert" : "status"}>
-            {error || "Memuat formulir permohonan..."}
-          </p>
-          {error && (
+        {error ? (
+          <div role="alert" aria-live="assertive" className="space-y-4">
+            <p className="text-destructive text-sm">{error}</p>
             <Button onClick={() => window.location.reload()}>Coba lagi</Button>
-          )}
-          <div className="bg-muted h-24 rounded-md" />
-          <div className="bg-muted h-64 rounded-md" />
-        </div>
+          </div>
+        ) : (
+          <FormPageSkeleton />
+        )}
       </AppShell>
     );
   }
@@ -216,7 +215,7 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
       <CardContent className="p-5 sm:p-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} noValidate>
-            <fieldset disabled={busy}>
+            <fieldset className="min-w-0" disabled={busy}>
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -377,6 +376,7 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
                   <Link href="/dashboard?view=all">Batal</Link>
                 </Button>
                 <Button type="submit" className="min-h-11">
+                  {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
                   {busy ? "Menyimpan..." : "Simpan permohonan"}
                 </Button>
               </div>

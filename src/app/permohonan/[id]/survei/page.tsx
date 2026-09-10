@@ -7,7 +7,9 @@ import { ArrowLeft, Eye, LockKeyhole } from "lucide-react";
 
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { FormPageSkeleton } from "@/components/dashboard/page-skeletons";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { useApplication } from "@/hooks/use-application";
 import { useSession } from "@/hooks/use-session";
 import {
@@ -28,16 +30,14 @@ export default function SurveyPage() {
   if (!ready) {
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
-        <div role="status" className="space-y-4">
-          <p role={sessionError ? "alert" : "status"}>
-            {sessionError || "Memuat formulir survei..."}
-          </p>
-          {sessionError && (
+        {sessionError ? (
+          <div role="alert" aria-live="assertive" className="space-y-4">
+            <p className="text-destructive text-sm">{sessionError}</p>
             <Button onClick={() => window.location.reload()}>Coba lagi</Button>
-          )}
-          <div className="bg-muted h-24 rounded-md" />
-          <div className="bg-muted h-64 rounded-md" />
-        </div>
+          </div>
+        ) : (
+          <FormPageSkeleton />
+        )}
       </AppShell>
     );
   }
@@ -124,13 +124,18 @@ export default function SurveyPage() {
             body={`Survei dikerjakan oleh ${owner.lane} — ${owner.label} sesuai jenis sambungan ${application.connectionType}.`}
           />
         ) : (
-          <ActionForm
-            key={application.id}
-            application={application}
-            action={action!}
-            onCancel={() => router.push(`/permohonan/${id}`)}
-            onSaved={() => router.push(`/permohonan/${id}`)}
-          />
+          <Card className="mt-6 rounded-lg">
+            <CardContent className="p-5 sm:p-6">
+              <ActionForm
+                key={application.id}
+                application={application}
+                action={action!}
+                embedded
+                onCancel={() => router.push(`/permohonan/${id}`)}
+                onSaved={() => router.push(`/permohonan/${id}`)}
+              />
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppShell>

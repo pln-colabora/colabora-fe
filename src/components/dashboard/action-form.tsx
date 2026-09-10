@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { LoaderCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -106,11 +107,13 @@ export function ActionForm({
   action,
   onCancel,
   onSaved,
+  embedded = false,
 }: {
   application: Application;
   action: AvailableAction;
   onCancel: () => void;
   onSaved: (application: Application) => void;
+  embedded?: boolean;
 }) {
   // Combined endpoints use one form; the server completes the associated nodes atomically.
   const formNode =
@@ -192,7 +195,11 @@ export function ActionForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(submit)}
-        className="border-border mt-5 min-w-0 border-t pt-5"
+        className={
+          embedded
+            ? "min-w-0"
+            : "border-border mt-5 min-w-0 border-t pt-5"
+        }
         noValidate
       >
         <fieldset className="min-w-0" disabled={busy}>
@@ -304,6 +311,7 @@ export function ActionForm({
               type="submit"
               className="h-auto min-h-11 w-full whitespace-normal sm:w-auto"
             >
+              {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
               {busy ? "Menyimpan..." : "Simpan dan selesaikan aktivitas"}
             </Button>
           </div>

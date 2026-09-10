@@ -27,6 +27,7 @@ import { z } from "zod";
 
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useApplication } from "@/hooks/use-application";
 import { useDocumentActions } from "@/hooks/use-document-actions";
 import { useSession } from "@/hooks/use-session";
@@ -89,16 +91,14 @@ export default function ApplicationDetailPage() {
   if (!ready)
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
-        <div role="status" className="space-y-4">
-          <p role={sessionError ? "alert" : "status"}>
-            {sessionError || "Memuat detail permohonan..."}
-          </p>
-          {sessionError && (
+        {sessionError ? (
+          <div role="alert" aria-live="assertive" className="space-y-4">
+            <p className="text-destructive text-sm">{sessionError}</p>
             <Button onClick={() => window.location.reload()}>Coba lagi</Button>
-          )}
-          <div className="bg-muted h-24 rounded-md" />
-          <div className="bg-muted h-48 rounded-md" />
-        </div>
+          </div>
+        ) : (
+          <DetailSkeleton />
+        )}
       </AppShell>
     );
 
@@ -211,13 +211,17 @@ export default function ApplicationDetailPage() {
           onSaved={handleAdvanced}
         />
         {relatedError && (
-          <p role="alert" className="text-destructive mt-4 text-sm">
+          <p role="alert" aria-live="assertive" className="text-destructive mt-4 flex flex-wrap items-center gap-3 text-sm">
             {relatedError}{" "}
             <Button
               variant="outline"
+              disabled={relatedLoading}
               onClick={reload}
             >
-              Coba lagi
+              {relatedLoading && (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              )}
+              {relatedLoading ? "Memuat..." : "Coba lagi"}
             </Button>
           </p>
         )}
@@ -395,9 +399,13 @@ function VendorAssignment({
             <Button
               type="button"
               variant="outline"
+              disabled={loading}
               onClick={() => setReload((value) => value + 1)}
             >
-              Muat ulang vendor
+              {loading && (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              )}
+              {loading ? "Memuat..." : "Muat ulang vendor"}
             </Button>
           </p>
         )}
@@ -407,6 +415,7 @@ function VendorAssignment({
             </p>
           )}
           <Button className="mt-3" disabled={busy || saved || loading}>
+            {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
             {busy ? "Menyimpan..." : "Tugaskan vendor"}
           </Button>
         </form>
@@ -852,9 +861,11 @@ function DocumentsSection({
         </p>
       </div>
       {loading ? (
-        <p role="status" className="text-muted-foreground py-8 text-sm">
-          Memuat dokumen...
-        </p>
+        <div role="status" aria-busy="true" className="space-y-3 py-5">
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-4/5" />
+          <span className="sr-only">Memuat dokumen...</span>
+        </div>
       ) : error ? (
         <p className="text-destructive py-8 text-sm">
           Dokumen belum berhasil dimuat.
@@ -1018,9 +1029,11 @@ function HistorySection({
         Riwayat aktivitas
       </h2>
       {loading ? (
-        <p role="status" className="text-muted-foreground mt-4 text-sm">
-          Memuat riwayat...
-        </p>
+        <div role="status" aria-busy="true" className="mt-4 space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-11/12" />
+          <span className="sr-only">Memuat riwayat...</span>
+        </div>
       ) : error ? (
         <p className="text-destructive mt-4 text-sm">
           Riwayat belum berhasil dimuat.

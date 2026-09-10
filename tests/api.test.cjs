@@ -403,13 +403,23 @@ test("history title is derived from workflow_node instead of action", async () =
           actor: "actor-id",
           detail: "Survei lapangan lengkap",
         },
+        {
+          id: "duplicate-log-id",
+          created_at: "2026-09-09T10:00:00Z",
+          action: "another_legacy_action_value",
+          workflow_node: "survei",
+          actor: "actor-id",
+          detail: "Survei lapangan lengkap",
+        },
       ],
     });
 
-  const [history] = await applications.getApplicationHistory("test-id");
-  assert.equal(history.title, workflow.getActivity("2").label);
-  assert.equal(history.detail, "Survei lapangan lengkap");
-  assert.notEqual(history.title, "legacy_action_value");
+  const history = await applications.getApplicationHistory("test-id");
+  assert.equal(history.length, 1);
+  const [first] = history;
+  assert.equal(first.title, workflow.getActivity("2").label);
+  assert.equal(first.detail, "Survei lapangan lengkap");
+  assert.notEqual(first.title, "legacy_action_value");
 });
 
 test("document content uses the authenticated permohonan endpoint", async () => {
