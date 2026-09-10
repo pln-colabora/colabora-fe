@@ -1,5 +1,6 @@
-import { apiRequest } from "@/lib/api";
+import { apiClient, apiRequest } from "@/lib/api";
 import {
+  getActivity,
   nodeActions,
   type Application,
   type AvailableAction,
@@ -29,14 +30,16 @@ type DocumentResponse = {
   id: string;
   original_filename: string;
   created_at: string;
+  mime_type: string;
+  size_bytes: number;
   workflow_nodes: string[];
 };
 type ActivityLog = {
   id: string;
   created_at: string;
-  action: string;
   actor: string;
   detail: string | null;
+  workflow_node: string | null;
 };
 
 export function mapApplication(data: PermohonanResponse): Application {
@@ -139,6 +142,8 @@ export async function getApplicationDocuments(id: string) {
     name: document.original_filename,
     addedAt: document.created_at,
     actionId: nodeActions[document.workflow_nodes[0]],
+    mimeType: document.mime_type,
+    sizeBytes: document.size_bytes,
   }));
 }
 export async function getApplicationHistory(id: string) {
@@ -146,12 +151,19 @@ export async function getApplicationHistory(id: string) {
     `/api/permohonan/${encodeURIComponent(id)}/logs`,
   );
   return data
-    .map((log) => ({
-      id: log.id,
-      at: log.created_at,
-      title: log.detail || log.action,
-      by: log.actor,
-    }))
+    .map((log) => {
+      const activity = getActivity(
+        nodeActions[log.workflow_node ?? ""],
+      );
+      return {
+        id: log.id,
+        at: log.created_at,
+        title:
+          activity?.label ?? log.workflow_node ?? "Aktivitas workflow",
+        detail: log.detail ?? undefined,
+        by: log.actor,
+      };
+    })
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
@@ -173,7 +185,10 @@ export async function createApplication(payload: CreateApplicationRequest) {
     ).data,
   );
 }
-export async function uploadEvidence(file: File) {
+export async function uploadEvidence(
+  file: File,
+  onProgress?: (percentage: number) => void,
+) {
   const body = new FormData();
   body.set("file", file);
   body.set("type", "evidence");
@@ -181,8 +196,22 @@ export async function uploadEvidence(file: File) {
     await apiRequest<DocumentResponse>("/api/documents", {
       method: "POST",
       data: body,
+      onUploadProgress: (event) => {
+        if (event.total)
+          onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      },
     })
   ).data;
+}
+
+export async function getApplicationDocument(
+  applicationId: string,
+  documentId: string,
+) {
+  const path = `/api/permohonan/${encodeURIComponent(
+    applicationId,
+  )}/documents/${encodeURIComponent(documentId)}`;
+  return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
 }
 export async function submitAction(
   id: string,

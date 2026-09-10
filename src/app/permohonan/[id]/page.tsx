@@ -13,8 +13,11 @@ import {
   ChevronRight,
   Circle,
   Clock3,
+  Download,
+  ExternalLink,
   FileText,
   Eye,
+  LoaderCircle,
   LockKeyhole,
   XCircle,
 } from "lucide-react";
@@ -42,12 +45,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useApplication } from "@/hooks/use-application";
+import { useDocumentActions } from "@/hooks/use-document-actions";
 import { useSession } from "@/hooks/use-session";
 import {
   assignVendor,
   getVendorAccounts,
 } from "@/lib/applications";
-import { formatApiDate } from "@/lib/utils";
+import { formatApiDate, formatFileSize } from "@/lib/utils";
 import {
   activities,
   nodeActions,
@@ -221,6 +225,7 @@ export default function ApplicationDetailPage() {
           <div className="min-w-0 space-y-6">
             <WorkflowTimeline application={application} />
             <DocumentsSection
+              applicationId={application.id}
               documents={documents}
               loading={relatedLoading}
               error={relatedError}
@@ -820,14 +825,19 @@ function activityStatusLabel(status: ProgressStatus) {
 }
 
 function DocumentsSection({
+  applicationId,
   documents,
   loading,
   error,
 }: {
+  applicationId: string;
   loading: boolean;
   error: string;
   documents: ReturnType<typeof getDocuments>;
 }) {
+  const { activeAction, openDocument, downloadDocument } =
+    useDocumentActions(applicationId);
+
   return (
     <section
       aria-labelledby="documents-title"
@@ -860,11 +870,53 @@ function DocumentsSection({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{document.name}</p>
                 <p className="text-muted-foreground mt-0.5 text-xs">
-                  {getActivity(document.actionId)?.shortLabel} ·{" "}
-                  {document.addedAt}
+                  {getActivity(document.actionId)?.shortLabel ?? "Evidence"} ·{" "}
+                  {formatFileSize(document.sizeBytes)} ·{" "}
+                  {displayHistoryDate(document.addedAt)}
                 </p>
               </div>
-              <span className="text-muted-foreground text-xs">Tersimpan</span>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9"
+                  disabled={!!activeAction}
+                  aria-label={`Buka ${document.name} di tab baru`}
+                  title="Buka evidence"
+                  onClick={() => void openDocument(document)}
+                >
+                  {activeAction?.documentId === document.id &&
+                  activeAction.type === "open" ? (
+                    <LoaderCircle
+                      className="size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <ExternalLink className="size-4" aria-hidden="true" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9"
+                  disabled={!!activeAction}
+                  aria-label={`Unduh ${document.name}`}
+                  title="Unduh evidence"
+                  onClick={() => void downloadDocument(document)}
+                >
+                  {activeAction?.documentId === document.id &&
+                  activeAction.type === "download" ? (
+                    <LoaderCircle
+                      className="size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Download className="size-4" aria-hidden="true" />
+                  )}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
@@ -989,6 +1041,11 @@ function HistorySection({
                 {displayHistoryDate(item.at)}
               </p>
               <p className="mt-1 font-medium">{item.title}</p>
+              {item.detail && (
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  {item.detail}
+                </p>
+              )}
               <p className="text-muted-foreground mt-0.5 text-xs">
                 oleh {item.by}
               </p>

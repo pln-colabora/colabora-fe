@@ -59,11 +59,16 @@ api.apiClient.defaults.adapter = async (config) => {
     );
   }
 
-  const text = await response.text();
-  let data = text;
-  try {
-    data = JSON.parse(text);
-  } catch {}
+  let data;
+  if (config.responseType === "blob") {
+    data = await response.blob();
+  } else {
+    const text = await response.text();
+    data = text;
+    try {
+      data = JSON.parse(text);
+    } catch {}
+  }
   const axiosResponse = {
     data,
     status: response.status,
@@ -361,6 +366,47 @@ test("upload uses multipart bytes with backend field names", async () => {
     (await applications.uploadEvidence(file)).id,
     "real-document-id",
   );
+});
+
+test("history title is derived from workflow_node instead of action", async () => {
+  global.fetch = async () =>
+    json({
+      status: true,
+      data: [
+        {
+          id: "log-id",
+          created_at: "2026-09-09T10:00:00Z",
+          action: "legacy_action_value",
+          workflow_node: "survei",
+          actor: "actor-id",
+          detail: "Survei lapangan lengkap",
+        },
+      ],
+    });
+
+  const [history] = await applications.getApplicationHistory("test-id");
+  assert.equal(history.title, workflow.getActivity("2").label);
+  assert.equal(history.detail, "Survei lapangan lengkap");
+  assert.notEqual(history.title, "legacy_action_value");
+});
+
+test("document content uses the authenticated permohonan endpoint", async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(
+      url,
+      "https://api.example.test/api/permohonan/test-id/documents/document-id",
+    );
+    assert.equal(init.headers.get("Authorization"), "Bearer access-test");
+    return new Response("document bytes", {
+      headers: { "Content-Type": "application/pdf" },
+    });
+  };
+
+  const blob = await applications.getApplicationDocument(
+    "test-id",
+    "document-id",
+  );
+  assert.equal(await blob.text(), "document bytes");
 });
 
 for (const status of [400, 403, 404, 409, 500]) {

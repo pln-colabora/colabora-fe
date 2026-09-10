@@ -69,6 +69,7 @@ export type HistoryItem = {
   id: string;
   at: string;
   title: string;
+  detail?: string;
   by: string;
 };
 
@@ -77,6 +78,8 @@ export type DocumentItem = {
   name: string;
   actionId: ActionId | undefined;
   addedAt: string;
+  mimeType: string;
+  sizeBytes: number;
 };
 
 export type WorkflowNode = {

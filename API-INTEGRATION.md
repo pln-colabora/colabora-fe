@@ -41,7 +41,8 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 | Action 15 + 16 + 17 | POST `P/closing` | `document_ids`, optional `notes` |
 | Upload evidence | POST `/api/documents` | Multipart `file`, `type=evidence` |
 | Dokumen | GET `P/documents` | Response metadata dokumen yang sudah terikat |
-| Riwayat | GET `P/logs` | Response log server |
+| Buka / unduh dokumen | GET `P/documents/{doc_id}` | Bearer token; response mengikuti redirect presigned URL |
+| Riwayat | GET `P/logs` | Judul aktivitas dipetakan dari `workflow_node`; `detail` ditampilkan terpisah |
 | Daftar akun vendor | GET `/api/user?page=...&per_page=100` | Filter role dari response; hanya dimuat saat disclosure penugasan dibuka |
 | Penugasan vendor | POST `P/vendor-assignments` | `vendor_id`, `vendor_role` |
 
@@ -80,7 +81,9 @@ Daftar 15 akun yang diberikan disimpan di `.env.local` yang diabaikan Git, melal
 - `src/lib/auth.ts`: login/logout dan hook session yang dipakai halaman.
 - `src/lib/applications.ts`: endpoint permohonan, evidence, history, assignment, dan mapping API/UI.
 - `src/lib/workflow.ts`: metadata tahap/label/PIC/form; seed, overrides, transisi lokal, history dan evidence palsu dihapus.
-- `src/components/dashboard/action-form.tsx`: form aktivitas yang dipakai detail dan survei, dengan field API dan upload asli; menggantikan dua implementasi form demo.
+- `src/components/dashboard/action-form.tsx`: form aktivitas yang dipakai detail dan survei, dengan field API dan upload asli.
+- `src/components/dashboard/evidence-uploader.tsx`: drag-and-drop evidence, daftar berkas, validasi, progres, status, dan penghapusan pilihan.
+- `src/hooks/use-document-actions.ts`: buka evidence di tab browser dan unduh melalui request terautentikasi.
 - `src/components/dashboard/app-shell.tsx`: identitas backend dan logout; switch peran/reset demo dihapus.
 - `src/app/login/*`: credential helper development dan login nyata, dengan layout yang sama.
 - `src/app/dashboard/page.tsx`: data list API, total/filter, caller-specific task queue, loading/error/retry.
@@ -91,7 +94,7 @@ Daftar 15 akun yang diberikan disimpan di `.env.local` yang diabaikan Git, melal
 - `tests/api.test.cjs`, `package.json`: regression tests memakai Node test runner dan TypeScript yang sudah tersedia.
 - `README.md`, dokumen ini: cara menjalankan dan mapping untuk pemeliharaan.
 
-Tidak ada dependency baru, provider auth, global data store, class API client, layer repository/service, atau workflow engine frontend.
+Tidak ada global data store atau workflow engine frontend. Axios menangani transport API dan Sonner menyediakan toast shadcn.
 
 ## Verifikasi 9 September 2026
 
@@ -120,7 +123,7 @@ Hasil pemeriksaan akhir:
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| `npm.cmd run test` | 31 test lulus |
+| `npm.cmd run test` | 35 test lulus |
 | `npm.cmd run lint` | Lulus |
 | `npm.cmd run typecheck` | Lulus |
 | `npm.cmd run build` | Lulus, semua route berhasil dibangun |

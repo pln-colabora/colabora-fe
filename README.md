@@ -46,6 +46,8 @@ Backend menjadi sumber data, status node, SLA, dan izin tindakan. Dashboard meng
 
 Form pembuatan mengikuti schema API: daya, ID pelanggan, catatan, dan evidence awal tidak dikirim karena tidak diterima endpoint create. Unit JTR/JTM berasal dari akun backend. Evidence aktivitas diunggah sebagai file asli, lalu document ID diikat oleh submit. Server menentukan transisi dan branching, termasuk aktivitas paralel.
 
+Pemilih evidence mendukung drag-and-drop, validasi format/ukuran, progres upload, dan penghapusan sebelum submit. Evidence yang sudah terikat dapat dibuka di tab browser atau diunduh dari halaman detail.
+
 Tests memakai Node test runner tanpa dependency tambahan dan tidak menulis data ke backend. Empat permohonan TEST untuk pemeriksaan live telah dibuat dengan izin pengguna; daftar ID dan hasilnya ada di dokumen integrasi.
 
 ## Pemeriksaan UI manual

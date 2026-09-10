@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import {
+  EvidenceUploader,
+  type EvidenceFileStatus,
+} from "@/components/dashboard/evidence-uploader";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -133,6 +137,9 @@ export function ActionForm({
     },
   });
   const uploads = useRef(new Map<File, string>());
+  const [fileStatuses, setFileStatuses] = useState(
+    new Map<File, EvidenceFileStatus>(),
+  );
   const busy = form.formState.isSubmitting;
 
   if (!activity)
@@ -143,8 +150,19 @@ export function ActionForm({
   async function submit(data: ActionFormValues) {
     try {
       for (const file of data.files) {
-        if (!uploads.current.has(file))
-          uploads.current.set(file, (await uploadEvidence(file)).id);
+        if (!uploads.current.has(file)) {
+          setFileStatus(file, { state: "uploading", progress: 0 });
+          try {
+            const document = await uploadEvidence(file, (progress) =>
+              setFileStatus(file, { state: "uploading", progress }),
+            );
+            uploads.current.set(file, document.id);
+            setFileStatus(file, { state: "uploaded", progress: 100 });
+          } catch (error) {
+            setFileStatus(file, { state: "failed" });
+            throw error;
+          }
+        }
       }
       const updated = await submitAction(
         application.id,
@@ -160,6 +178,14 @@ export function ActionForm({
       form.setError("root", { message });
       toast.error(message);
     }
+  }
+
+  function setFileStatus(file: File, status: EvidenceFileStatus) {
+    setFileStatuses((current) => {
+      const next = new Map(current);
+      next.set(file, status);
+      return next;
+    });
   }
 
   return (
@@ -240,21 +266,16 @@ export function ActionForm({
             name="files"
             render={({ field }) => (
               <FormItem className="mt-5">
-                <FormLabel>
-                  Evidence aktivitas (PDF/JPG/PNG, maksimal 10 MB per berkas)
-                </FormLabel>
+                <FormLabel>Evidence aktivitas</FormLabel>
                 <FormControl>
-                  <Input
-                    ref={field.ref}
-                    name={field.name}
-                    onBlur={field.onBlur}
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="h-11"
-                    onChange={(event) =>
-                      field.onChange(Array.from(event.target.files ?? []))
-                    }
+                  <EvidenceUploader
+                    files={field.value}
+                    statuses={fileStatuses}
+                    disabled={busy}
+                    onFilesChange={(files) => {
+                      field.onChange(files);
+                      void form.trigger("files");
+                    }}
                   />
                 </FormControl>
                 <FormMessage />
