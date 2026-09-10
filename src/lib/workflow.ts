@@ -252,7 +252,7 @@ export const activities: ActivityDefinition[] = [
       },
       notesField,
     ],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Hasil Survei",
     owner: surveyOwner,
   },
   {
@@ -272,7 +272,7 @@ export const activities: ActivityDefinition[] = [
       },
       notesField,
     ],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence RAB",
     owner: planningOwner,
   },
   {
@@ -297,12 +297,12 @@ export const activities: ActivityDefinition[] = [
   {
     id: "5",
     stage: 3,
-    label: "Delegasi Perintah Kerja NPS",
-    shortLabel: "Delegasi PK NPS",
+    label: "Delegasi Perintah Kerja",
+    shortLabel: "Delegasi Perintah Kerja",
     description:
-      "Delegasikan PK pekerjaan ke bagian tujuan. Pengembalian PK akan menghentikan workflow permohonan.",
+      "Delegasikan PK pekerjaan ke bagian tujuan. Pengembalian Perintak Kerja akan menghentikan workflow permohonan.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Perintah Kerja",
     owner: "nps",
   },
   {
@@ -313,7 +313,7 @@ export const activities: ActivityDefinition[] = [
     description:
       "Terbitkan work order pemasangan tiang sesuai hasil perencanaan.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Perintah Kerja Vendor Tiang",
     owner: "perencanaan",
   },
   {
@@ -333,7 +333,7 @@ export const activities: ActivityDefinition[] = [
       },
       notesField,
     ],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Perintah Kerja Vendor Konstruksi",
     owner: "konstruksi",
   },
   {
@@ -363,7 +363,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "WO Vendor APP",
     description: "Terbitkan work order penyediaan dan pemasangan APP.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Perintah Kerja Vendor APP",
     owner: "transaksi-energi",
   },
   {
@@ -389,7 +389,7 @@ export const activities: ActivityDefinition[] = [
         maxLength: 2000,
       },
     ],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Material",
     owner: "transaksi-energi",
   },
   {
@@ -399,7 +399,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Perakitan & Tera APP",
     description: "Catat identitas APP serta hasil perakitan dan tera.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence APP",
     owner: "transaksi-energi",
   },
   {
@@ -410,7 +410,7 @@ export const activities: ActivityDefinition[] = [
     description:
       "Dokumentasikan pemasangan tiang dari kondisi awal hingga selesai.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Pemasangan Tiang",
     owner: "vendor-tiang",
   },
   {
@@ -421,7 +421,7 @@ export const activities: ActivityDefinition[] = [
     description:
       "Laporkan realisasi scope, waktu, kendala, dan dokumentasi konstruksi.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Konstruksi",
     owner: "vendor-konstruksi",
   },
   {
@@ -431,7 +431,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Dokumentasi PDKB",
     description: "Lengkapi dokumentasi pendampingan PDKB dan BAPL.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence PDKB",
     owner: "pdkb",
   },
   {
@@ -450,7 +450,7 @@ export const activities: ActivityDefinition[] = [
       },
       notesField,
     ],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Operasi Jaringan",
     owner: energizeOwner,
   },
   {
@@ -461,7 +461,7 @@ export const activities: ActivityDefinition[] = [
     description:
       "Lengkapi identitas meter, hasil pemasangan, dan status penyalaan.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Pemasangan SR/APP & Penyalaan",
     owner: appVendorOwner,
   },
   {
@@ -471,7 +471,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Entri & Mutasi PDL",
     description: "Lengkapi evidence penutupan PDL, arsip AIL, dan DIJ.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Entri & Mutasi PDL",
     owner: "pelayanan-pelanggan",
   },
   {
@@ -481,7 +481,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Arsip AIL / DIJ",
     description: "Lengkapi nomor AIL dan pembaruan data induk jaringan.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Arsip AIL / DIJ",
     owner: "pelayanan-pelanggan",
   },
   {
@@ -492,7 +492,7 @@ export const activities: ActivityDefinition[] = [
     description:
       "Konfirmasi seluruh dokumen akhir lengkap dan tutup permohonan.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Penutup Permohonan",
     owner: "pelayanan-pelanggan",
   },
 ];
