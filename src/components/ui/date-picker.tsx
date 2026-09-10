@@ -81,7 +81,7 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
             disabled={disabled}
             placeholder=""
             className={cn(
-              "bg-background h-11 pr-12 text-transparent caret-foreground placeholder:text-transparent",
+              "bg-background h-11 pr-12 text-transparent caret-foreground placeholder:text-transparent focus-visible:border-input focus-visible:ring-0",
               className,
             )}
           />

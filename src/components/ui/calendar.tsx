@@ -25,7 +25,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         months_dropdown: "w-[4.5rem]",
         years_dropdown: "w-[4.5rem]",
         chevron: "text-muted-foreground size-3.5",
-        nav: "absolute inset-x-0 top-0 flex w-full items-center justify-between",
+        nav: "absolute inset-x-0 top-6 flex w-full items-center justify-between",
         button_previous:
           "absolute left-1 size-8 rounded-md border-0 bg-transparent p-0 opacity-70 hover:bg-accent hover:opacity-100",
         button_next:
