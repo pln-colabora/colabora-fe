@@ -17,11 +17,18 @@ import { logout, type User } from "@/lib/auth";
 import { getRole, type RoleId } from "@/lib/workflow";
 
 const baseDestinations = [
-  { id: "dashboard", href: "/dashboard", label: "Beranda", icon: House },
+  {
+    id: "dashboard",
+    href: "/dashboard",
+    label: "Beranda",
+    mobileLabel: "Beranda",
+    icon: House,
+  },
   {
     id: "applications",
     href: "/dashboard?view=all",
     label: "Permohonan",
+    mobileLabel: "Permohonan",
     icon: ClipboardList,
   },
 ] as const;
@@ -30,6 +37,7 @@ const createDestination = {
   id: "create",
   href: "/permohonan/baru",
   label: "Permohonan baru",
+  mobileLabel: "Buat baru",
   icon: FilePlus2,
 } as const;
 
@@ -116,7 +124,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
       </aside>
       <div className="max-w-full min-w-0">
         <header className="bg-card sticky top-0 z-20 border-b">
-          <div className="mx-auto flex min-h-16 w-full max-w-[1440px] min-w-0 items-center gap-4 px-4 sm:px-6 lg:gap-8">
+          <div className="mx-auto flex min-h-16 w-full max-w-[1440px] min-w-0 items-center gap-2 px-3 sm:gap-4 sm:px-6 lg:gap-8">
             <Link href="/dashboard" className="shrink-0 py-2 lg:hidden">
               <span className="font-display text-primary block text-lg font-bold tracking-tight">
                 COLABORA
@@ -129,7 +137,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
               Ruang kerja permohonan PB/PD
             </p>
             <details className="group relative ml-auto min-w-0">
-              <summary className="hover:bg-accent flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 [&::-webkit-details-marker]:hidden">
+              <summary className="hover:bg-accent flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-1.5 sm:px-2 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0 text-sm">
                   <span className="text-muted-foreground block text-xs">
                     Peran
@@ -158,7 +166,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
             </details>
             <Button
               variant="ghost"
-              className="min-h-11 lg:hidden"
+              className="min-h-11 gap-1 px-2 sm:px-3 lg:hidden"
               onClick={handleLogout}
             >
               <LogOut aria-hidden="true" />
@@ -180,15 +188,15 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
             gridTemplateColumns: `repeat(${destinations.length}, minmax(0, 1fr))`,
           }}
         >
-          {destinations.map(({ id, href, label, icon: Icon }) => (
+          {destinations.map(({ id, href, mobileLabel, icon: Icon }) => (
             <Link
               key={id}
               href={href}
               aria-current={active === id ? "page" : undefined}
-              className={`flex min-h-16 flex-col items-center justify-center gap-1 border-t-2 text-sm font-medium ${active === id ? "border-primary bg-accent text-primary" : "text-muted-foreground border-transparent"}`}
+              className={`flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center gap-1 border-t-2 px-2 text-xs font-medium ${active === id ? "border-primary bg-accent text-primary" : "text-muted-foreground border-transparent"}`}
             >
-              <Icon className="size-5" aria-hidden="true" />
-              {label}
+              <Icon className="size-[1.15rem] shrink-0" aria-hidden="true" />
+              <span className="max-w-full truncate leading-4">{mobileLabel}</span>
             </Link>
           ))}
         </nav>
