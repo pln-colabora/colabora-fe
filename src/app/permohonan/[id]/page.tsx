@@ -274,15 +274,15 @@ function VendorAssignment({
     defaultValues: { vendorId: "" },
   });
   const busy = form.formState.isSubmitting;
+  // Konstruksi assigns vendor-konstruksi inside the WO Vendor Konstruksi form,
+  // so it is intentionally absent from this standalone assignment panel.
   const vendorRole =
     roleId === "perencanaan" && application.decisions.needsPole === true
       ? "vendor-tiang"
-      : roleId === "konstruksi"
-        ? "vendor-konstruksi"
-        : roleId === "transaksi-energi" &&
-            !application.connectionType.startsWith("PLG TM")
-          ? "vendor-sr-app"
-          : null;
+      : roleId === "transaksi-energi" &&
+          !application.connectionType.startsWith("PLG TM")
+        ? "vendor-sr-app"
+        : null;
   useEffect(() => {
     if (!vendorRole || !open) return;
     let cancelled = false;

@@ -343,7 +343,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "WO PDKB",
     description: "Terbitkan penugasan Tim PDKB sebelum konstruksi dimulai.",
     fields: [notesField],
-    evidence: "Evidence aktivitas",
+    evidence: "Upload Evidence Perintah Kerja PDKB",
     owner: "konstruksi",
   },
   {

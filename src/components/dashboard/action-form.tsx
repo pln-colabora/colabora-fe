@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -11,6 +11,7 @@ import {
   EvidenceUploader,
   type EvidenceFileStatus,
 } from "@/components/dashboard/evidence-uploader";
+import { VendorCombobox } from "@/components/dashboard/vendor-combobox";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -29,7 +30,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { submitAction, uploadEvidence } from "@/lib/applications";
+import { ApiError } from "@/lib/api";
+import {
+  assignVendor,
+  getVendorAccounts,
+  submitAction,
+  uploadEvidence,
+} from "@/lib/applications";
 import {
   getActivity,
   nodeActions,
@@ -41,7 +48,7 @@ import {
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const acceptedFile = /\.(pdf|jpe?g|png)$/i;
 
-function createActionSchema(fields: FieldDefinition[]) {
+function createActionSchema(fields: FieldDefinition[], requireVendor: boolean) {
   const shape = Object.fromEntries(
     fields.map((field) => {
       let schema = z.string().trim();
@@ -93,12 +100,23 @@ function createActionSchema(fields: FieldDefinition[]) {
           ),
       )
       .min(1, "Pilih minimal satu evidence."),
+    vendorId: z
+      .string()
+      .trim()
+      .superRefine((value, ctx) => {
+        if (requireVendor && value.length === 0)
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Vendor konstruksi wajib dipilih.",
+          });
+      }),
   });
 }
 
 type ActionFormValues = {
   values: Record<string, string>;
   files: File[];
+  vendorId: string;
 };
 
 export function ActionForm({
@@ -122,10 +140,11 @@ export function ActionForm({
         selesai: "entri_mutasi_pdl",
       } as Record<string, string>
     )[action.workflow_node] ?? action.workflow_node;
+  const isWoKonstruksi = action.workflow_node === "wo_konstruksi";
   const activity = getActivity(nodeActions[formNode]);
   const schema = useMemo(
-    () => createActionSchema(activity?.fields ?? []),
-    [activity],
+    () => createActionSchema(activity?.fields ?? [], isWoKonstruksi),
+    [activity, isWoKonstruksi],
   );
   const form = useForm<ActionFormValues>({
     resolver: zodResolver(schema),
@@ -134,13 +153,46 @@ export function ActionForm({
         (activity?.fields ?? []).map((field) => [field.name, ""]),
       ),
       files: [],
+      vendorId: "",
     },
   });
   const uploads = useRef(new Map<File, string>());
   const [fileStatuses, setFileStatuses] = useState(
     new Map<File, EvidenceFileStatus>(),
   );
+  const [vendors, setVendors] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [vendorError, setVendorError] = useState("");
+  const [vendorReload, setVendorReload] = useState(0);
   const busy = form.formState.isSubmitting;
+
+  useEffect(() => {
+    if (!isWoKonstruksi) return;
+    let cancelled = false;
+    setVendorLoading(true);
+    setVendorError("");
+    getVendorAccounts("vendor-konstruksi")
+      .then((data) => {
+        if (!cancelled)
+          setVendors(data.map(({ id, name }) => ({ id, name })));
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setVendorError(
+            error instanceof Error
+              ? error.message
+              : "Daftar vendor gagal dimuat.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setVendorLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isWoKonstruksi, vendorReload]);
 
   if (!activity)
     return (
@@ -162,6 +214,14 @@ export function ActionForm({
             setFileStatus(file, { state: "failed" });
             throw error;
           }
+        }
+      }
+      if (isWoKonstruksi && data.vendorId) {
+        try {
+          await assignVendor(application.id, data.vendorId, "vendor-konstruksi");
+        } catch (error) {
+          // A one-time assignment already exists (409); reuse it and continue.
+          if (!(error instanceof ApiError && error.status === 409)) throw error;
         }
       }
       const updated = await submitAction(
@@ -196,6 +256,39 @@ export function ActionForm({
         noValidate
       >
         <fieldset className="min-w-0" disabled={busy}>
+          {isWoKonstruksi ? (
+            <FormField
+              control={form.control}
+              name="vendorId"
+              render={({ field }) => (
+                <FormItem className="mb-4 min-w-0">
+                  <FormLabel>Vendor konstruksi</FormLabel>
+                  <FormControl>
+                    <VendorCombobox
+                      vendors={vendors}
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      disabled={busy}
+                      loading={vendorLoading}
+                    />
+                  </FormControl>
+                  {vendorError ? (
+                    <p role="alert" className="text-destructive text-sm">
+                      {vendorError}{" "}
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => setVendorReload((value) => value + 1)}
+                      >
+                        Muat ulang
+                      </button>
+                    </p>
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             {activity.fields.map((definition) => (
               <FormField
@@ -266,7 +359,7 @@ export function ActionForm({
             name="files"
             render={({ field }) => (
               <FormItem className="mt-5 min-w-0">
-                <FormLabel>Evidence aktivitas</FormLabel>
+                <FormLabel>{activity.evidence ?? "Evidence aktivitas"}</FormLabel>
                 <FormControl>
                   <EvidenceUploader
                     files={field.value}
