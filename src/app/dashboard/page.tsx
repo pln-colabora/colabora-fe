@@ -135,9 +135,6 @@ function DashboardContent() {
                 </Link>
               </Button>
             ) : null}
-            <p className="text-muted-foreground text-sm">
-              Data backend COLABORA
-            </p>
           </div>
         </header>
 
