@@ -1,4 +1,5 @@
 import { apiClient, apiRequest } from "@/lib/api";
+import { formatApiDate } from "@/lib/utils";
 import {
   getActivity,
   nodeActions,
@@ -52,6 +53,10 @@ export function mapApplication(data: PermohonanResponse): Application {
     active.find((node) => node.sla_status === "due_soon") ??
     active.find((node) => node.sla_status === "on_time");
   const sla = slaNode?.sla_status;
+  // Active nodes may carry a deadline without a graded sla_status ("none");
+  // surface that date so the SLA column is informative instead of just "—".
+  const deadline =
+    (slaNode ?? active.find((node) => node.sla_deadline))?.sla_deadline ?? null;
   return {
     id: data.id,
     number: data.no_permohonan,
@@ -96,14 +101,22 @@ export function mapApplication(data: PermohonanResponse): Application {
               ? "due"
               : "safe",
       label:
-        sla === "overdue"
-          ? "Terlambat"
-          : sla === "due_soon"
-            ? "Mendekati tenggat"
-            : sla === "on_time"
-              ? "Tepat waktu"
-              : "—",
-      deadline: slaNode?.sla_deadline ?? null,
+        data.status === "completed"
+          ? "Selesai"
+          : sla === "overdue"
+            ? "Terlambat"
+            : sla === "due_soon"
+              ? "Mendekati tenggat"
+              : sla === "on_time"
+                ? "Tepat waktu"
+                : deadline
+                  ? `Tenggat ${formatApiDate(deadline, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}`
+                  : "—",
+      deadline,
     },
     nodes,
     availableActions: data.available_actions ?? [],
