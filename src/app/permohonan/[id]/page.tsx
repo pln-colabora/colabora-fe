@@ -8,6 +8,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeft,
+  BellRing,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -58,7 +59,7 @@ import {
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
-import { formatApiDate, formatFileSize } from "@/lib/utils";
+import { formatApiDate, formatFileSize, parseDateValue } from "@/lib/utils";
 import {
   activities,
   nodeActions,
@@ -207,6 +208,13 @@ export default function ApplicationDetailPage() {
             </dl>
           </div>
         </header>
+
+        {application.sla.deadline && !application.completed ? (
+          <SlaReminder
+            deadline={application.sla.deadline}
+            tone={application.sla.tone}
+          />
+        ) : null}
 
         <CurrentAction
           application={application}
@@ -1114,6 +1122,95 @@ function HeaderFact({
       <dt className="text-muted-foreground text-xs">{label}</dt>
       <dd className={`mt-1 max-w-44 text-sm font-medium ${color}`}>{value}</dd>
     </div>
+  );
+}
+
+function SlaReminder({
+  deadline,
+  tone,
+}: {
+  deadline: string;
+  tone: Application["sla"]["tone"];
+}) {
+  const deadlineDate = parseSlaDeadline(deadline);
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    const date = parseSlaDeadline(deadline);
+    if (!date) {
+      setDaysRemaining(null);
+      return;
+    }
+    const update = () => setDaysRemaining(getCalendarDayDifference(date));
+    update();
+    const timer = window.setInterval(update, 60_000);
+    return () => window.clearInterval(timer);
+  }, [deadline]);
+
+  if (!deadlineDate) return null;
+
+  const style =
+    tone === "late"
+      ? "border-destructive-border bg-destructive-surface text-destructive"
+      : tone === "due"
+        ? "border-warning-border bg-warning-surface text-warning"
+        : "border-border bg-muted/30 text-foreground";
+  const remainingLabel =
+    daysRemaining === null
+      ? ""
+      : daysRemaining < 0
+        ? `Terlambat ${Math.abs(daysRemaining)} hari`
+        : daysRemaining === 0
+          ? "Jatuh tempo hari ini"
+          : daysRemaining === 1
+            ? "Jatuh tempo besok"
+            : `Tersisa ${daysRemaining} hari`;
+  const deadlineLabel = formatApiDate(deadline.slice(0, 10), {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  return (
+    <section
+      role="status"
+      aria-live="polite"
+      className={`mt-4 flex items-start gap-3 rounded-md border px-4 py-3 text-sm ${style}`}
+    >
+      <BellRing className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="font-semibold">Pengingat SLA</p>
+        <p className="mt-0.5 leading-6">
+          {remainingLabel ? `${remainingLabel} · ` : ""}
+          Batas {deadlineLabel}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function parseSlaDeadline(value: string) {
+  const dateOnly = value.slice(0, 10);
+  const date = parseDateValue(dateOnly);
+  if (date) return date;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function getCalendarDayDifference(deadline: Date) {
+  const today = new Date();
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const deadlineStart = new Date(
+    deadline.getFullYear(),
+    deadline.getMonth(),
+    deadline.getDate(),
+  );
+  return Math.round(
+    (deadlineStart.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000),
   );
 }
 

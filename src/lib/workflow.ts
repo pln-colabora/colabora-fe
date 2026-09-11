@@ -61,7 +61,11 @@ export type ApplicationSummary = {
   currentAction: ActionId | null;
   decisions: WorkflowDecisions;
   rejected?: boolean;
-  sla: { tone: "safe" | "due" | "late" | "done"; label: string };
+  sla: {
+    tone: "safe" | "due" | "late" | "done";
+    label: string;
+    deadline: string | null;
+  };
   updatedAt: string;
 };
 

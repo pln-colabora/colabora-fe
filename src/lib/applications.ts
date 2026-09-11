@@ -103,6 +103,7 @@ export function mapApplication(data: PermohonanResponse): Application {
             : sla === "on_time"
               ? "Tepat waktu"
               : "—",
+      deadline: slaNode?.sla_deadline ?? null,
     },
     nodes,
     availableActions: data.available_actions ?? [],

@@ -124,6 +124,7 @@ const fixture = {
       stage_number: 5,
       status: "available",
       sla_status: "overdue",
+      sla_deadline: "2026-09-12",
     },
     {
       workflow_node: "pemasangan_tiang",
@@ -179,6 +180,7 @@ test("server projection retains parallel and skipped nodes and server permission
   assert.equal(mapped.connectionType, "JTM / Gardu");
   assert.equal(mapped.currentStage, 4);
   assert.equal(mapped.sla.tone, "late");
+  assert.equal(mapped.sla.deadline, "2026-09-12");
   assert.deepEqual(mapped.availableActions, fixture.available_actions);
   assert.equal(
     mapped.nodes.find((node) => node.workflow_node === "wo_konstruksi").status,
