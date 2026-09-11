@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { ErrorNotice } from "@/components/dashboard/error-notice";
 import {
   EvidenceUploader,
   type EvidenceFileStatus,
@@ -31,7 +32,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { submitAction, uploadEvidence } from "@/lib/applications";
+import { presentApiError } from "@/lib/error-utils";
 import { isValidDateValue } from "@/lib/utils";
 import {
   getActivity,
@@ -107,12 +111,14 @@ export function ActionForm({
   onCancel,
   onSaved,
   embedded = false,
+  onDirtyChange,
 }: {
   application: Application;
   action: AvailableAction;
   onCancel: () => void;
   onSaved: (application: Application) => void;
   embedded?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   // Combined endpoints use one form; the server completes the associated nodes atomically.
   const formNode =
@@ -142,7 +148,18 @@ export function ActionForm({
   const [fileStatuses, setFileStatuses] = useState(
     new Map<File, EvidenceFileStatus>(),
   );
+  const [requestError, setRequestError] = useState<unknown>(null);
   const busy = form.formState.isSubmitting;
+  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(
+    form.formState.isDirty,
+  );
+  const { confirm: confirmAction, dialog: actionDialog } = useConfirmDialog();
+  const activityLabel = activity?.label ?? "aktivitas ini";
+
+  useEffect(() => {
+    onDirtyChange?.(form.formState.isDirty);
+    return () => onDirtyChange?.(false);
+  }, [form.formState.isDirty, onDirtyChange]);
 
   if (!activity)
     return (
@@ -150,6 +167,16 @@ export function ActionForm({
     );
 
   async function submit(data: ActionFormValues) {
+    if (form.formState.isSubmitting) return;
+    if (
+      !(await confirmAction({
+        title: "Lanjutkan aktivitas?",
+        description: `Simpan aktivitas “${activityLabel}” dan lanjutkan workflow permohonan ini.`,
+        confirmLabel: "Simpan & lanjutkan",
+      }))
+    )
+      return;
+    setRequestError(null);
     try {
       for (const file of data.files) {
         if (!uploads.current.has(file)) {
@@ -175,9 +202,8 @@ export function ActionForm({
       toast.success("Aktivitas berhasil disimpan.");
       onSaved(updated);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Aktivitas gagal disimpan.";
-      form.setError("root", { message });
+      const message = presentApiError(error, "Aktivitas gagal disimpan.").message;
+      setRequestError(error);
       toast.error(message);
     }
   }
@@ -191,7 +217,10 @@ export function ActionForm({
   }
 
   return (
-    <Form {...form}>
+    <>
+      {unsavedDialog}
+      {actionDialog}
+      <Form {...form}>
       <form
         onSubmit={form.handleSubmit(submit)}
         className={
@@ -296,20 +325,23 @@ export function ActionForm({
             )}
           />
 
-          {form.formState.errors.root?.message && (
-            <p
-              role="alert"
-              className="text-destructive mt-4 min-w-0 break-words text-sm"
-            >
-              {form.formState.errors.root.message}
-            </p>
+          {Boolean(requestError) && (
+            <ErrorNotice
+              error={requestError}
+              onRetry={() => void form.handleSubmit(submit)()}
+              retrying={busy}
+            />
           )}
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
               className="min-h-11 w-full sm:w-auto"
-              onClick={onCancel}
+              onClick={() => {
+                void confirmDiscard().then((confirmed) => {
+                  if (confirmed) onCancel();
+                });
+              }}
             >
               Batal
             </Button>
@@ -323,6 +355,7 @@ export function ActionForm({
           </div>
         </fieldset>
       </form>
-    </Form>
+      </Form>
+    </>
   );
 }

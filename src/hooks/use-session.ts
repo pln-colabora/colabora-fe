@@ -11,7 +11,7 @@ import { getCurrentUser, type User } from "@/lib/auth";
 export function useSession() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,11 +25,7 @@ export function useSession() {
           router.replace("/login");
           return;
         }
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Gagal memuat akun.",
-        );
+        setError(requestError);
       });
     return () => {
       cancelled = true;

@@ -8,7 +8,7 @@ import type { Application } from "@/lib/workflow";
 export function useApplications(enabled = true) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(enabled);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
@@ -17,7 +17,7 @@ export function useApplications(enabled = true) {
     if (!enabled) return;
     let cancelled = false;
     setLoading(true);
-    setError("");
+    setError(null);
     getApplications()
       .then((data) => {
         if (!cancelled) setApplications(data);
@@ -25,9 +25,7 @@ export function useApplications(enabled = true) {
       .catch((requestError: unknown) => {
         if (!cancelled)
           setError(
-            requestError instanceof Error
-              ? requestError.message
-              : "Gagal memuat permohonan.",
+            requestError,
           );
       })
       .finally(() => {

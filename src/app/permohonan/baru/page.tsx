@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, LoaderCircle, LockKeyhole } from "lucide-react";
@@ -15,6 +15,7 @@ import {
   AppShell,
   canCreatePermohonan,
 } from "@/components/dashboard/app-shell";
+import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { FormPageSkeleton } from "@/components/dashboard/page-skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,8 +36,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { createApplication } from "@/lib/applications";
+import { presentApiError } from "@/lib/error-utils";
+import { getDashboardReturnPath } from "@/lib/navigation";
 import { getRole, type RoleId } from "@/lib/workflow";
 
 const jenisByRole: Partial<Record<RoleId, string[]>> = {
@@ -76,17 +81,19 @@ type FormValues = z.infer<typeof baseSchema>;
 
 export default function ApplicationCreatePage() {
   const { user, error } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const roleId = user?.role ?? "user";
+  const returnTo = getDashboardReturnPath(searchParams.get("returnTo"));
+  const [createDirty, setCreateDirty] = useState(false);
+  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(createDirty);
   const ready = !!user;
 
   if (!ready) {
     return (
       <AppShell active="create" roleId={roleId} user={user}>
         {error ? (
-          <div role="alert" aria-live="assertive" className="space-y-4">
-            <p className="text-destructive text-sm">{error}</p>
-            <Button onClick={() => window.location.reload()}>Coba lagi</Button>
-          </div>
+          <ErrorNotice error={error} onRetry={() => window.location.reload()} />
         ) : (
           <FormPageSkeleton />
         )}
@@ -96,9 +103,17 @@ export default function ApplicationCreatePage() {
 
   return (
     <AppShell active="create" roleId={roleId} user={user}>
+      {unsavedDialog}
       <div className="mx-auto w-full max-w-3xl min-w-0">
         <Link
-          href="/dashboard?view=all"
+          href={returnTo}
+          onClick={(event) => {
+            if (!createDirty) return;
+            event.preventDefault();
+            void confirmDiscard().then((confirmed) => {
+              if (confirmed) router.push(returnTo);
+            });
+          }}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -116,7 +131,11 @@ export default function ApplicationCreatePage() {
         </header>
 
         {canCreatePermohonan(roleId) ? (
-          <CreateForm roleId={roleId} />
+          <CreateForm
+            roleId={roleId}
+            returnTo={returnTo}
+            onDirtyChange={setCreateDirty}
+          />
         ) : (
           <Unauthorized roleId={roleId} />
         )}
@@ -155,7 +174,15 @@ function Unauthorized({ roleId }: { roleId: RoleId }) {
   );
 }
 
-function CreateForm({ roleId }: { roleId: RoleId }) {
+function CreateForm({
+  roleId,
+  returnTo,
+  onDirtyChange,
+}: {
+  roleId: RoleId;
+  returnTo: string;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const connectionOptions = useMemo(() => jenisByRole[roleId] ?? [], [roleId]);
   const schema = useMemo(
     () =>
@@ -181,8 +208,28 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
     },
   });
   const busy = form.formState.isSubmitting;
+  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(
+    form.formState.isDirty,
+  );
+  const { confirm: confirmCreate, dialog: createDialog } = useConfirmDialog();
+  const [requestError, setRequestError] = useState<unknown>(null);
+
+  useEffect(() => {
+    onDirtyChange(form.formState.isDirty);
+    return () => onDirtyChange(false);
+  }, [form.formState.isDirty, onDirtyChange]);
 
   async function handleSubmit(values: FormValues) {
+    if (form.formState.isSubmitting) return;
+    if (
+      !(await confirmCreate({
+        title: "Buat permohonan baru?",
+        description: "Permohonan akan disimpan dan workflow PB/PD akan dimulai.",
+        confirmLabel: "Simpan permohonan",
+      }))
+    )
+      return;
+    setRequestError(null);
     try {
       const application = await createApplication({
         pelanggan_nama: values.customer,
@@ -201,17 +248,21 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
           : {}),
       });
       toast.success("Permohonan berhasil dibuat.");
-      router.push("/permohonan/" + application.id);
+      router.push(
+        `/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`,
+      );
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Gagal menyimpan permohonan.";
-      form.setError("root", { message });
+      const message = presentApiError(error, "Gagal menyimpan permohonan.").message;
+      setRequestError(error);
       toast.error(message);
     }
   }
 
   return (
-    <Card className="mt-6 rounded-lg">
+    <>
+      {unsavedDialog}
+      {createDialog}
+      <Card className="mt-6 rounded-lg">
       <CardContent className="p-5 sm:p-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} noValidate>
@@ -366,14 +417,27 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
                 />
               </div>
 
-              {form.formState.errors.root?.message && (
-                <p role="alert" className="text-destructive mt-4 text-sm">
-                  {form.formState.errors.root.message}
-                </p>
+              {Boolean(requestError) && (
+                <ErrorNotice
+                  error={requestError}
+                  onRetry={() => void form.handleSubmit(handleSubmit)()}
+                  retrying={busy}
+                />
               )}
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button asChild variant="outline" className="min-h-11">
-                  <Link href="/dashboard?view=all">Batal</Link>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={(event) => {
+                    if (!form.formState.isDirty) return;
+                    event.preventDefault();
+                    void confirmDiscard().then((confirmed) => {
+                      if (confirmed) router.push(returnTo);
+                    });
+                  }}
+                >
+                  <Link href={returnTo}>Batal</Link>
                 </Button>
                 <Button type="submit" className="min-h-11">
                   {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
@@ -384,6 +448,7 @@ function CreateForm({ roleId }: { roleId: RoleId }) {
           </form>
         </Form>
       </CardContent>
-    </Card>
+      </Card>
+    </>
   );
 }

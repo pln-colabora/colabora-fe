@@ -5,24 +5,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { getApplicationDocument } from "@/lib/applications";
+import { presentApiError } from "@/lib/error-utils";
 import type { DocumentItem } from "@/lib/workflow";
 
 type DocumentAction = {
   documentId: string;
   type: "open" | "download";
 };
-
-function getDocumentErrorMessage(error: unknown, fallback: string) {
-  if (
-    error instanceof Error &&
-    error.message ===
-      "Tidak dapat menghubungi API COLABORA. Periksa koneksi lalu coba lagi."
-  ) {
-    return "File belum dapat diakses karena layanan penyimpanan tidak tersedia dari jaringan ini.";
-  }
-
-  return error instanceof Error ? error.message : fallback;
-}
 
 export function useDocumentActions(applicationId: string) {
   const [activeAction, setActiveAction] = useState<DocumentAction>();
@@ -46,7 +35,9 @@ export function useDocumentActions(applicationId: string) {
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     } catch (error) {
       previewWindow?.close();
-      toast.error(getDocumentErrorMessage(error, "Evidence gagal dibuka."));
+      toast.error(
+        presentApiError(error, "Evidence gagal dibuka.").message,
+      );
     } finally {
       setActiveAction(undefined);
     }
@@ -64,7 +55,9 @@ export function useDocumentActions(applicationId: string) {
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
       toast.success("Evidence mulai diunduh.");
     } catch (error) {
-      toast.error(getDocumentErrorMessage(error, "Evidence gagal diunduh."));
+      toast.error(
+        presentApiError(error, "Evidence gagal diunduh.").message,
+      );
     } finally {
       setActiveAction(undefined);
     }

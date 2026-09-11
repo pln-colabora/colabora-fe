@@ -16,9 +16,9 @@ export function useApplication(
 ) {
   const [application, setApplication] = useState<Application>();
   const [loading, setLoading] = useState(enabled);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [relatedLoading, setRelatedLoading] = useState(false);
-  const [relatedError, setRelatedError] = useState("");
+  const [relatedError, setRelatedError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
@@ -27,8 +27,8 @@ export function useApplication(
     if (!enabled || !id) return;
     let cancelled = false;
     setLoading(true);
-    setError("");
-    setRelatedError("");
+    setError(null);
+    setRelatedError(null);
     getApplication(id)
       .then(async (data) => {
         if (cancelled) return;
@@ -48,11 +48,7 @@ export function useApplication(
             );
         } catch (requestError) {
           if (!cancelled)
-            setRelatedError(
-              requestError instanceof Error
-                ? requestError.message
-                : "Gagal memuat dokumen dan riwayat.",
-            );
+            setRelatedError(requestError);
         } finally {
           if (!cancelled) setRelatedLoading(false);
         }
@@ -60,11 +56,7 @@ export function useApplication(
       .catch((requestError: unknown) => {
         if (!cancelled) {
           setApplication(undefined);
-          setError(
-            requestError instanceof Error
-              ? requestError.message
-              : "Gagal memuat detail.",
-          );
+          setError(requestError);
           setLoading(false);
         }
       });

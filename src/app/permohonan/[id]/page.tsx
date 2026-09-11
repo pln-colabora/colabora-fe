@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -27,6 +27,7 @@ import { z } from "zod";
 
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
@@ -47,12 +48,16 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApplication } from "@/hooks/use-application";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useDocumentActions } from "@/hooks/use-document-actions";
 import { useSession } from "@/hooks/use-session";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import {
   assignVendor,
   getVendorAccounts,
 } from "@/lib/applications";
+import { presentApiError } from "@/lib/error-utils";
+import { getDashboardReturnPath } from "@/lib/navigation";
 import { formatApiDate, formatFileSize } from "@/lib/utils";
 import {
   activities,
@@ -73,7 +78,10 @@ import {
 
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id;
+  const returnTo = getDashboardReturnPath(searchParams.get("returnTo"));
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
   const {
@@ -87,15 +95,14 @@ export default function ApplicationDetailPage() {
   } = useApplication(id, !!user, true);
   const ready = !!application || !loading;
   const [showForm, setShowForm] = useState(false);
+  const [actionDirty, setActionDirty] = useState(false);
+  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(actionDirty);
 
   if (!ready)
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
         {sessionError ? (
-          <div role="alert" aria-live="assertive" className="space-y-4">
-            <p className="text-destructive text-sm">{sessionError}</p>
-            <Button onClick={() => window.location.reload()}>Coba lagi</Button>
-          </div>
+          <ErrorNotice error={sessionError} onRetry={() => window.location.reload()} />
         ) : (
           <DetailSkeleton />
         )}
@@ -109,18 +116,15 @@ export default function ApplicationDetailPage() {
           <h1 className="font-display text-xl font-semibold">
             Detail permohonan belum tersedia
           </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {loadError || "Permohonan tidak ditemukan."}
-          </p>
-          <Button
-            variant="outline"
-            className="mt-6 mr-2"
-            onClick={reload}
-          >
-            Coba lagi
-          </Button>
+          <div className="mt-2">
+            <ErrorNotice
+              error={loadError ?? new Error("Permohonan tidak ditemukan.")}
+              onRetry={reload}
+              backHref={returnTo}
+            />
+          </div>
           <Button asChild variant="outline" className="mt-6">
-            <Link href="/dashboard?view=all">Kembali ke permohonan</Link>
+            <Link href={returnTo}>Kembali ke permohonan</Link>
           </Button>
         </div>
       </AppShell>
@@ -143,9 +147,17 @@ export default function ApplicationDetailPage() {
 
   return (
     <AppShell active="applications" roleId={roleId} user={user}>
+      {unsavedDialog}
       <div className="mx-auto w-full max-w-[1480px] min-w-0 overflow-x-clip">
         <Link
-          href="/dashboard?view=all"
+          href={returnTo}
+          onClick={(event) => {
+            if (!actionDirty) return;
+            event.preventDefault();
+            void confirmDiscard().then((confirmed) => {
+              if (confirmed) router.push(returnTo);
+            });
+          }}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -199,10 +211,12 @@ export default function ApplicationDetailPage() {
         <CurrentAction
           application={application}
           roleId={roleId}
+          returnTo={returnTo}
           showForm={showForm}
           onShowForm={() => setShowForm(true)}
           onCancel={() => setShowForm(false)}
           onAdvanced={handleAdvanced}
+          onDirtyChange={setActionDirty}
         />
 
         <VendorAssignment
@@ -210,20 +224,15 @@ export default function ApplicationDetailPage() {
           roleId={roleId}
           onSaved={handleAdvanced}
         />
-        {relatedError && (
-          <p role="alert" aria-live="assertive" className="text-destructive mt-4 flex flex-wrap items-center gap-3 text-sm">
-            {relatedError}{" "}
-            <Button
-              variant="outline"
-              disabled={relatedLoading}
-              onClick={reload}
-            >
-              {relatedLoading && (
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
-              )}
-              {relatedLoading ? "Memuat..." : "Coba lagi"}
-            </Button>
-          </p>
+        {Boolean(relatedError) && (
+          <div className="text-destructive mt-4">
+            <ErrorNotice
+              error={relatedError}
+              onRetry={reload}
+              retrying={relatedLoading}
+              backHref={returnTo}
+            />
+          </div>
         )}
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
@@ -265,7 +274,7 @@ function VendorAssignment({
   roleId: RoleId;
   onSaved: (application: Application) => void;
 }) {
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
   const [vendors, setVendors] = useState<Array<{ id: string; name: string }>>(
     [],
@@ -278,6 +287,8 @@ function VendorAssignment({
     defaultValues: { vendorId: "" },
   });
   const busy = form.formState.isSubmitting;
+  const { confirm: confirmAssignment, dialog: assignmentDialog } =
+    useConfirmDialog();
   const vendorRole =
     roleId === "perencanaan" && application.decisions.needsPole === true
       ? "vendor-tiang"
@@ -291,18 +302,14 @@ function VendorAssignment({
     if (!vendorRole || !open) return;
     let cancelled = false;
     setLoading(true);
-    setError("");
+    setError(null);
     getVendorAccounts(vendorRole)
       .then((data) => {
         if (!cancelled) setVendors(data);
       })
       .catch((error: unknown) => {
         if (!cancelled)
-          setError(
-            error instanceof Error
-              ? error.message
-              : "Daftar vendor gagal dimuat.",
-          );
+          setError(error);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -319,125 +326,133 @@ function VendorAssignment({
   )
     return null;
   return (
-    <details
-      className="bg-card mt-4 rounded-lg p-5"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary className="cursor-pointer text-sm font-medium">
-        Penugasan {getRole(vendorRole).label}
-      </summary>
-      <p className="text-muted-foreground mt-2 text-sm">
-        Vendor hanya dapat mengakses permohonan setelah akunnya ditugaskan.
-        Penugasan diperiksa oleh server dan hanya dapat dibuat sekali.
-      </p>
-      <Form {...form}>
-        <form
-          className="mt-4"
-          noValidate
-          onSubmit={form.handleSubmit(async ({ vendorId }) => {
-            if (saved) return;
-            form.clearErrors("root");
-          try {
-            const updated = await assignVendor(
-              application.id,
-              vendorId.trim(),
-              vendorRole,
-            );
-            setSaved(true);
-            toast.success("Vendor berhasil ditugaskan.");
-            onSaved(updated);
-          } catch (requestError) {
-            const message =
-              requestError instanceof Error
-                ? requestError.message
-                : "Penugasan vendor gagal.";
-            form.setError("root", { message });
-            toast.error(message);
-          }
-          })}
-        >
-          <FormField
-            control={form.control}
-            name="vendorId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Akun {getRole(vendorRole).label}</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={busy || saved || loading}
-                >
-                  <FormControl>
-                    <SelectTrigger className="h-11 w-full">
-                      <SelectValue
-                        placeholder={
-                          loading ? "Memuat vendor..." : "Pilih akun vendor"
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {vendors.map((vendor) => (
-                      <SelectItem key={vendor.id} value={vendor.id}>
-                        {vendor.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        {!loading && !error && !vendors.length && (
-          <p className="text-muted-foreground mt-2 text-sm">
-            Belum ada akun vendor untuk peran ini.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-destructive mt-2 text-sm">
-            {error}{" "}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading}
-              onClick={() => setReload((value) => value + 1)}
-            >
-              {loading && (
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
+    <>
+      {assignmentDialog}
+      <details
+        className="bg-card mt-4 rounded-lg p-5"
+        onToggle={(event) => setOpen(event.currentTarget.open)}
+      >
+        <summary className="cursor-pointer text-sm font-medium">
+          Penugasan {getRole(vendorRole).label}
+        </summary>
+        <p className="text-muted-foreground mt-2 text-sm">
+          Vendor hanya dapat mengakses permohonan setelah akunnya ditugaskan.
+          Penugasan diperiksa oleh server dan hanya dapat dibuat sekali.
+        </p>
+        <Form {...form}>
+          <form
+            className="mt-4"
+            noValidate
+            onSubmit={form.handleSubmit(async ({ vendorId }) => {
+              if (saved || form.formState.isSubmitting) return;
+              if (
+                !(await confirmAssignment({
+                  title: "Tugaskan vendor?",
+                  description: `Akun ${getRole(vendorRole).label} akan ditugaskan ke permohonan ini.`,
+                  confirmLabel: "Tugaskan vendor",
+                }))
+              )
+                return;
+              form.clearErrors("root");
+              try {
+                const updated = await assignVendor(
+                  application.id,
+                  vendorId.trim(),
+                  vendorRole,
+                );
+                setSaved(true);
+                toast.success("Vendor berhasil ditugaskan.");
+                onSaved(updated);
+              } catch (requestError) {
+                const message = presentApiError(
+                  requestError,
+                  "Penugasan vendor gagal.",
+                ).message;
+                form.setError("root", { message });
+                toast.error(message);
+              }
+            })}
+          >
+            <FormField
+              control={form.control}
+              name="vendorId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Akun {getRole(vendorRole).label}</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={busy || saved || loading}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="h-11 w-full">
+                        <SelectValue
+                          placeholder={
+                            loading ? "Memuat vendor..." : "Pilih akun vendor"
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {vendors.map((vendor) => (
+                        <SelectItem key={vendor.id} value={vendor.id}>
+                          {vendor.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
               )}
-              {loading ? "Memuat..." : "Muat ulang vendor"}
+            />
+            {!loading && !error && !vendors.length && (
+              <p className="text-muted-foreground mt-2 text-sm">
+                Belum ada akun vendor untuk peran ini.
+              </p>
+            )}
+            {Boolean(error) && (
+              <div className="text-destructive mt-2">
+                <ErrorNotice
+                  error={error}
+                  onRetry={() => setReload((value) => value + 1)}
+                  retrying={loading}
+                />
+              </div>
+            )}
+            {form.formState.errors.root?.message && (
+              <p role="alert" className="text-destructive mt-2 text-sm">
+                {form.formState.errors.root.message}
+              </p>
+            )}
+            <Button className="mt-3" disabled={busy || saved || loading}>
+              {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
+              {busy ? "Menyimpan..." : "Tugaskan vendor"}
             </Button>
-          </p>
-        )}
-          {form.formState.errors.root?.message && (
-            <p role="alert" className="text-destructive mt-2 text-sm">
-              {form.formState.errors.root.message}
-            </p>
-          )}
-          <Button className="mt-3" disabled={busy || saved || loading}>
-            {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
-            {busy ? "Menyimpan..." : "Tugaskan vendor"}
-          </Button>
-        </form>
-      </Form>
-    </details>
+          </form>
+        </Form>
+      </details>
+    </>
   );
 }
 
 function CurrentAction({
   application,
   roleId,
+  returnTo,
   showForm,
   onShowForm,
   onCancel,
   onAdvanced,
+  onDirtyChange,
 }: {
   application: Application;
   roleId: RoleId;
+  returnTo: string;
   showForm: boolean;
   onShowForm: () => void;
   onCancel: () => void;
   onAdvanced: (application: Application) => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [selectedNode, setSelectedNode] = useState("");
   const available = application.availableActions.filter(
@@ -591,7 +606,9 @@ function CurrentAction({
         </div>
         {ownsAction && isSurvey ? (
           <Button asChild className="min-h-11 w-full shrink-0 sm:w-auto">
-            <Link href={`/permohonan/${application.id}/survei`}>
+            <Link
+              href={`/permohonan/${application.id}/survei?returnTo=${encodeURIComponent(returnTo)}`}
+            >
               Lanjutkan proses
               <ChevronRight aria-hidden="true" />
             </Link>
@@ -613,6 +630,7 @@ function CurrentAction({
           action={action!}
           onCancel={onCancel}
           onSaved={onAdvanced}
+          onDirtyChange={onDirtyChange}
         />
       ) : null}
     </section>
@@ -845,7 +863,7 @@ function DocumentsSection({
 }: {
   applicationId: string;
   loading: boolean;
-  error: string;
+  error: unknown;
   documents: ReturnType<typeof getDocuments>;
 }) {
   const { activeAction, openDocument, downloadDocument } =
@@ -1021,7 +1039,7 @@ function HistorySection({
   error,
 }: {
   loading: boolean;
-  error: string;
+  error: unknown;
   history: ReturnType<typeof getHistory>;
 }) {
   return (

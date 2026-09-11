@@ -1,15 +1,14 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   ArrowRight,
   Clock3,
   FilePlus2,
-  LoaderCircle,
   Search,
   TriangleAlert,
 } from "lucide-react";
@@ -18,6 +17,7 @@ import {
   AppShell,
   canCreatePermohonan,
 } from "@/components/dashboard/app-shell";
+import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DashboardSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
@@ -59,9 +59,11 @@ export default function DashboardPage() {
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isHome = !searchParams.has("view");
   const view: View = searchParams.get("view") === "mine" ? "mine" : "all";
-  const [statusFilter, setStatusFilter] = useState("");
+  const query = searchParams.get("q") ?? "";
+  const statusFilter = searchParams.get("status") ?? "";
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
   const {
@@ -71,7 +73,23 @@ function DashboardContent() {
     reload,
   } = useApplications(!!user);
   const ready = !applicationsLoading;
-  const [query, setQuery] = useState("");
+
+  function updateFilters(next: { query?: string; status?: string }) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.query) params.set("q", next.query);
+    else params.delete("q");
+    if (next.status) params.set("status", next.status);
+    else params.delete("status");
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  }
+
+  function dashboardHref(nextView: View) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", nextView);
+    return `/dashboard?${params.toString()}`;
+  }
+
+  const returnTo = `/dashboard?${searchParams.toString()}`;
 
   const roleQueue = applications.filter(isOwnedBy);
   const filteredApplications = (
@@ -130,7 +148,9 @@ function DashboardContent() {
           <div className="flex flex-col gap-3 sm:items-end">
             {ready && canCreatePermohonan(roleId) ? (
               <Button asChild className="min-h-11 w-full sm:w-auto">
-                <Link href="/permohonan/baru">
+                <Link
+                  href={`/permohonan/baru?returnTo=${encodeURIComponent(returnTo)}`}
+                >
                   <FilePlus2 aria-hidden="true" />
                   Permohonan baru
                 </Link>
@@ -142,23 +162,13 @@ function DashboardContent() {
           </div>
         </header>
 
-        {(loadError || sessionError) && (
-          <div role="alert" aria-live="assertive" className="text-destructive mt-4 flex flex-wrap items-center gap-3 text-sm">
-            {loadError || sessionError}{" "}
-            <Button
-              variant="outline"
-              disabled={applicationsLoading}
-              onClick={() =>
-                sessionError
-                  ? window.location.reload()
-                  : reload()
-              }
-            >
-              {applicationsLoading && (
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
-              )}
-              {applicationsLoading ? "Memuat..." : "Coba lagi"}
-            </Button>
+        {Boolean(loadError || sessionError) && (
+          <div className="text-destructive mt-4">
+            <ErrorNotice
+              error={loadError ?? sessionError}
+              onRetry={() => (sessionError ? window.location.reload() : reload())}
+              retrying={applicationsLoading}
+            />
           </div>
         )}
         {isHome && (
@@ -216,7 +226,7 @@ function DashboardContent() {
                 )}
               </p>
               <Button asChild className="min-h-11 w-full sm:w-auto">
-                <Link href="/dashboard?view=mine">
+                  <Link href={dashboardHref("mine")}>
                   {roleId === "super-user"
                     ? "Lihat permohonan dalam pemantauan"
                     : "Lihat tugas saya"}{" "}
@@ -297,7 +307,7 @@ function DashboardContent() {
             </div>
             {isHome ? (
               <Link
-                href="/dashboard?view=all"
+                href={dashboardHref("all")}
                 className="text-primary inline-flex min-h-11 shrink-0 items-center gap-2 text-sm font-medium hover:underline"
               >
                 Lihat semua <ArrowRight className="size-4" aria-hidden="true" />
@@ -310,14 +320,14 @@ function DashboardContent() {
                   aria-label="Jenis daftar"
                 >
                   <Link
-                    href="/dashboard?view=all"
+                    href={dashboardHref("all")}
                     aria-current={view === "all" ? "page" : undefined}
                     className={`flex min-h-11 min-w-0 items-center justify-center rounded px-3 text-sm font-medium ${view === "all" ? "bg-card text-primary" : "text-muted-foreground"}`}
                   >
                     Semua permohonan
                   </Link>
                   <Link
-                    href="/dashboard?view=mine"
+                    href={dashboardHref("mine")}
                     aria-current={view === "mine" ? "page" : undefined}
                     className={`flex min-h-11 min-w-0 items-center justify-center rounded px-3 text-sm font-medium ${view === "mine" ? "bg-card text-primary" : "text-muted-foreground"}`}
                   >
@@ -334,7 +344,9 @@ function DashboardContent() {
                   />
                   <Input
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) =>
+                      updateFilters({ query: event.target.value, status: statusFilter })
+                    }
                     placeholder="Cari nomor, pelanggan, atau unit"
                     aria-label="Cari permohonan"
                     className="h-11 pl-9"
@@ -347,7 +359,7 @@ function DashboardContent() {
                   <Select
                     value={statusFilter || "all"}
                     onValueChange={(value) =>
-                      setStatusFilter(value === "all" ? "" : value)
+                      updateFilters({ query, status: value === "all" ? "" : value })
                     }
                   >
                     <SelectTrigger
@@ -372,8 +384,7 @@ function DashboardContent() {
                       variant="ghost"
                       className="min-h-11"
                       onClick={() => {
-                        setQuery("");
-                        setStatusFilter("");
+                        updateFilters({ query: "", status: "" });
                       }}
                     >
                       Reset filter
@@ -404,9 +415,10 @@ function DashboardContent() {
             <>
               <div className="divide-y px-4 lg:hidden">
                 {visibleApplications.map((application) => (
-                  <ApplicationListItem
-                    key={application.id}
-                    application={application}
+                    <ApplicationListItem
+                      key={application.id}
+                      application={application}
+                      returnTo={returnTo}
                   />
                 ))}
               </div>
@@ -448,6 +460,7 @@ function DashboardContent() {
                         compact={isHome}
                         key={application.id}
                         application={application}
+                        returnTo={returnTo}
                       />
                     ))}
                   </tbody>
@@ -474,7 +487,13 @@ function DashboardContent() {
   );
 }
 
-function ApplicationListItem({ application }: { application: Application }) {
+function ApplicationListItem({
+  application,
+  returnTo,
+}: {
+  application: Application;
+  returnTo: string;
+}) {
   const activity = getActivity(application.currentAction);
   const stage = stages.find(
     (item) => item.id === getCurrentStage(application),
@@ -530,7 +549,7 @@ function ApplicationListItem({ application }: { application: Application }) {
           })}
         </time>
         <Link
-          href={`/permohonan/${application.id}`}
+          href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`}
           className="text-primary inline-flex min-h-11 items-center gap-1 text-sm font-medium whitespace-nowrap hover:underline"
         >
           {owned ? "Lanjutkan" : "Lihat detail"}
@@ -588,9 +607,11 @@ function SummaryMetric({
 function ApplicationRow({
   application,
   compact = false,
+  returnTo,
 }: {
   application: Application;
   compact?: boolean;
+  returnTo: string;
 }) {
   const activity = getActivity(application.currentAction);
   const stage = stages.find(
@@ -654,7 +675,7 @@ function ApplicationRow({
       </td>
       <td className="px-4 py-3 text-right">
         <Link
-          href={`/permohonan/${application.id}`}
+          href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`}
           className="text-primary inline-flex min-h-11 items-center gap-1 text-sm font-medium whitespace-nowrap hover:underline"
         >
           {owned ? "Lanjutkan" : "Lihat"}

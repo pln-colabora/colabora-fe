@@ -1,17 +1,22 @@
 "use client";
 
+import { useState } from "react";
+
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { ArrowLeft, Eye, LockKeyhole } from "lucide-react";
 
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { FormPageSkeleton } from "@/components/dashboard/page-skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useApplication } from "@/hooks/use-application";
 import { useSession } from "@/hooks/use-session";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { getDashboardReturnPath } from "@/lib/navigation";
 import {
   getActivity,
   getOwner,
@@ -20,7 +25,12 @@ import {
 
 export default function SurveyPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const id = params.id;
+  const returnTo = getDashboardReturnPath(searchParams.get("returnTo"));
+  const detailHref = `/permohonan/${id}?returnTo=${encodeURIComponent(returnTo)}`;
+  const [actionDirty, setActionDirty] = useState(false);
+  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(actionDirty);
   const { user, error: sessionError } = useSession();
   const router = useRouter();
   const roleId = user?.role ?? "user";
@@ -31,10 +41,7 @@ export default function SurveyPage() {
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
         {sessionError ? (
-          <div role="alert" aria-live="assertive" className="space-y-4">
-            <p className="text-destructive text-sm">{sessionError}</p>
-            <Button onClick={() => window.location.reload()}>Coba lagi</Button>
-          </div>
+          <ErrorNotice error={sessionError} onRetry={() => window.location.reload()} />
         ) : (
           <FormPageSkeleton />
         )}
@@ -49,18 +56,15 @@ export default function SurveyPage() {
           <h1 className="font-display text-xl font-semibold">
             Detail survei belum tersedia
           </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {error || "Permohonan tidak ditemukan."}
-          </p>
-          <Button
-            variant="outline"
-            className="mt-6 mr-2"
-            onClick={reload}
-          >
-            Coba lagi
-          </Button>
+          <div className="mt-2">
+            <ErrorNotice
+              error={error ?? new Error("Permohonan tidak ditemukan.")}
+              onRetry={reload}
+              backHref={returnTo}
+            />
+          </div>
           <Button asChild variant="outline" className="mt-6">
-            <Link href="/dashboard?view=all">Kembali ke permohonan</Link>
+          <Link href={returnTo}>Kembali ke permohonan</Link>
           </Button>
         </div>
       </AppShell>
@@ -83,9 +87,17 @@ export default function SurveyPage() {
 
   return (
     <AppShell active="applications" roleId={roleId} user={user}>
+      {unsavedDialog}
       <div className="mx-auto w-full max-w-3xl min-w-0">
         <Link
-          href={`/permohonan/${application.id}`}
+          href={detailHref}
+          onClick={(event) => {
+            if (!actionDirty) return;
+            event.preventDefault();
+            void confirmDiscard().then((confirmed) => {
+              if (confirmed) router.push(detailHref);
+            });
+          }}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -109,18 +121,21 @@ export default function SurveyPage() {
           <Notice
             icon={LockKeyhole}
             title="Aktivitas survei tidak aktif"
+            returnTo={returnTo}
             body="Permohonan ini tidak sedang menunggu aktivitas survei. Buka detail permohonan untuk melihat tahap yang sedang berjalan."
           />
         ) : isMonitoring ? (
           <Notice
             icon={Eye}
             title="Mode monitoring"
+            returnTo={returnTo}
             body={`Survei berada pada ${owner.lane} — ${owner.label}. Super User dapat memantau tanpa mengisi formulir.`}
           />
         ) : !ownsAction ? (
           <Notice
             icon={LockKeyhole}
             title="Menunggu tindakan PIC survei"
+            returnTo={returnTo}
             body={`Survei dikerjakan oleh ${owner.lane} — ${owner.label} sesuai jenis sambungan ${application.connectionType}.`}
           />
         ) : (
@@ -131,8 +146,9 @@ export default function SurveyPage() {
                 application={application}
                 action={action!}
                 embedded
-                onCancel={() => router.push(`/permohonan/${id}`)}
-                onSaved={() => router.push(`/permohonan/${id}`)}
+                onCancel={() => router.push(detailHref)}
+                onSaved={() => router.push(detailHref)}
+                onDirtyChange={setActionDirty}
               />
             </CardContent>
           </Card>
@@ -146,10 +162,12 @@ function Notice({
   icon: Icon,
   title,
   body,
+  returnTo,
 }: {
   icon: typeof LockKeyhole;
   title: string;
   body: string;
+  returnTo: string;
 }) {
   return (
     <section
@@ -167,7 +185,7 @@ function Notice({
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">{body}</p>
           <Button asChild variant="outline" className="mt-4 min-h-11">
-            <Link href="/dashboard?view=all">Lihat daftar permohonan</Link>
+            <Link href={returnTo}>Lihat daftar permohonan</Link>
           </Button>
         </div>
       </div>

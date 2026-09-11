@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { login } from "@/lib/auth";
+import { presentApiError } from "@/lib/error-utils";
 
 const loginSchema = z.object({
   email: z
@@ -61,7 +62,7 @@ export function LoginForm({
       toast.success(`Berhasil masuk sebagai ${user.name}.`);
       router.replace("/dashboard");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Login gagal.";
+      const message = presentApiError(error, "Login gagal.", "login").message;
       form.setError("root", { message });
       toast.error(message);
     }
