@@ -1,3 +1,4 @@
+import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 
 import type { Metadata } from "next";
@@ -53,6 +54,13 @@ const dmSans = localFont({
   display: "swap",
 });
 
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "COLABORA",
   description: "COLABORA operational workspace",
@@ -65,7 +73,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" suppressHydrationWarning>
-      <body className={`${dmSans.variable} antialiased`}>
+      <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
