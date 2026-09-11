@@ -16,6 +16,7 @@ import {
   LogOut,
   Menu,
   PanelLeft,
+  UserPlus,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,15 +52,29 @@ const createDestination = {
   icon: FilePlus2,
 } as const;
 
+const accountDestination = {
+  id: "accounts",
+  href: "/admin/akun/baru",
+  label: "Buat akun",
+  mobileLabel: "Buat akun",
+  icon: UserPlus,
+} as const;
+
 const CREATE_ROLES: RoleId[] = ["pelayanan-pelanggan", "nps"];
+
+const ACCOUNT_ROLES: RoleId[] = ["admin", "super-user"];
 
 export function canCreatePermohonan(roleId: RoleId) {
   return CREATE_ROLES.includes(roleId);
 }
 
+export function canManageAccounts(roleId: RoleId) {
+  return ACCOUNT_ROLES.includes(roleId);
+}
+
 type AppShellProps = {
   children: React.ReactNode;
-  active: "dashboard" | "applications" | "create";
+  active: "dashboard" | "applications" | "create" | "accounts";
   roleId: RoleId;
   user?: User | null;
 };
@@ -103,6 +118,9 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
   const destinations = canCreatePermohonan(roleId)
     ? [...baseDestinations, createDestination]
     : baseDestinations;
+  const navigationDestinations = canManageAccounts(roleId)
+    ? [...destinations, accountDestination]
+    : destinations;
 
   return (
     <div
@@ -159,7 +177,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
             </p>
           )}
           <div className="space-y-1">
-            {destinations.map(({ id, href, label, icon: Icon }) => (
+            {navigationDestinations.map(({ id, href, label, icon: Icon }) => (
               <Link
                 key={id}
                 href={href}
@@ -391,22 +409,24 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                   </p>
                 </div>
                 <nav aria-label="Navigasi seluler" className="space-y-1">
-                  {destinations.map(({ id, href, label, icon: Icon }) => (
-                    <Link
-                      key={id}
-                      href={href}
-                      aria-current={active === id ? "page" : undefined}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium ${
-                        active === id
-                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                      }`}
-                    >
-                      <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{label}</span>
-                    </Link>
-                  ))}
+                  {navigationDestinations.map(
+                    ({ id, href, label, icon: Icon }) => (
+                      <Link
+                        key={id}
+                        href={href}
+                        aria-current={active === id ? "page" : undefined}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium ${
+                          active === id
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className="size-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{label}</span>
+                      </Link>
+                    ),
+                  )}
                 </nav>
                 <Button
                   type="button"
