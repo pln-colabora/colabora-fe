@@ -14,7 +14,9 @@ import {
   FilePlus2,
   House,
   LogOut,
+  Menu,
   PanelLeft,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -65,6 +67,7 @@ type AppShellProps = {
 export function AppShell({ children, active, roleId, user }: AppShellProps) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -90,6 +93,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
   }
 
   function handleLogout() {
+    setMobileMenuOpen(false);
     void logout();
     toast.success("Berhasil keluar.");
     router.replace("/login");
@@ -102,7 +106,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
 
   return (
     <div
-      className={`bg-background min-h-dvh w-full max-w-full transition-[padding-left] duration-200 ease-in-out ${
+      className={`bg-background min-h-dvh w-full max-w-full overflow-x-clip transition-[padding-left] duration-200 ease-in-out ${
         collapsed ? "lg:pl-16" : "lg:pl-[232px]"
       }`}
     >
@@ -113,7 +117,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
         Lewati ke konten utama
       </a>
       <aside
-        className={`bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-30 hidden flex-col overflow-y-auto overflow-x-hidden border-r transition-[width] duration-200 ease-in-out lg:flex ${
+        className={`bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden overflow-y-auto border-r transition-[width] duration-200 ease-in-out lg:flex ${
           collapsed ? "w-16" : "w-[232px]"
         }`}
       >
@@ -124,7 +128,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
         >
           <Link
             href="/dashboard"
-            className={`flex items-center min-w-0 ${
+            className={`flex min-w-0 items-center ${
               collapsed ? "justify-center" : "gap-3"
             }`}
             title="COLABORA"
@@ -138,7 +142,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
               priority
             />
             {!collapsed && (
-              <span className="font-display text-primary block text-xl font-bold tracking-tight truncate">
+              <span className="font-display text-primary block truncate text-xl font-bold tracking-tight">
                 COLABORA
               </span>
             )}
@@ -163,7 +167,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                 aria-label={collapsed ? label : undefined}
                 aria-current={active === id ? "page" : undefined}
                 className={`font-display flex min-h-11 items-center rounded-md text-sm font-medium transition-colors ${
-                  collapsed ? "justify-center px-0 w-full" : "gap-3 px-3"
+                  collapsed ? "w-full justify-center px-0" : "gap-3 px-3"
                 } ${
                   active === id
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -218,13 +222,13 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                   Akun
                 </p>
                 <p
-                  className="text-sm font-medium truncate"
+                  className="truncate text-sm font-medium"
                   title={user?.name ?? undefined}
                 >
                   {user?.name ?? "Memuat akun..."}
                 </p>
                 <p
-                  className="text-muted-foreground mt-0.5 text-xs truncate"
+                  className="text-muted-foreground mt-0.5 truncate text-xs"
                   title={user?.unit || undefined}
                 >
                   {user?.unit || "—"}
@@ -232,7 +236,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="mt-3 min-h-10 w-full justify-start gap-3 border-0 px-3 text-sm font-medium text-muted-foreground shadow-none outline-none transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:ring-0"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive mt-3 min-h-10 w-full justify-start gap-3 border-0 px-3 text-sm font-medium shadow-none transition-colors outline-none focus:outline-none focus-visible:ring-0"
                   onClick={handleLogout}
                 >
                   <LogOut className="size-4 shrink-0" aria-hidden="true" />
@@ -252,7 +256,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className="size-9 border-0 text-muted-foreground shadow-none outline-none transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:ring-0"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive size-9 border-0 shadow-none transition-colors outline-none focus:outline-none focus-visible:ring-0"
                   onClick={handleLogout}
                   title="Keluar"
                   aria-label="Keluar"
@@ -272,9 +276,25 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
           }`}
         >
           <div className="mx-auto flex h-full w-full max-w-[1440px] min-w-0 items-center gap-2 px-3 sm:gap-4 sm:px-6 lg:gap-4">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:text-foreground lg:hidden"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation"
+              aria-label={mobileMenuOpen ? "Tutup menu" : "Buka menu"}
+            >
+              {mobileMenuOpen ? (
+                <X className="size-5" aria-hidden="true" />
+              ) : (
+                <Menu className="size-5" aria-hidden="true" />
+              )}
+            </Button>
             <Link
               href="/dashboard"
-              className="flex items-center gap-2.5 shrink-0 py-2 lg:hidden"
+              className="flex shrink-0 items-center gap-2.5 py-2 lg:hidden"
             >
               <Image
                 src="/logo/colabora.png"
@@ -302,7 +322,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
             <p className="text-muted-foreground hidden text-sm lg:block">
               Ruang kerja permohonan PB/PD
             </p>
-            <details className="group relative ml-auto min-w-0">
+            <details className="group relative ml-auto hidden min-w-0 lg:block">
               <summary className="hover:bg-accent flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-1.5 sm:px-2 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0 text-sm">
                   <span className="text-muted-foreground block text-xs">
@@ -331,15 +351,76 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
               </div>
             </details>
             <Button
+              type="button"
               variant="ghost"
-              className="min-h-11 gap-1 border-0 px-2 text-muted-foreground shadow-none outline-none hover:bg-destructive/10 hover:text-destructive sm:px-3 lg:hidden"
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive min-h-11 gap-1 border-0 px-2 shadow-none outline-none sm:px-3 lg:hidden"
               onClick={handleLogout}
+              aria-label="Keluar"
+              title="Keluar"
             >
               <LogOut aria-hidden="true" />
-              Keluar
+              <span className="hidden sm:inline">Keluar</span>
             </Button>
           </div>
         </header>
+        {mobileMenuOpen && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 top-16 z-30 bg-black/10 lg:hidden"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Tutup menu"
+            />
+            <div
+              id="mobile-navigation"
+              className="bg-card fixed inset-x-0 top-16 z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b shadow-md lg:hidden"
+            >
+              <div className="p-4">
+                <div className="border-border mb-4 border-b pb-4">
+                  <p className="text-muted-foreground text-xs font-medium">
+                    Akun
+                  </p>
+                  <p className="mt-1 truncate text-sm font-medium">
+                    {user?.name ?? "Memuat akun..."}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5 truncate text-sm">
+                    {user?.email ?? ""}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5 truncate text-sm">
+                    {role.label} — {user?.unit || "—"}
+                  </p>
+                </div>
+                <nav aria-label="Navigasi seluler" className="space-y-1">
+                  {destinations.map(({ id, href, label, icon: Icon }) => (
+                    <Link
+                      key={id}
+                      href={href}
+                      aria-current={active === id ? "page" : undefined}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium ${
+                        active === id
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className="size-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{label}</span>
+                    </Link>
+                  ))}
+                </nav>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive mt-4 min-h-11 w-full justify-start gap-3 px-3 text-sm font-medium"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="size-4 shrink-0" aria-hidden="true" />
+                  Keluar
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
         <main
           id="main-content"
           tabIndex={-1}

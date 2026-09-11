@@ -567,7 +567,7 @@ function ApplicationListItem({
 
   return (
     <article className="min-w-0 py-4">
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="font-medium">{application.customer}</p>
           <p className="text-muted-foreground mt-1 text-sm">
