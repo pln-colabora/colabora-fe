@@ -1,7 +1,15 @@
-# Ilustrasi login COLABORA
+# Ilustrasi COLABORA
 
 - `coordination-grid.png`: sumber hasil generasi, 1448 × 1086 piksel.
 - `coordination-grid.webp`: aset halaman login, 127.138 byte. Dikonversi dari PNG dengan Sharp (kualitas 85), tanpa perubahan komposisi.
+- `field-technicians.png`: dua teknisi meninjau pekerjaan bersama.
+- `field-maintenance.png`: teknisi memeriksa panel jaringan.
+- `neighborhood-power-grid.png`: lingkungan dan gardu distribusi.
+- `neighborhood-distribution.png`: rumah dan jaringan distribusi.
+- `service-truck.png`: kendaraan layanan lapangan dan perlengkapan kerja.
+- `transformer-pole.png`: gardu transformator pada tiang.
+- `transformer-substation.png`: gardu transformator dengan pagar pengaman.
+- `error-field-operations.png`: tim teknisi menangani gangguan jaringan; dipakai pada halaman 404 dan 500.
 - Dibuat dengan tool ImageGen bawaan, bukan CLI. Ilustrasi konseptual; tidak memuat logo resmi PLN.
 - Latar panel memakai token `brand-surface`; palet ilustrasi tetap terang pada kedua tema agar karya tetap terbaca.
 
