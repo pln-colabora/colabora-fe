@@ -94,12 +94,12 @@ export default function CreateAccountPage() {
       {unsavedDialog}
       <div className="mx-auto w-full max-w-3xl min-w-0">
         <Link
-          href="/dashboard"
+          href="/admin/akun"
           onClick={(event) => {
             if (!dirty) return;
             event.preventDefault();
             void confirmDiscard().then((confirmed) => {
-              if (confirmed) window.location.assign("/dashboard");
+              if (confirmed) window.location.assign("/admin/akun");
             });
           }}
           className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-2 text-sm"
@@ -146,7 +146,7 @@ function Unauthorized() {
             Hubungi administrator untuk membuat atau mengelola akun pengguna.
           </p>
           <Button asChild variant="outline" className="mt-4 min-h-11">
-            <Link href="/dashboard">Kembali ke beranda</Link>
+            <Link href="/admin/akun">Kembali ke daftar akun</Link>
           </Button>
         </div>
       </div>
@@ -198,7 +198,7 @@ function AccountForm({
       });
       toast.success("Akun berhasil dibuat.");
       form.reset();
-      router.push("/dashboard");
+      router.push("/admin/akun");
     } catch (error) {
       setRequestError(error);
       toast.error(presentApiError(error, "Akun tidak dapat dibuat.").message);
@@ -360,7 +360,7 @@ function AccountForm({
                     className="min-h-11"
                     onClick={() =>
                       void confirmDiscard().then(
-                        (confirmed) => confirmed && router.push("/dashboard"),
+                        (confirmed) => confirmed && router.push("/admin/akun"),
                       )
                     }
                   >

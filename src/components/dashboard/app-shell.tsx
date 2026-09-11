@@ -54,9 +54,9 @@ const createDestination = {
 
 const accountDestination = {
   id: "accounts",
-  href: "/admin/akun/baru",
-  label: "Buat akun",
-  mobileLabel: "Buat akun",
+  href: "/admin/akun",
+  label: "Manajemen akun",
+  mobileLabel: "Akun",
   icon: UserPlus,
 } as const;
 
