@@ -38,20 +38,18 @@ import {
   getActivity,
   getApplicationStatus,
   getCurrentStage,
+  getOwnedSla,
   getRole,
   stages,
   type Application,
+  type RoleId,
 } from "@/lib/workflow";
 
 type View = "all" | "mine";
 
 export default function DashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <DashboardSkeleton />
-      }
-    >
+    <Suspense fallback={<DashboardSkeleton />}>
       <DashboardContent />
     </Suspense>
   );
@@ -167,11 +165,12 @@ function DashboardContent() {
   });
 
   const role = getRole(roleId);
-  const visibleApplications = isHome && !search && !statusFilter
-    ? [...applications]
-        .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
-        .slice(0, 5)
-    : filteredApplications;
+  const visibleApplications =
+    isHome && !search && !statusFilter
+      ? [...applications]
+          .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+          .slice(0, 5)
+      : filteredApplications;
   const completedCount = applications.filter(
     (item) => getApplicationStatus(item) === "Selesai",
   ).length;
@@ -179,7 +178,7 @@ function DashboardContent() {
     (item) => item.status === "in_progress",
   ).length;
   const overdueCount = applications.filter(
-    (item) => item.sla.tone === "late" && item.status === "in_progress",
+    (item) => getOwnedSla(item, roleId)?.tone === "late",
   ).length;
   const showProcessDistribution =
     !isHome && ready && (roleId === "admin" || roleId === "super-user");
@@ -221,9 +220,6 @@ function DashboardContent() {
                 </Link>
               </Button>
             ) : null}
-            <p className="text-muted-foreground text-sm">
-              Data backend COLABORA
-            </p>
           </div>
         </header>
 
@@ -231,7 +227,9 @@ function DashboardContent() {
           <div className="text-destructive mt-4">
             <ErrorNotice
               error={loadError ?? sessionError}
-              onRetry={() => (sessionError ? window.location.reload() : reload())}
+              onRetry={() =>
+                sessionError ? window.location.reload() : reload()
+              }
               retrying={applicationsLoading}
             />
           </div>
@@ -291,7 +289,7 @@ function DashboardContent() {
                 )}
               </p>
               <Button asChild className="min-h-11 w-full sm:w-auto">
-                  <Link href={dashboardHref("mine")}>
+                <Link href={dashboardHref("mine")}>
                   {roleId === "super-user"
                     ? "Lihat permohonan dalam pemantauan"
                     : "Lihat tugas saya"}{" "}
@@ -411,7 +409,7 @@ function DashboardContent() {
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Cari nomor, pelanggan, atau unit"
                     aria-label="Cari permohonan"
-                    className="h-11 pl-9 pr-9"
+                    className="h-11 pr-9 pl-9"
                   />
                   {searchQuery ? (
                     <button
@@ -474,20 +472,18 @@ function DashboardContent() {
               {!loadError &&
                 !sessionError &&
                 [1, 2, 3].map((row) => (
-                  <Skeleton
-                    key={row}
-                    className="h-16 w-full"
-                  />
+                  <Skeleton key={row} className="h-16 w-full" />
                 ))}
             </div>
           ) : visibleApplications.length > 0 ? (
             <>
               <div className="divide-y px-4 lg:hidden">
                 {visibleApplications.map((application) => (
-                    <ApplicationListItem
-                      key={application.id}
-                      application={application}
-                      returnTo={returnTo}
+                  <ApplicationListItem
+                    key={application.id}
+                    application={application}
+                    roleId={roleId}
+                    returnTo={returnTo}
                   />
                 ))}
               </div>
@@ -526,6 +522,7 @@ function DashboardContent() {
                         compact={isHome}
                         key={application.id}
                         application={application}
+                        roleId={roleId}
                         returnTo={returnTo}
                       />
                     ))}
@@ -555,9 +552,11 @@ function DashboardContent() {
 
 function ApplicationListItem({
   application,
+  roleId,
   returnTo,
 }: {
   application: Application;
+  roleId: RoleId;
   returnTo: string;
 }) {
   const stage = stages.find(
@@ -590,7 +589,7 @@ function ApplicationListItem({
         <div className="min-w-0">
           <dt className="text-muted-foreground text-sm">SLA</dt>
           <dd className="mt-1">
-            <SlaIndicator application={application} />
+            <SlaIndicator application={application} roleId={roleId} />
           </dd>
         </div>
       </dl>
@@ -664,10 +663,12 @@ function SummaryMetric({
 
 function ApplicationRow({
   application,
+  roleId,
   compact = false,
   returnTo,
 }: {
   application: Application;
+  roleId: RoleId;
   compact?: boolean;
   returnTo: string;
 }) {
@@ -718,7 +719,7 @@ function ApplicationRow({
         </td>
       )}
       <td className="px-4 py-3">
-        <SlaIndicator application={application} />
+        <SlaIndicator application={application} roleId={roleId} />
       </td>
       <td className="px-4 py-3 text-right">
         <Link
@@ -733,26 +734,34 @@ function ApplicationRow({
   );
 }
 
-function SlaIndicator({ application }: { application: Application }) {
+function SlaIndicator({
+  application,
+  roleId,
+}: {
+  application: Application;
+  roleId: RoleId;
+}) {
+  const sla = getOwnedSla(application, roleId);
+  if (!sla) {
+    return <span className="text-muted-foreground">—</span>;
+  }
   const color =
-    application.sla.tone === "late"
+    sla.tone === "late"
       ? "text-destructive"
-      : application.sla.tone === "due"
+      : sla.tone === "due"
         ? "text-warning"
-        : application.sla.tone === "done"
-          ? "text-success"
-          : "text-foreground";
-  const deadlineIsInLabel = application.sla.label.startsWith("Tenggat ");
+        : "text-foreground";
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${color}`}
     >
       <Clock3 className="size-3.5" aria-hidden="true" />
       <span>
-        <span className="block">{application.sla.label}</span>
-        {application.sla.deadline && !deadlineIsInLabel ? (
+        <span className="block">{sla.label}</span>
+        {sla.deadline ? (
           <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
-            Batas {formatApiDate(application.sla.deadline.slice(0, 10), {
+            Batas{" "}
+            {formatApiDate(sla.deadline.slice(0, 10), {
               day: "numeric",
               month: "short",
               year: "numeric",

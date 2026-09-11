@@ -204,6 +204,24 @@ test("server projection retains parallel and skipped nodes and server permission
   );
 });
 
+test("SLA reminder is scoped to the role that owns the available node", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    available_actions: [
+      {
+        ...fixture.available_actions[0],
+        workflow_node: "pelaksanaan_konstruksi",
+      },
+    ],
+  });
+
+  assert.equal(
+    workflow.getOwnedSla(mapped, "vendor-konstruksi")?.deadline,
+    "2026-09-12",
+  );
+  assert.equal(workflow.getOwnedSla(mapped, "konstruksi"), null);
+});
+
 test("SLA deadline falls back to the current stage node", () => {
   const mapped = applications.mapApplication({
     ...fixture,

@@ -53,10 +53,7 @@ import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useDocumentActions } from "@/hooks/use-document-actions";
 import { useSession } from "@/hooks/use-session";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import {
-  assignVendor,
-  getVendorAccounts,
-} from "@/lib/applications";
+import { assignVendor, getVendorAccounts } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
 import { formatApiDate, formatFileSize, parseDateValue } from "@/lib/utils";
@@ -68,6 +65,7 @@ import {
   getCurrentStage,
   getDocuments,
   getHistory,
+  getOwnedSla,
   getOwner,
   getRole,
   stages,
@@ -97,13 +95,17 @@ export default function ApplicationDetailPage() {
   const ready = !!application || !loading;
   const [showForm, setShowForm] = useState(false);
   const [actionDirty, setActionDirty] = useState(false);
-  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(actionDirty);
+  const { confirmDiscard, dialog: unsavedDialog } =
+    useUnsavedChanges(actionDirty);
 
   if (!ready)
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
         {sessionError ? (
-          <ErrorNotice error={sessionError} onRetry={() => window.location.reload()} />
+          <ErrorNotice
+            error={sessionError}
+            onRetry={() => window.location.reload()}
+          />
         ) : (
           <DetailSkeleton />
         )}
@@ -139,6 +141,7 @@ export default function ApplicationDetailPage() {
   const currentStage = getCurrentStage(application);
   const documents = getDocuments(application);
   const history = getHistory(application);
+  const ownedSla = getOwnedSla(application, roleId);
 
   function handleAdvanced(nextApplication: Application) {
     setApplication(nextApplication);
@@ -198,8 +201,8 @@ export default function ApplicationDetailPage() {
               />
               <HeaderFact
                 label="SLA"
-                value={application.sla.label}
-                tone={application.sla.tone}
+                value={ownedSla?.label ?? "—"}
+                tone={ownedSla?.tone}
               />
               <HeaderFact
                 label="Terakhir diperbarui"
@@ -209,11 +212,8 @@ export default function ApplicationDetailPage() {
           </div>
         </header>
 
-        {application.sla.deadline && !application.completed ? (
-          <SlaReminder
-            deadline={application.sla.deadline}
-            tone={application.sla.tone}
-          />
+        {ownedSla?.deadline && !application.completed ? (
+          <SlaReminder deadline={ownedSla.deadline} tone={ownedSla.tone} />
         ) : null}
 
         <CurrentAction
@@ -316,8 +316,7 @@ function VendorAssignment({
         if (!cancelled) setVendors(data);
       })
       .catch((error: unknown) => {
-        if (!cancelled)
-          setError(error);
+        if (!cancelled) setError(error);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -433,7 +432,9 @@ function VendorAssignment({
               </p>
             )}
             <Button className="mt-3" disabled={busy || saved || loading}>
-              {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
+              {busy && (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              )}
               {busy ? "Menyimpan..." : "Tugaskan vendor"}
             </Button>
           </form>
