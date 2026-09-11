@@ -11,7 +11,7 @@ export default function GlobalError({ reset }: { reset: () => void }) {
   return (
     <main className="bg-background flex min-h-dvh items-center px-6 py-12 sm:px-10 lg:px-16">
       <div className="mx-auto w-full max-w-6xl">
-        <div className="mt-10 grid items-center gap-10 lg:mt-14 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
+        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
           <section className="max-w-xl" aria-labelledby="global-error-title">
             <AlertTriangle
               className="text-destructive size-7"
