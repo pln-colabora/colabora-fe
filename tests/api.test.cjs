@@ -204,6 +204,21 @@ test("server projection retains parallel and skipped nodes and server permission
   );
 });
 
+test("SLA deadline falls back to the current stage node", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    workflow_nodes: [
+      {
+        ...fixture.workflow_nodes[0],
+        status: "completed",
+        sla_status: "none",
+        sla_deadline: "2026-09-15",
+      },
+    ],
+  });
+  assert.equal(mapped.sla.deadline, "2026-09-15");
+});
+
 test("list follows pagination without requesting details per row", async () => {
   const calls = [];
   global.fetch = async (url) => {

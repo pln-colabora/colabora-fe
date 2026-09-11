@@ -56,7 +56,13 @@ export function mapApplication(data: PermohonanResponse): Application {
   // Active nodes may carry a deadline without a graded sla_status ("none");
   // surface that date so the SLA column is informative instead of just "—".
   const deadline =
-    (slaNode ?? active.find((node) => node.sla_deadline))?.sla_deadline ?? null;
+    slaNode?.sla_deadline ??
+    active.find((node) => node.sla_deadline)?.sla_deadline ??
+    nodes.find(
+      (node) =>
+        node.stage_number === data.current_stage && Boolean(node.sla_deadline),
+    )?.sla_deadline ??
+    null;
   return {
     id: data.id,
     number: data.no_permohonan,

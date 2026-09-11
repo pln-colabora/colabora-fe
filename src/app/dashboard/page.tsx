@@ -38,7 +38,6 @@ import {
   getActivity,
   getApplicationStatus,
   getCurrentStage,
-  getOwner,
   getRole,
   stages,
   type Application,
@@ -512,9 +511,6 @@ function DashboardContent() {
                       )}
                       <th className="px-4 py-3 font-medium">Tahap saat ini</th>
                       <th className="px-4 py-3 font-medium">Status</th>
-                      {!isHome && (
-                        <th className="px-4 py-3 font-medium">PIC</th>
-                      )}
                       {isHome && (
                         <th className="px-4 py-3 font-medium">Tanggal</th>
                       )}
@@ -564,11 +560,9 @@ function ApplicationListItem({
   application: Application;
   returnTo: string;
 }) {
-  const activity = getActivity(application.currentAction);
   const stage = stages.find(
     (item) => item.id === getCurrentStage(application),
   )!;
-  const owner = activity ? getRole(getOwner(activity, application)) : null;
   const owned = isOwnedBy(application);
 
   return (
@@ -586,17 +580,11 @@ function ApplicationListItem({
         <StatusBadge status={getApplicationStatus(application)} />
       </div>
 
-      <dl className="mt-3 grid min-w-0 grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+      <dl className="mt-3 grid min-w-0 grid-cols-2 gap-3 text-sm sm:grid-cols-2">
         <div className="min-w-0">
           <dt className="text-muted-foreground text-sm">Tahap saat ini</dt>
           <dd className="mt-1 truncate">
             {application.rejected ? "Delegasi PK NPS" : stage.shortLabel}
-          </dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="text-muted-foreground text-sm">PIC</dt>
-          <dd className="mt-1 truncate">
-            {application.rejected || !owner ? "—" : owner.label}
           </dd>
         </div>
         <div className="min-w-0">
@@ -687,7 +675,6 @@ function ApplicationRow({
   const stage = stages.find(
     (item) => item.id === getCurrentStage(application),
   )!;
-  const owner = activity ? getRole(getOwner(activity, application)) : null;
   const owned = isOwnedBy(application);
   const status = getApplicationStatus(application);
 
@@ -719,16 +706,6 @@ function ApplicationRow({
       <td className="px-4 py-3">
         <StatusBadge status={status} />
       </td>
-      {!compact && (
-        <td className="px-4 py-3">
-          <p className="max-w-40 truncate">
-            {application.rejected || !owner ? "—" : owner.label}
-          </p>
-          {owner && !application.rejected ? (
-            <p className="text-muted-foreground mt-0.5 text-sm">{owner.lane}</p>
-          ) : null}
-        </td>
-      )}
       {compact && (
         <td className="px-4 py-3 whitespace-nowrap">
           <time dateTime={application.requestedAt || undefined}>
@@ -765,12 +742,24 @@ function SlaIndicator({ application }: { application: Application }) {
         : application.sla.tone === "done"
           ? "text-success"
           : "text-foreground";
+  const deadlineIsInLabel = application.sla.label.startsWith("Tenggat ");
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${color}`}
     >
       <Clock3 className="size-3.5" aria-hidden="true" />
-      {application.sla.label}
+      <span>
+        <span className="block">{application.sla.label}</span>
+        {application.sla.deadline && !deadlineIsInLabel ? (
+          <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
+            Batas {formatApiDate(application.sla.deadline.slice(0, 10), {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+        ) : null}
+      </span>
     </span>
   );
 }
