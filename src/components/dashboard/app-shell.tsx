@@ -111,7 +111,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
           <Button
             type="button"
             variant="ghost"
-            className="text-muted-foreground hover:text-foreground mt-3 min-h-10 w-full justify-start px-0 hover:bg-transparent"
+            className="bg-destructive-surface text-destructive hover:bg-destructive-surface border-destructive-border mt-3 min-h-10 w-full justify-start gap-3 border px-3 hover:opacity-90"
             onClick={handleLogout}
           >
             <LogOut className="size-4" aria-hidden="true" />
