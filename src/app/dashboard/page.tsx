@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,6 +11,7 @@ import {
   FilePlus2,
   Search,
   TriangleAlert,
+  X,
 } from "lucide-react";
 
 import {
@@ -62,8 +63,9 @@ function DashboardContent() {
   const router = useRouter();
   const isHome = !searchParams.has("view");
   const view: View = searchParams.get("view") === "mine" ? "mine" : "all";
-  const query = searchParams.get("q") ?? "";
+  const urlQuery = searchParams.get("q") ?? "";
   const statusFilter = searchParams.get("status") ?? "";
+  const [searchQuery, setSearchQuery] = useState(urlQuery);
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
   const {
@@ -74,12 +76,47 @@ function DashboardContent() {
   } = useApplications(!!user);
   const ready = !applicationsLoading;
 
-  function updateFilters(next: { query?: string; status?: string }) {
+  // Keep local search in sync if URL query changes from navigation or back/forward
+  useEffect(() => {
+    setSearchQuery(urlQuery);
+  }, [urlQuery]);
+
+  // Debounce syncing local search to URL query parameter to avoid blocking typing
+  useEffect(() => {
+    if (searchQuery.trim() === urlQuery.trim()) return;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (searchQuery.trim()) {
+        params.set("q", searchQuery.trim());
+      } else {
+        params.delete("q");
+      }
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, urlQuery, searchParams, router]);
+
+  function handleStatusChange(value: string) {
+    const nextStatus = value === "all" ? "" : value;
     const params = new URLSearchParams(searchParams.toString());
-    if (next.query) params.set("q", next.query);
-    else params.delete("q");
-    if (next.status) params.set("status", next.status);
-    else params.delete("status");
+    if (searchQuery.trim()) {
+      params.set("q", searchQuery.trim());
+    } else {
+      params.delete("q");
+    }
+    if (nextStatus) {
+      params.set("status", nextStatus);
+    } else {
+      params.delete("status");
+    }
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  }
+
+  function handleResetFilters() {
+    setSearchQuery("");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("q");
+    params.delete("status");
     router.replace(`/dashboard?${params.toString()}`, { scroll: false });
   }
 
@@ -92,19 +129,46 @@ function DashboardContent() {
   const returnTo = `/dashboard?${searchParams.toString()}`;
 
   const roleQueue = applications.filter(isOwnedBy);
+  const search = searchQuery.trim().toLocaleLowerCase("id-ID");
+  const searchTerms = search.split(/\s+/).filter(Boolean);
+
   const filteredApplications = (
     view === "mine" ? roleQueue : applications
   ).filter((application) => {
-    const search = query.trim().toLocaleLowerCase("id-ID");
-    return (
-      `${application.number} ${application.id} ${application.customer} ${application.unit}`
-        .toLocaleLowerCase("id-ID")
-        .includes(search) &&
-      (!statusFilter || getApplicationStatus(application) === statusFilter)
+    if (statusFilter && getApplicationStatus(application) !== statusFilter) {
+      return false;
+    }
+    if (searchTerms.length === 0) {
+      return true;
+    }
+    const activity = getActivity(application.currentAction);
+    const stage = stages.find(
+      (item) => item.id === getCurrentStage(application),
     );
+    const haystack = [
+      application.number,
+      application.id,
+      application.customer,
+      application.unit,
+      application.phone,
+      application.location,
+      application.requestType,
+      application.connectionType,
+      stage?.label,
+      stage?.shortLabel,
+      activity?.label,
+      activity?.shortLabel,
+      getApplicationStatus(application),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("id-ID");
+
+    return searchTerms.every((term) => haystack.includes(term));
   });
+
   const role = getRole(roleId);
-  const visibleApplications = isHome
+  const visibleApplications = isHome && !search && !statusFilter
     ? [...applications]
         .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
         .slice(0, 5)
@@ -344,14 +408,23 @@ function DashboardContent() {
                     aria-hidden="true"
                   />
                   <Input
-                    value={query}
-                    onChange={(event) =>
-                      updateFilters({ query: event.target.value, status: statusFilter })
-                    }
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Cari nomor, pelanggan, atau unit"
                     aria-label="Cari permohonan"
-                    className="h-11 pl-9"
+                    className="h-11 pl-9 pr-9"
                   />
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2 rounded p-1 focus-visible:outline-2"
+                      aria-label="Hapus pencarian"
+                      title="Hapus pencarian"
+                    >
+                      <X className="size-4" aria-hidden="true" />
+                    </button>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <label htmlFor="status-filter" className="text-sm">
@@ -359,9 +432,7 @@ function DashboardContent() {
                   </label>
                   <Select
                     value={statusFilter || "all"}
-                    onValueChange={(value) =>
-                      updateFilters({ query, status: value === "all" ? "" : value })
-                    }
+                    onValueChange={handleStatusChange}
                   >
                     <SelectTrigger
                       id="status-filter"
@@ -380,13 +451,11 @@ function DashboardContent() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {(query || statusFilter) && (
+                  {(searchQuery || statusFilter) && (
                     <Button
                       variant="ghost"
                       className="min-h-11"
-                      onClick={() => {
-                        updateFilters({ query: "", status: "" });
-                      }}
+                      onClick={handleResetFilters}
                     >
                       Reset filter
                     </Button>
