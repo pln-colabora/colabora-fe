@@ -22,7 +22,6 @@ export type ActionId =
   | "5"
   | "6"
   | "7"
-  | "pk"
   | "7b"
   | "8"
   | "9"
@@ -351,16 +350,6 @@ export const activities: ActivityDefinition[] = [
     owner: "konstruksi",
   },
   {
-    id: "pk",
-    stage: 4,
-    label: "PK Vendor Pelaksana",
-    shortLabel: "PK Vendor",
-    description: "Terbitkan perintah kerja vendor pelaksana.",
-    owner: "konstruksi",
-    fields: [notesField],
-    evidence: "Evidence PK vendor",
-  },
-  {
     id: "8",
     stage: 4,
     label: "WO Vendor APP",
@@ -513,7 +502,6 @@ export const nodeActions: Record<string, ActionId> = {
   wo_tiang: "6",
   wo_konstruksi: "7",
   wo_pdkb: "7b",
-  pk_vendor: "pk",
   wo_app: "8",
   reservasi_material: "9",
   tera_app: "10",
@@ -528,6 +516,44 @@ export const nodeActions: Record<string, ActionId> = {
 };
 export function getActivity(id: ActionId | null | undefined) {
   return activities.find((activity) => activity.id === id);
+}
+// Stage 5 tasks each depend only on their matching stage-4 node, not on the
+// whole of stage 4 — e.g. Pemasangan tiang needs WO Tiang done but not WO
+// Konstruksi. Every other stage boundary requires all earlier stages resolved.
+const stage4Predecessor: Record<string, string> = {
+  pemasangan_tiang: "wo_tiang",
+  pelaksanaan_konstruksi: "wo_konstruksi",
+  pdkb_documentation: "wo_pdkb",
+};
+
+// An action may only run once its prerequisite nodes are resolved (completed or
+// skipped by a branch decision). The server should enforce this, but the FE
+// guards it too so a later step is never offered while a prerequisite is still
+// pending — e.g. Pemasangan SR/APP (stage 6) must wait for Dokumentasi PDKB
+// (stage 5).
+export function actionPrerequisitesMet(
+  nodes: WorkflowNode[],
+  workflowNode: string,
+  stageNumber?: StageId | null,
+): boolean {
+  const normalize = (name: string) => name.replaceAll("-", "_");
+  const key = normalize(workflowNode);
+  const predecessor = stage4Predecessor[key];
+  // The action's stage may be absent; fall back to the mapped activity's stage.
+  const stage = stageNumber ?? getActivity(nodeActions[key])?.stage;
+  if (!stage) return true;
+  return nodes
+    .filter((node) => {
+      if (node.stage_number >= stage) return false;
+      // For stage 5, ignore unrelated stage-4 branches; keep only this task's
+      // direct stage-4 predecessor as a gate.
+      if (stage === 5 && node.stage_number === 4)
+        return normalize(node.workflow_node) === predecessor;
+      return true;
+    })
+    .every(
+      (node) => node.status === "completed" || node.status === "skipped",
+    );
 }
 export function getOwner(
   activity: ActivityDefinition,
