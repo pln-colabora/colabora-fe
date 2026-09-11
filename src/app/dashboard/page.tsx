@@ -118,6 +118,8 @@ function DashboardContent() {
   const overdueCount = applications.filter(
     (item) => item.sla.tone === "late" && item.status === "in_progress",
   ).length;
+  const showProcessDistribution =
+    !isHome && ready && (roleId === "admin" || roleId === "super-user");
 
   return (
     <AppShell
@@ -237,7 +239,7 @@ function DashboardContent() {
           </>
         )}
 
-        {!isHome && ready && (
+        {showProcessDistribution && (
           <section
             className="bg-card mt-6 overflow-hidden rounded-lg"
             aria-labelledby="distribution-title"
@@ -257,9 +259,8 @@ function DashboardContent() {
               {stages.map((stage) => {
                 const count = applications.filter(
                   (application) =>
-                    !application.rejected &&
-                    application.currentAction &&
-                    getCurrentStage(application) === stage.id,
+                    application.status === "in_progress" &&
+                    application.currentStage === stage.id,
                 ).length;
                 return (
                   <div
