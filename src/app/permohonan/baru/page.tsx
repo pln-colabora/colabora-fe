@@ -220,7 +220,6 @@ function CreateForm({
   }, [form.formState.isDirty, onDirtyChange]);
 
   async function handleSubmit(values: FormValues) {
-    if (form.formState.isSubmitting) return;
     if (
       !(await confirmCreate({
         title: "Buat permohonan baru?",

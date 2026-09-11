@@ -344,7 +344,7 @@ function VendorAssignment({
             className="mt-4"
             noValidate
             onSubmit={form.handleSubmit(async ({ vendorId }) => {
-              if (saved || form.formState.isSubmitting) return;
+              if (saved) return;
               if (
                 !(await confirmAssignment({
                   title: "Tugaskan vendor?",

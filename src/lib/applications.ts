@@ -230,34 +230,37 @@ export async function submitAction(
   values: Record<string, string>,
   documentIds: string[],
 ) {
+  // Some API deployments expose the combined planning node under the
+  // decision name; both names use the same rab-kko-kkf contract.
+  const workflowNode = action.workflow_node.replaceAll("-", "_");
   const payload: Record<string, unknown> = { document_ids: documentIds };
-  if (action.workflow_node === "survei")
+  if (workflowNode === "survei")
     payload.surveyed_at = values.surveyed_at;
-  if (action.workflow_node === "rab_kko_kkf")
+  if (workflowNode === "rab_kko_kkf" || workflowNode === "kebutuhan_tiang")
     payload.kebutuhan_tiang = values.kebutuhan_tiang === "Ya";
   if (
-    action.workflow_node === "permohonan_perluasan" ||
-    action.workflow_node === "nps_delegation"
+    workflowNode === "permohonan_perluasan" ||
+    workflowNode === "nps_delegation"
   )
     payload.nps_delegation_status =
       values.nps_delegation_status === "Didelegasikan"
         ? "delegated"
         : "returned";
-  if (action.workflow_node === "wo_konstruksi")
+  if (workflowNode === "wo_konstruksi")
     payload.perlu_pdkb = values.perlu_pdkb === "Ya";
   if (
-    action.workflow_node === "reservasi_material" ||
-    action.workflow_node === "tera_app"
+    workflowNode === "reservasi_material" ||
+    workflowNode === "tera_app"
   ) {
     if (values.reservation_notes)
       payload.reservation_notes = values.reservation_notes;
     if (values.tera_notes) payload.tera_notes = values.tera_notes;
   } else if (values.notes) payload.notes = values.notes;
-  if (action.workflow_node === "energize_jaringan")
+  if (workflowNode === "energize_jaringan")
     payload.operation_result = values.operation_result;
   if (
-    action.workflow_node === "pemasangan_tiang" ||
-    action.workflow_node === "pelaksanaan_konstruksi"
+    workflowNode === "pemasangan_tiang" ||
+    workflowNode === "pelaksanaan_konstruksi"
   )
     payload.workflow_node = action.workflow_node;
   const path = action.path.replace("{id}", encodeURIComponent(id));

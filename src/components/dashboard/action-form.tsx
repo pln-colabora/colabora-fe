@@ -167,7 +167,6 @@ export function ActionForm({
     );
 
   async function submit(data: ActionFormValues) {
-    if (form.formState.isSubmitting) return;
     if (
       !(await confirmAction({
         title: "Lanjutkan aktivitas?",

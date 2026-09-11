@@ -259,6 +259,12 @@ const cases = [
     { kebutuhan_tiang: true },
   ],
   [
+    "kebutuhan_tiang",
+    "rab-kko-kkf",
+    { kebutuhan_tiang: "Ya" },
+    { kebutuhan_tiang: true },
+  ],
+  [
     "permohonan_perluasan",
     "permohonan-perluasan",
     { nps_delegation_status: "Dikembalikan" },

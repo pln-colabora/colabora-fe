@@ -502,6 +502,7 @@ export const nodeActions: Record<string, ActionId> = {
   permohonan: "1",
   survei: "2",
   rab_kko_kkf: "3",
+  "rab-kko-kkf": "3",
   kebutuhan_tiang: "3",
   permohonan_perluasan: "4",
   nps_delegation: "5",

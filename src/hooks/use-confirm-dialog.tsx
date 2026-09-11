@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import {
   AlertDialog,
@@ -28,50 +28,55 @@ type PendingConfirmation = ConfirmationOptions & {
 
 export function useConfirmDialog() {
   const [pending, setPending] = useState<PendingConfirmation | null>(null);
+  const pendingRef = useRef<PendingConfirmation | null>(null);
 
   const confirm = useCallback((options: ConfirmationOptions) => {
     return new Promise<boolean>((resolve) => {
-      setPending((current) => {
-        current?.resolve(false);
-        return { ...options, resolve };
-      });
+      pendingRef.current?.resolve(false);
+      const next = { ...options, resolve };
+      pendingRef.current = next;
+      setPending(next);
     });
   }, []);
 
-  const close = useCallback((open: boolean) => {
-    if (open) return;
-    setPending((current) => {
-      current?.resolve(false);
-      return null;
-    });
+  const settle = useCallback((confirmed: boolean) => {
+    const current = pendingRef.current;
+    pendingRef.current = null;
+    setPending(null);
+    current?.resolve(confirmed);
   }, []);
 
-  const accept = useCallback(() => {
-    setPending((current) => {
-      current?.resolve(true);
-      return null;
-    });
-  }, []);
+  const close = useCallback(
+    (open: boolean) => {
+      if (!open) settle(false);
+    },
+    [settle],
+  );
 
-  const dialog = (
-    <AlertDialog open={!!pending} onOpenChange={close}>
+  const accept = useCallback(() => settle(true), [settle]);
+
+  const dialog = pending ? (
+    <AlertDialog open onOpenChange={close}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{pending?.title}</AlertDialogTitle>
-          <AlertDialogDescription>{pending?.description}</AlertDialogDescription>
+          <AlertDialogTitle>{pending.title}</AlertDialogTitle>
+          <AlertDialogDescription>{pending.description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{pending?.cancelLabel ?? "Batal"}</AlertDialogCancel>
+          <AlertDialogCancel>{pending.cancelLabel ?? "Batal"}</AlertDialogCancel>
           <AlertDialogAction
             onClick={accept}
-            className={cn(pending?.destructive && "bg-destructive text-white hover:bg-destructive/90")}
+            className={cn(
+              pending.destructive &&
+                "bg-destructive text-white hover:bg-destructive/90",
+            )}
           >
-            {pending?.confirmLabel ?? "Lanjutkan"}
+            {pending.confirmLabel ?? "Lanjutkan"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
+  ) : null;
 
   return { confirm, dialog };
 }
