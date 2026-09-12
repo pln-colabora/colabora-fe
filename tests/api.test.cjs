@@ -343,7 +343,6 @@ const cases = [
   ["wo_tiang", "wo-vendor/tiang", {}, {}],
   ["wo_app", "wo-vendor/app", {}, {}],
   ["wo_pdkb", "wo-pdkb", {}, {}],
-  ["pk_vendor", "pk-vendor", {}, {}],
   [
     "reservasi_material",
     "reservasi-material",

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeft,
   BellRing,
@@ -22,9 +21,6 @@ import {
   LockKeyhole,
   XCircle,
 } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { toast } from "sonner";
-import { z } from "zod";
 
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
@@ -32,14 +28,6 @@ import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
@@ -49,12 +37,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApplication } from "@/hooks/use-application";
-import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useDocumentActions } from "@/hooks/use-document-actions";
 import { useSession } from "@/hooks/use-session";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import { assignVendor, getVendorAccounts } from "@/lib/applications";
-import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
 import {
   formatApiDate,
@@ -232,11 +217,6 @@ export default function ApplicationDetailPage() {
           onDirtyChange={setActionDirty}
         />
 
-        <VendorAssignment
-          application={application}
-          roleId={roleId}
-          onSaved={handleAdvanced}
-        />
         {Boolean(relatedError) && (
           <div className="text-destructive mt-4">
             <ErrorNotice
@@ -269,183 +249,6 @@ export default function ApplicationDetailPage() {
         </div>
       </div>
     </AppShell>
-  );
-}
-
-const vendorAssignmentSchema = z.object({
-  vendorId: z.string().trim().min(1, "Akun vendor wajib dipilih."),
-});
-
-type VendorAssignmentValues = z.infer<typeof vendorAssignmentSchema>;
-
-function VendorAssignment({
-  application,
-  roleId,
-  onSaved,
-}: {
-  application: Application;
-  roleId: RoleId;
-  onSaved: (application: Application) => void;
-}) {
-  const [error, setError] = useState<unknown>(null);
-  const [saved, setSaved] = useState(false);
-  const [vendors, setVendors] = useState<Array<{ id: string; name: string }>>(
-    [],
-  );
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [reload, setReload] = useState(0);
-  const form = useForm<VendorAssignmentValues>({
-    resolver: zodResolver(vendorAssignmentSchema),
-    defaultValues: { vendorId: "" },
-  });
-  const busy = form.formState.isSubmitting;
-  const { confirm: confirmAssignment, dialog: assignmentDialog } =
-    useConfirmDialog();
-  const vendorRole =
-    roleId === "perencanaan" && application.decisions.needsPole === true
-      ? "vendor-tiang"
-      : roleId === "konstruksi"
-        ? "vendor-konstruksi"
-        : roleId === "transaksi-energi" &&
-            !application.connectionType.startsWith("PLG TM")
-          ? "vendor-sr-app"
-          : null;
-  useEffect(() => {
-    if (!vendorRole || !open) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    getVendorAccounts(vendorRole)
-      .then((data) => {
-        if (!cancelled) setVendors(data);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setError(error);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [vendorRole, open, reload]);
-  if (
-    !vendorRole ||
-    application.decisions.npsApproved !== true ||
-    application.completed ||
-    application.rejected
-  )
-    return null;
-  return (
-    <>
-      {assignmentDialog}
-      <details
-        className="bg-card mt-4 rounded-lg p-5"
-        onToggle={(event) => setOpen(event.currentTarget.open)}
-      >
-        <summary className="cursor-pointer text-sm font-medium">
-          Penugasan {getRole(vendorRole).label}
-        </summary>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Vendor hanya dapat mengakses permohonan setelah akunnya ditugaskan.
-          Penugasan diperiksa oleh server dan hanya dapat dibuat sekali.
-        </p>
-        <Form {...form}>
-          <form
-            className="mt-4"
-            noValidate
-            onSubmit={form.handleSubmit(async ({ vendorId }) => {
-              if (saved) return;
-              if (
-                !(await confirmAssignment({
-                  title: "Tugaskan vendor?",
-                  description: `Akun ${getRole(vendorRole).label} akan ditugaskan ke permohonan ini.`,
-                  confirmLabel: "Tugaskan vendor",
-                }))
-              )
-                return;
-              form.clearErrors("root");
-              try {
-                const updated = await assignVendor(
-                  application.id,
-                  vendorId.trim(),
-                  vendorRole,
-                );
-                setSaved(true);
-                toast.success("Vendor berhasil ditugaskan.");
-                onSaved(updated);
-              } catch (requestError) {
-                const message = presentApiError(
-                  requestError,
-                  "Penugasan vendor gagal.",
-                ).message;
-                form.setError("root", { message });
-                toast.error(message);
-              }
-            })}
-          >
-            <FormField
-              control={form.control}
-              name="vendorId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Akun {getRole(vendorRole).label}</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={busy || saved || loading}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="h-11 w-full">
-                        <SelectValue
-                          placeholder={
-                            loading ? "Memuat vendor..." : "Pilih akun vendor"
-                          }
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {vendors.map((vendor) => (
-                        <SelectItem key={vendor.id} value={vendor.id}>
-                          {vendor.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {!loading && !error && !vendors.length && (
-              <p className="text-muted-foreground mt-2 text-sm">
-                Belum ada akun vendor untuk peran ini.
-              </p>
-            )}
-            {Boolean(error) && (
-              <div className="text-destructive mt-2">
-                <ErrorNotice
-                  error={error}
-                  onRetry={() => setReload((value) => value + 1)}
-                  retrying={loading}
-                />
-              </div>
-            )}
-            {form.formState.errors.root?.message && (
-              <p role="alert" className="text-destructive mt-2 text-sm">
-                {form.formState.errors.root.message}
-              </p>
-            )}
-            <Button className="mt-3" disabled={busy || saved || loading}>
-              {busy && (
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
-              )}
-              {busy ? "Menyimpan..." : "Tugaskan vendor"}
-            </Button>
-          </form>
-        </Form>
-      </details>
-    </>
   );
 }
 
