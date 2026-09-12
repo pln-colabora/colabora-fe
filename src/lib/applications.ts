@@ -25,6 +25,10 @@ type PermohonanResponse = {
   kebutuhan_tiang: boolean | null;
   perlu_pdkb: boolean | null;
   nps_delegation_status: "delegated" | "returned" | null;
+  // Backend-derived SLA across actionable nodes: earliest deadline and the most
+  // urgent status. Preferred over recomputing from nodes on the client.
+  sla_deadline: string | null;
+  sla_status: "none" | "on_time" | "due_soon" | "overdue";
   workflow_nodes: WorkflowNode[];
   available_actions: AvailableAction[];
 };
@@ -49,15 +53,16 @@ export function mapApplication(data: PermohonanResponse): Application {
   const active = nodes.filter(
     (node) => node.status === "available" || node.status === "in_progress",
   );
-  const slaNode =
-    active.find((node) => node.sla_status === "overdue") ??
-    active.find((node) => node.sla_status === "due_soon") ??
-    active.find((node) => node.sla_status === "on_time");
-  const sla = slaNode?.sla_status;
-  // Active nodes may carry a deadline without a graded sla_status ("none");
-  // surface that date so the SLA column is informative instead of just "—".
+  // Prefer the backend-derived SLA; fall back to scanning nodes for older
+  // deployments that only expose per-node SLA.
+  const sla =
+    data.sla_status && data.sla_status !== "none"
+      ? data.sla_status
+      : (active.find((node) => node.sla_status === "overdue") ??
+          active.find((node) => node.sla_status === "due_soon") ??
+          active.find((node) => node.sla_status === "on_time"))?.sla_status;
   const deadline =
-    slaNode?.sla_deadline ??
+    data.sla_deadline ??
     active.find((node) => node.sla_deadline)?.sla_deadline ??
     nodes.find(
       (node) =>

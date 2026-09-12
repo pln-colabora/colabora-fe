@@ -33,7 +33,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApplications } from "@/hooks/use-applications";
 import { useSession } from "@/hooks/use-session";
-import { formatApiDate } from "@/lib/utils";
+import { formatApiDate, formatSlaCountdown } from "@/lib/utils";
 import {
   getActivity,
   getApplicationStatus,
@@ -42,7 +42,6 @@ import {
   getRole,
   stages,
   type Application,
-  type RoleId,
 } from "@/lib/workflow";
 
 type View = "all" | "mine";
@@ -482,7 +481,6 @@ function DashboardContent() {
                   <ApplicationListItem
                     key={application.id}
                     application={application}
-                    roleId={roleId}
                     returnTo={returnTo}
                   />
                 ))}
@@ -522,7 +520,6 @@ function DashboardContent() {
                         compact={isHome}
                         key={application.id}
                         application={application}
-                        roleId={roleId}
                         returnTo={returnTo}
                       />
                     ))}
@@ -552,11 +549,9 @@ function DashboardContent() {
 
 function ApplicationListItem({
   application,
-  roleId,
   returnTo,
 }: {
   application: Application;
-  roleId: RoleId;
   returnTo: string;
 }) {
   const stage = stages.find(
@@ -589,7 +584,7 @@ function ApplicationListItem({
         <div className="min-w-0">
           <dt className="text-muted-foreground text-sm">SLA</dt>
           <dd className="mt-1">
-            <SlaIndicator application={application} roleId={roleId} />
+            <SlaIndicator application={application} />
           </dd>
         </div>
       </dl>
@@ -663,12 +658,10 @@ function SummaryMetric({
 
 function ApplicationRow({
   application,
-  roleId,
   compact = false,
   returnTo,
 }: {
   application: Application;
-  roleId: RoleId;
   compact?: boolean;
   returnTo: string;
 }) {
@@ -719,7 +712,7 @@ function ApplicationRow({
         </td>
       )}
       <td className="px-4 py-3">
-        <SlaIndicator application={application} roleId={roleId} />
+        <SlaIndicator application={application} />
       </td>
       <td className="px-4 py-3 text-right">
         <Link
@@ -734,40 +727,34 @@ function ApplicationRow({
   );
 }
 
-function SlaIndicator({
-  application,
-  roleId,
-}: {
-  application: Application;
-  roleId: RoleId;
-}) {
-  const sla = getOwnedSla(application, roleId);
-  if (!sla) {
+function SlaIndicator({ application }: { application: Application }) {
+  const { deadline, tone } = application.sla;
+  const countdown = formatSlaCountdown(deadline);
+  if (application.completed || !deadline || !countdown) {
     return <span className="text-muted-foreground">—</span>;
   }
+  // Colour by remaining time: overdue red, near-deadline amber, on time green.
   const color =
-    sla.tone === "late"
+    tone === "late"
       ? "text-destructive"
-      : sla.tone === "due"
+      : tone === "due"
         ? "text-warning"
-        : "text-foreground";
+        : "text-success";
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${color}`}
     >
       <Clock3 className="size-3.5" aria-hidden="true" />
       <span>
-        <span className="block">{sla.label}</span>
-        {sla.deadline ? (
-          <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
-            Batas{" "}
-            {formatApiDate(sla.deadline.slice(0, 10), {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-          </span>
-        ) : null}
+        <span className="block">{countdown}</span>
+        <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
+          Batas{" "}
+          {formatApiDate(deadline.slice(0, 10), {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
       </span>
     </span>
   );
