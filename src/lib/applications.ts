@@ -252,6 +252,10 @@ export async function getApplicationDocument(
   )}/documents/${encodeURIComponent(documentId)}`;
   return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
 }
+export async function previewApplicationDocument(documentId: string) {
+  const path = `/api/documents/${encodeURIComponent(documentId)}/preview`;
+  return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
+}
 export async function submitAction(
   id: string,
   action: AvailableAction,

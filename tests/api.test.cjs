@@ -497,6 +497,22 @@ test("document content uses the authenticated permohonan endpoint", async () => 
   assert.equal(await blob.text(), "document bytes");
 });
 
+test("document preview uses the dedicated authenticated preview endpoint", async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(
+      url,
+      "https://api.example.test/api/documents/document-id/preview",
+    );
+    assert.equal(init.headers.get("Authorization"), "Bearer access-test");
+    return new Response("preview bytes", {
+      headers: { "Content-Type": "application/pdf" },
+    });
+  };
+
+  const blob = await applications.previewApplicationDocument("document-id");
+  assert.equal(await blob.text(), "preview bytes");
+});
+
 for (const status of [400, 403, 404, 409, 500]) {
   test(
     "HTTP " + status + " surfaces backend error without mutation success",

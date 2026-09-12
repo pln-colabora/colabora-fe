@@ -41,7 +41,8 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 | Action 15 + 16 + 17 | POST `P/closing` | `document_ids`, optional `notes` |
 | Upload evidence | POST `/api/documents` | Multipart `file`, `type=evidence` |
 | Dokumen | GET `P/documents` | Response metadata dokumen yang sudah terikat |
-| Buka / unduh dokumen | GET `P/documents/{doc_id}` | Bearer token; response mengikuti redirect presigned URL |
+| Preview dokumen | GET `/api/documents/{doc_id}/preview` | Bearer token; bytes dokumen untuk dibuka di browser |
+| Unduh dokumen | GET `P/documents/{doc_id}` | Bearer token; response mengikuti redirect presigned URL |
 | Riwayat | GET `P/logs` | Judul aktivitas dipetakan dari `workflow_node`; `detail` ditampilkan terpisah |
 | Daftar akun vendor | GET `/api/user?page=...&per_page=100` | Filter role dari response; hanya dimuat saat disclosure penugasan dibuka |
 | Penugasan vendor | POST `P/vendor-assignments` | `vendor_id`, `vendor_role` |
