@@ -39,6 +39,36 @@ export function formatApiDate(
   return new Intl.DateTimeFormat("id-ID", options).format(date);
 }
 
+export function getSlaDaysRemaining(value: string | null | undefined) {
+  if (!value) return null;
+  const dateOnly = value.slice(0, 10);
+  const deadline = parseDateValue(dateOnly) ?? new Date(value);
+  if (Number.isNaN(deadline.getTime())) return null;
+
+  const today = new Date();
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const deadlineStart = new Date(
+    deadline.getFullYear(),
+    deadline.getMonth(),
+    deadline.getDate(),
+  );
+  return Math.round(
+    (deadlineStart.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000),
+  );
+}
+
+export function formatSlaRemaining(daysRemaining: number | null) {
+  if (daysRemaining === null) return "";
+  if (daysRemaining < 0) return `Terlambat ${Math.abs(daysRemaining)} hari`;
+  if (daysRemaining === 0) return "Jatuh tempo hari ini";
+  if (daysRemaining === 1) return "Jatuh tempo besok";
+  return `Tersisa ${daysRemaining} hari`;
+}
+
 export function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

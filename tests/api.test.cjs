@@ -164,6 +164,12 @@ test("date formatting tolerates empty and invalid API values", () => {
   assert.notEqual(utils.formatApiDate("2026-09-09", options), "—");
 });
 
+test("SLA day labels handle late and upcoming deadlines", () => {
+  assert.equal(utils.getSlaDaysRemaining("not-a-date"), null);
+  assert.equal(utils.formatSlaRemaining(-2), "Terlambat 2 hari");
+  assert.equal(utils.formatSlaRemaining(3), "Tersisa 3 hari");
+});
+
 beforeEach(() => {
   storage.clear();
   api.saveTokens({
@@ -235,6 +241,17 @@ test("SLA deadline falls back to the current stage node", () => {
     ],
   });
   assert.equal(mapped.sla.deadline, "2026-09-15");
+});
+
+test("list SLA fields take precedence over per-node fallback", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    sla_status: "on_time",
+    sla_deadline: "2026-10-30",
+  });
+
+  assert.equal(mapped.sla.tone, "safe");
+  assert.equal(mapped.sla.deadline, "2026-10-30");
 });
 
 test("list follows pagination without requesting details per row", async () => {

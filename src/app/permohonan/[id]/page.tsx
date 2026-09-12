@@ -56,7 +56,12 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { assignVendor, getVendorAccounts } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
-import { formatApiDate, formatFileSize, parseDateValue } from "@/lib/utils";
+import {
+  formatApiDate,
+  formatFileSize,
+  formatSlaRemaining,
+  getSlaDaysRemaining,
+} from "@/lib/utils";
 import {
   activities,
   nodeActions,
@@ -1133,22 +1138,16 @@ function SlaReminder({
   deadline: string;
   tone: Application["sla"]["tone"];
 }) {
-  const deadlineDate = parseSlaDeadline(deadline);
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
 
   useEffect(() => {
-    const date = parseSlaDeadline(deadline);
-    if (!date) {
-      setDaysRemaining(null);
-      return;
-    }
-    const update = () => setDaysRemaining(getCalendarDayDifference(date));
+    const update = () => setDaysRemaining(getSlaDaysRemaining(deadline));
     update();
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
   }, [deadline]);
 
-  if (!deadlineDate) return null;
+  if (daysRemaining === null) return null;
 
   const style =
     tone === "late"
@@ -1156,16 +1155,7 @@ function SlaReminder({
       : tone === "due"
         ? "border-warning-border bg-warning-surface text-warning"
         : "border-border bg-muted/30 text-foreground";
-  const remainingLabel =
-    daysRemaining === null
-      ? ""
-      : daysRemaining < 0
-        ? `Terlambat ${Math.abs(daysRemaining)} hari`
-        : daysRemaining === 0
-          ? "Jatuh tempo hari ini"
-          : daysRemaining === 1
-            ? "Jatuh tempo besok"
-            : `Tersisa ${daysRemaining} hari`;
+  const remainingLabel = formatSlaRemaining(daysRemaining);
   const deadlineLabel = formatApiDate(deadline.slice(0, 10), {
     day: "numeric",
     month: "long",
@@ -1187,31 +1177,6 @@ function SlaReminder({
         </p>
       </div>
     </section>
-  );
-}
-
-function parseSlaDeadline(value: string) {
-  const dateOnly = value.slice(0, 10);
-  const date = parseDateValue(dateOnly);
-  if (date) return date;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function getCalendarDayDifference(deadline: Date) {
-  const today = new Date();
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-  const deadlineStart = new Date(
-    deadline.getFullYear(),
-    deadline.getMonth(),
-    deadline.getDate(),
-  );
-  return Math.round(
-    (deadlineStart.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000),
   );
 }
 

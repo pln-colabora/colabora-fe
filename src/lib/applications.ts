@@ -24,6 +24,9 @@ type PermohonanResponse = {
   kebutuhan_tiang: boolean | null;
   perlu_pdkb: boolean | null;
   nps_delegation_status: "delegated" | "returned" | null;
+  // The list endpoint exposes an aggregate SLA in addition to per-node data.
+  sla_deadline?: string | null;
+  sla_status?: "none" | "on_time" | "due_soon" | "overdue";
   workflow_nodes: WorkflowNode[];
   available_actions: AvailableAction[];
 };
@@ -52,10 +55,16 @@ export function mapApplication(data: PermohonanResponse): Application {
     active.find((node) => node.sla_status === "overdue") ??
     active.find((node) => node.sla_status === "due_soon") ??
     active.find((node) => node.sla_status === "on_time");
-  const sla = slaNode?.sla_status;
+  // Prefer the aggregate values from the list response, while keeping the
+  // per-node fallback for older API responses.
+  const sla =
+    data.sla_status && data.sla_status !== "none"
+      ? data.sla_status
+      : slaNode?.sla_status;
   // Active nodes may carry a deadline without a graded sla_status ("none");
   // surface that date so the SLA column is informative instead of just "—".
   const deadline =
+    data.sla_deadline ??
     slaNode?.sla_deadline ??
     active.find((node) => node.sla_deadline)?.sla_deadline ??
     nodes.find(
