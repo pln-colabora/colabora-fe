@@ -362,10 +362,10 @@ export const activities: ActivityDefinition[] = [
   {
     id: "9",
     stage: 4,
-    label: "Reservasi Material",
-    shortLabel: "Reservasi material",
+    label: "Reservasi Material & Perakitan Tera APP",
+    shortLabel: "Reservasi material & Perakitan Tera APP",
     description:
-      "Pastikan material utama tersedia dan telah dipesan dari gudang.",
+      "Pastikan material utama tersedia dan lakukan perakitan dan tera APP.",
     fields: [
       {
         name: "reservation_notes",
@@ -382,7 +382,7 @@ export const activities: ActivityDefinition[] = [
         maxLength: 2000,
       },
     ],
-    evidence: "Evidence aktivitas",
+    evidence: "Evidence aktivitas Perakitan & Tera APP",
     owner: "transaksi-energi",
   },
   {
