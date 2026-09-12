@@ -34,15 +34,22 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import { submitAction, uploadEvidence } from "@/lib/applications";
+import {
+  assignVendor,
+  getVendorAccounts,
+  submitAction,
+  uploadEvidence,
+} from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import { isValidDateValue } from "@/lib/utils";
 import {
   getActivity,
+  getRole,
   nodeActions,
   type Application,
   type AvailableAction,
   type FieldDefinition,
+  type RoleId,
 } from "@/lib/workflow";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -131,19 +138,62 @@ export function ActionForm({
       } as Record<string, string>
     )[action.workflow_node] ?? action.workflow_node;
   const activity = getActivity(nodeActions[formNode]);
+  // Each WO also assigns the vendor that will receive it, so the picker is part
+  // of the WO form (mandatory) instead of a separate step. SR/APP has no
+  // dedicated vendor on PLG TM — the construction vendor handles it there.
+  const vendorRole: RoleId | null = (() => {
+    const node = formNode.replaceAll("-", "_");
+    if (node === "wo_tiang") return "vendor-tiang";
+    if (node === "wo_konstruksi") return "vendor-konstruksi";
+    if (node === "wo_app" && !application.connectionType.startsWith("PLG TM"))
+      return "vendor-sr-app";
+    return null;
+  })();
+  const vendorLabel = vendorRole ? getRole(vendorRole).label : "";
+  const vendorField: FieldDefinition | null = vendorRole
+    ? { name: "vendor_id", label: vendorLabel, required: true }
+    : null;
+  const baseFields = activity?.fields ?? [];
+  const schemaFields = vendorField ? [...baseFields, vendorField] : baseFields;
   const schema = useMemo(
-    () => createActionSchema(activity?.fields ?? []),
-    [activity],
+    () => createActionSchema(schemaFields),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activity, vendorRole],
   );
   const form = useForm<ActionFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      values: Object.fromEntries(
-        (activity?.fields ?? []).map((field) => [field.name, ""]),
-      ),
+      values: Object.fromEntries(schemaFields.map((field) => [field.name, ""])),
       files: [],
     },
   });
+  const [vendors, setVendors] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [vendorError, setVendorError] = useState<unknown>(null);
+  const assignedVendor = useRef(false);
+
+  useEffect(() => {
+    if (!vendorRole) return;
+    let cancelled = false;
+    setVendorLoading(true);
+    setVendorError(null);
+    getVendorAccounts(vendorRole)
+      .then((data) => {
+        if (!cancelled)
+          setVendors(data.map((item) => ({ id: item.id, name: item.name })));
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setVendorError(error);
+      })
+      .finally(() => {
+        if (!cancelled) setVendorLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vendorRole]);
   const uploads = useRef(new Map<File, string>());
   const [fileStatuses, setFileStatuses] = useState(
     new Map<File, EvidenceFileStatus>(),
@@ -165,6 +215,74 @@ export function ActionForm({
     return (
       <p role="alert">Formulir aktivitas belum tersedia. Muat ulang detail.</p>
     );
+
+  const beforeNotes = baseFields.filter((field) => field.name !== "notes");
+  const notesDef = baseFields.find((field) => field.name === "notes");
+
+  const renderField = (definition: FieldDefinition) => (
+    <FormField
+      key={definition.name}
+      control={form.control}
+      name={`values.${definition.name}`}
+      render={({ field }) => (
+        <FormItem
+          className={definition.type === "textarea" ? "md:col-span-2" : ""}
+        >
+          <FormLabel>
+            {definition.label}
+            {!definition.required && (
+              <span className="text-muted-foreground font-normal">
+                {" "}
+                (opsional)
+              </span>
+            )}
+          </FormLabel>
+          {definition.type === "textarea" ? (
+            <FormControl>
+              <Textarea
+                maxLength={definition.maxLength}
+                className="bg-background min-h-24"
+                {...field}
+              />
+            </FormControl>
+          ) : definition.type === "select" ? (
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              disabled={busy}
+            >
+              <FormControl>
+                <SelectTrigger className="bg-background h-11 w-full">
+                  <SelectValue placeholder="Pilih keputusan" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {definition.options?.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : definition.type === "date" ? (
+            <FormControl>
+              <DatePicker {...field} disabled={busy} />
+            </FormControl>
+          ) : (
+            <FormControl>
+              <Input
+                type={definition.type ?? "text"}
+                maxLength={definition.maxLength}
+                className="bg-background h-11"
+                {...field}
+              />
+            </FormControl>
+          )}
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
 
   async function submit(data: ActionFormValues) {
     if (
@@ -191,6 +309,12 @@ export function ActionForm({
             throw error;
           }
         }
+      }
+      // Assign the vendor first so the completed WO is visible to them.
+      // Guarded by a ref so a retry after a later failure does not re-assign.
+      if (vendorRole && !assignedVendor.current) {
+        await assignVendor(application.id, data.values.vendor_id, vendorRole);
+        assignedVendor.current = true;
       }
       const updated = await submitAction(
         application.id,
@@ -231,75 +355,54 @@ export function ActionForm({
       >
         <fieldset className="min-w-0" disabled={busy}>
           <div className="grid gap-4 md:grid-cols-2">
-            {activity.fields.map((definition) => (
+            {beforeNotes.map(renderField)}
+            {vendorRole ? (
               <FormField
-                key={definition.name}
                 control={form.control}
-                name={`values.${definition.name}`}
+                name="values.vendor_id"
                 render={({ field }) => (
-                  <FormItem
-                    className={
-                      definition.type === "textarea" ? "md:col-span-2" : ""
-                    }
-                  >
-                    <FormLabel>
-                      {definition.label}
-                      {!definition.required && (
-                        <span className="text-muted-foreground font-normal">
-                          {" "}
-                          (opsional)
-                        </span>
-                      )}
-                    </FormLabel>
-                    {definition.type === "textarea" ? (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>{vendorLabel}</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={busy || vendorLoading}
+                    >
                       <FormControl>
-                        <Textarea
-                          maxLength={definition.maxLength}
-                          className="bg-background min-h-24"
-                          {...field}
-                        />
+                        <SelectTrigger className="bg-background h-11 w-full">
+                          <SelectValue
+                            placeholder={
+                              vendorLoading
+                                ? "Memuat vendor..."
+                                : `Pilih ${vendorLabel.toLowerCase()}`
+                            }
+                          />
+                        </SelectTrigger>
                       </FormControl>
-                    ) : definition.type === "select" ? (
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        disabled={busy}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="bg-background h-11 w-full">
-                            <SelectValue placeholder="Pilih keputusan" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {definition.options?.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : definition.type === "date" ? (
-                      <FormControl>
-                        <DatePicker
-                          {...field}
-                          disabled={busy}
-                        />
-                      </FormControl>
-                    ) : (
-                      <FormControl>
-                        <Input
-                          type={definition.type ?? "text"}
-                          maxLength={definition.maxLength}
-                          className="bg-background h-11"
-                          {...field}
-                        />
-                      </FormControl>
+                      <SelectContent>
+                        {vendors.map((vendor) => (
+                          <SelectItem key={vendor.id} value={vendor.id}>
+                            {vendor.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!vendorLoading && !vendorError && !vendors.length && (
+                      <p className="text-muted-foreground mt-2 text-sm">
+                        Belum ada akun {vendorLabel.toLowerCase()}.
+                      </p>
+                    )}
+                    {Boolean(vendorError) && (
+                      <p className="text-destructive mt-2 text-sm">
+                        Daftar vendor gagal dimuat.
+                      </p>
                     )}
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            ))}
+            ) : null}
+            {notesDef ? renderField(notesDef) : null}
           </div>
 
           <FormField

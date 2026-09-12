@@ -1,6 +1,7 @@
 import { apiClient, apiRequest } from "@/lib/api";
 import { formatApiDate } from "@/lib/utils";
 import {
+  actionPrerequisitesMet,
   getActivity,
   nodeActions,
   type Application,
@@ -125,7 +126,11 @@ export function mapApplication(data: PermohonanResponse): Application {
       deadline,
     },
     nodes,
-    availableActions: data.available_actions ?? [],
+    // Drop any action whose prerequisite nodes are not yet resolved, so a
+    // later step can never be completed ahead of a pending one.
+    availableActions: (data.available_actions ?? []).filter((action) =>
+      actionPrerequisitesMet(nodes, action.workflow_node, action.stage_number),
+    ),
     history: [],
     documents: [],
   };
