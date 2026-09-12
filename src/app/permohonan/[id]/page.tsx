@@ -819,7 +819,6 @@ function ApplicationFacts({ application }: { application: Application }) {
     ["Jenis sambungan", application.connectionType],
     ["Unit / ULP", application.unit],
     ["Lokasi", application.location],
-    ["Daya", application.power],
     ["Tanggal permohonan", formatDate(application.requestedAt)],
   ];
   return (

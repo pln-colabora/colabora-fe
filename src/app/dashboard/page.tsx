@@ -38,7 +38,6 @@ import {
   getActivity,
   getApplicationStatus,
   getCurrentStage,
-  getOwnedSla,
   getRole,
   stages,
   type Application,
@@ -177,7 +176,7 @@ function DashboardContent() {
     (item) => item.status === "in_progress",
   ).length;
   const overdueCount = applications.filter(
-    (item) => getOwnedSla(item, roleId)?.tone === "late",
+    (item) => item.sla.tone === "late",
   ).length;
   const showProcessDistribution =
     !isHome && ready && (roleId === "admin" || roleId === "super-user");

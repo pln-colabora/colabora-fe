@@ -85,7 +85,6 @@ export function mapApplication(data: PermohonanResponse): Application {
       ? "JTM / Gardu"
       : data.jenis_sambungan) as Application["connectionType"],
     unit: data.ulp_unit,
-    power: "—",
     requestedAt: data.request_date ?? "",
     updatedAt: "—",
     currentAction:
