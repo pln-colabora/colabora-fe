@@ -19,6 +19,7 @@ import {
   Eye,
   LoaderCircle,
   LockKeyhole,
+  StickyNote,
   XCircle,
 } from "lucide-react";
 
@@ -454,6 +455,24 @@ function CurrentAction({
   );
 }
 
+// Optional notes submitted with an activity live in its workflow node payload
+// (Catatan, plus the reservation/tera notes). Surface them so they are not lost.
+function getActivityNotes(id: ActionId, application: Application): string[] {
+  const keys = ["notes", "reservation_notes", "tera_notes"];
+  const notes: string[] = [];
+  application.nodes
+    .filter((node) => nodeActions[node.workflow_node] === id)
+    .forEach((node) => {
+      const payload = (node.payload ?? {}) as Record<string, unknown>;
+      keys.forEach((key) => {
+        const value = payload[key];
+        if (typeof value === "string" && value.trim())
+          notes.push(value.trim());
+      });
+    });
+  return notes;
+}
+
 function WorkflowTimeline({ application }: { application: Application }) {
   return (
     <section
@@ -512,6 +531,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
                   {stageActivities.map((activity) => {
                     const status = getActivityStatus(activity.id, application);
                     const owner = getRole(getOwner(activity, application));
+                    const notes = getActivityNotes(activity.id, application);
                     return (
                       <li
                         key={activity.id}
@@ -529,6 +549,23 @@ function WorkflowTimeline({ application }: { application: Application }) {
                         <span className="text-muted-foreground text-xs sm:text-right">
                           {activityStatusLabel(status)}
                         </span>
+                        {notes.map((note, index) => (
+                          <p
+                            key={index}
+                            className="border-border border-l-primary/60 bg-muted/60 mt-1 rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-relaxed sm:col-span-3"
+                          >
+                            <span className="text-muted-foreground inline-flex items-center gap-1 font-semibold">
+                              <StickyNote
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                              Catatan
+                            </span>
+                            <span className="text-foreground mt-0.5 block whitespace-pre-line">
+                              {note}
+                            </span>
+                          </p>
+                        ))}
                       </li>
                     );
                   })}
@@ -787,7 +824,6 @@ function ApplicationFacts({ application }: { application: Application }) {
     ["Jenis sambungan", application.connectionType],
     ["Unit / ULP", application.unit],
     ["Lokasi", application.location],
-    ["Daya", application.power],
     ["Tanggal permohonan", formatDate(application.requestedAt)],
   ];
   return (

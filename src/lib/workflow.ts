@@ -55,7 +55,6 @@ export type ApplicationSummary = {
   connectionType: ConnectionType;
   unit: string;
   location: string;
-  power: string;
   requestedAt: string;
   currentAction: ActionId | null;
   decisions: WorkflowDecisions;

@@ -199,7 +199,6 @@ test("server projection retains parallel and skipped nodes and server permission
   );
   assert.deepEqual(mapped.documents, []);
   assert.deepEqual(mapped.history, []);
-  assert.equal(mapped.power, "—");
   assert.equal(
     workflow.getApplicationStatus({ ...mapped, status: "returned" }),
     "Ditolak",
