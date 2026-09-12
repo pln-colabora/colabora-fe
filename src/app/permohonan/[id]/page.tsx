@@ -50,6 +50,7 @@ import {
   getCurrentStage,
   getDocuments,
   getHistory,
+  getOwnedSla,
   getOwner,
   getRole,
   stages,
@@ -79,13 +80,17 @@ export default function ApplicationDetailPage() {
   const ready = !!application || !loading;
   const [showForm, setShowForm] = useState(false);
   const [actionDirty, setActionDirty] = useState(false);
-  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(actionDirty);
+  const { confirmDiscard, dialog: unsavedDialog } =
+    useUnsavedChanges(actionDirty);
 
   if (!ready)
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
         {sessionError ? (
-          <ErrorNotice error={sessionError} onRetry={() => window.location.reload()} />
+          <ErrorNotice
+            error={sessionError}
+            onRetry={() => window.location.reload()}
+          />
         ) : (
           <DetailSkeleton />
         )}
@@ -121,6 +126,7 @@ export default function ApplicationDetailPage() {
   const currentStage = getCurrentStage(application);
   const documents = getDocuments(application);
   const history = getHistory(application);
+  const ownedSla = getOwnedSla(application, roleId);
 
   function handleAdvanced(nextApplication: Application) {
     setApplication(nextApplication);
@@ -180,8 +186,8 @@ export default function ApplicationDetailPage() {
               />
               <HeaderFact
                 label="SLA"
-                value={application.sla.label}
-                tone={application.sla.tone}
+                value={ownedSla?.label ?? "—"}
+                tone={ownedSla?.tone}
               />
               <HeaderFact
                 label="Terakhir diperbarui"
@@ -191,11 +197,8 @@ export default function ApplicationDetailPage() {
           </div>
         </header>
 
-        {application.sla.deadline && !application.completed ? (
-          <SlaReminder
-            deadline={application.sla.deadline}
-            tone={application.sla.tone}
-          />
+        {ownedSla?.deadline && !application.completed ? (
+          <SlaReminder deadline={ownedSla.deadline} tone={ownedSla.tone} />
         ) : null}
 
         <CurrentAction

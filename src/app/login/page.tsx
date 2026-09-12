@@ -30,12 +30,19 @@ export default function LoginPage() {
         />
         <div className="relative z-10 flex min-h-dvh flex-col px-8 py-8 xl:px-12">
           <header>
-            <p className="font-display text-brand-ink text-xl font-semibold tracking-tight">
-              COLABORA
-            </p>
-            <p className="text-brand-ink mt-1 text-sm">
-              Layanan Kolaborasi PLN
-            </p>
+            <div className="flex items-center gap-2.5">
+              <Image
+                src="/logo/colabora.png"
+                alt="Logo COLABORA"
+                width={32}
+                height={32}
+                className="size-8 shrink-0 object-contain"
+                priority
+              />
+              <p className="font-display text-brand-ink text-xl font-semibold tracking-tight">
+                COLABORA
+              </p>
+            </div>
           </header>
           <div className="mt-10 w-full max-w-[26rem] xl:mt-14">
             <h2
@@ -61,12 +68,19 @@ export default function LoginPage() {
       >
         <div className="w-full max-w-md">
           <header className="border-t-brand-accent mb-8 border-t-4 border-b pt-5 pb-6 lg:hidden">
-            <p className="font-display text-primary text-lg font-semibold tracking-tight">
-              COLABORA
-            </p>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Layanan Kolaborasi PLN
-            </p>
+            <div className="flex items-center gap-2.5">
+              <Image
+                src="/logo/colabora.png"
+                alt="Logo COLABORA"
+                width={28}
+                height={28}
+                className="size-7 shrink-0 object-contain"
+                priority
+              />
+              <p className="font-display text-primary text-lg font-semibold tracking-tight">
+                COLABORA
+              </p>
+            </div>
           </header>
           <h1
             id="login-title"

@@ -563,6 +563,50 @@ export function getOwner(
     ? activity.owner(application)
     : activity.owner;
 }
+
+export function getOwnedSla(application: Application, roleId: RoleId) {
+  if (application.status !== "in_progress") return null;
+
+  // The API returns available_actions for the authenticated caller. Pairing
+  // those actions with their workflow nodes keeps reminders role-scoped.
+  const ownedNodes = application.availableActions
+    .map((availableAction) => {
+      const node = application.nodes.find(
+        (item) => item.workflow_node === availableAction.workflow_node,
+      );
+      if (!node || !node.sla_deadline) return null;
+      const activity = getActivity(nodeActions[availableAction.workflow_node]);
+      return activity && getOwner(activity, application) === roleId
+        ? node
+        : null;
+    })
+    .filter((node): node is WorkflowNode => node !== null);
+  const node =
+    ownedNodes.find((item) => item.sla_status === "overdue") ??
+    ownedNodes.find((item) => item.sla_status === "due_soon") ??
+    ownedNodes.find((item) => item.sla_status === "on_time") ??
+    ownedNodes[0];
+  if (!node) return null;
+
+  return {
+    tone:
+      node.sla_status === "overdue"
+        ? ("late" as const)
+        : node.sla_status === "due_soon"
+          ? ("due" as const)
+          : ("safe" as const),
+    label:
+      node.sla_status === "overdue"
+        ? "Terlambat"
+        : node.sla_status === "due_soon"
+          ? "Mendekati tenggat"
+          : node.sla_status === "on_time"
+            ? "Tepat waktu"
+            : "Tenggat",
+    deadline: node.sla_deadline,
+  };
+}
+
 export function getRole(id: RoleId) {
   return (
     roles.find((role) => role.id === id) ?? {
