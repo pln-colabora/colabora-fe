@@ -56,6 +56,11 @@ export default function AccountsPage() {
 
   async function handleDelete() {
     if (!pendingDelete) return;
+    if (pendingDelete.id === user?.id) {
+      toast.error("Akun yang sedang digunakan tidak dapat dihapus.");
+      setPendingDelete(null);
+      return;
+    }
     setDeleting(true);
     try {
       await deleteUser(pendingDelete.id);

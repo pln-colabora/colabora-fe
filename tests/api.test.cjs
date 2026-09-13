@@ -89,6 +89,7 @@ api.apiClient.defaults.adapter = async (config) => {
   return axiosResponse;
 };
 const applications = load("@/lib/applications");
+const users = load("@/lib/users");
 const utils = load("@/lib/utils");
 const workflow = load("@/lib/workflow");
 const fixture = {
@@ -288,6 +289,17 @@ test("create sends only the supplied API fields and bearer token", async () => {
     return json({ status: true, data: fixture });
   };
   assert.equal((await applications.createApplication(payload)).id, fixture.id);
+});
+
+test("delete targets the selected account id, never the signed-in account", async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(url, "https://api.example.test/api/user/account-a-id");
+    assert.equal(init.method, "DELETE");
+    assert.equal(init.headers.get("Authorization"), "Bearer access-test");
+    return json({ status: true, data: null });
+  };
+
+  await users.deleteUser("account-a-id");
 });
 
 const cases = [
