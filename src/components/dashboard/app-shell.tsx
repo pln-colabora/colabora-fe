@@ -202,35 +202,6 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
         <div className="mt-auto flex flex-col">
           <div
             className={`border-sidebar-border border-t ${
-              collapsed ? "flex justify-center p-2" : "p-3"
-            }`}
-          >
-            <Button
-              type="button"
-              variant="ghost"
-              size={collapsed ? "icon-sm" : "default"}
-              className={`text-muted-foreground hover:text-foreground ${
-                collapsed
-                  ? "h-9 w-9"
-                  : "w-full justify-start gap-3 px-3 text-xs font-medium"
-              }`}
-              onClick={toggleCollapsed}
-              title={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
-              aria-label={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
-            >
-              {collapsed ? (
-                <ChevronsRight className="size-4" aria-hidden="true" />
-              ) : (
-                <>
-                  <ChevronsLeft className="size-4" aria-hidden="true" />
-                  <span>Ciutkan</span>
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div
-            className={`border-sidebar-border border-t ${
               collapsed ? "px-2 py-3" : "px-5 py-4"
             }`}
           >
