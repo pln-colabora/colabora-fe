@@ -248,27 +248,23 @@ function DashboardContent() {
                 tone="primary"
                 label="Total permohonan"
                 value={applications.length}
-                detail="Seluruh permohonan yang dapat diakses"
                 ready={ready}
               />
               <SummaryMetric
                 tone="warning"
                 label="Dalam proses"
                 value={activeCount}
-                detail="Belum selesai atau ditolak"
                 ready={ready}
               />
               <SummaryMetric
                 tone="success"
                 label="Selesai"
                 value={completedCount}
-                detail="Proses telah ditutup"
                 ready={ready}
               />
               <SummaryMetric
-                label="SLA terlambat"
+                label="Over SLA"
                 value={overdueCount}
-                detail="Memerlukan perhatian"
                 danger
                 ready={ready}
               />
@@ -614,14 +610,12 @@ function ApplicationListItem({
 function SummaryMetric({
   label,
   value,
-  detail,
   danger = false,
   ready,
   tone = "default",
 }: {
   label: string;
   value: number;
-  detail: string;
   danger?: boolean;
   ready: boolean;
   tone?: "default" | "primary" | "warning" | "success";
@@ -650,7 +644,6 @@ function SummaryMetric({
       <p className={`mt-2 text-3xl font-semibold tabular-nums ${valueColor}`}>
         {ready ? value.toLocaleString("id-ID") : "—"}
       </p>
-      <p className="text-muted-foreground mt-1 text-sm">{detail}</p>
     </div>
   );
 }

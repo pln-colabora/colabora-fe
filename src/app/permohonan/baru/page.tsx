@@ -22,7 +22,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -357,10 +356,6 @@ function CreateForm({
                           ))}
                         </SelectContent>
                       </Select>
-                      <FormDescription>
-                        Pilihan dibatasi sesuai kewenangan peran{" "}
-                        {getRole(roleId).label}.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
