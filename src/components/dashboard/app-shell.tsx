@@ -8,8 +8,6 @@ import { useRouter } from "next/navigation";
 
 import {
   ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
   ClipboardList,
   FilePlus2,
   House,
