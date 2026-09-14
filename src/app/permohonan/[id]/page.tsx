@@ -498,9 +498,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
       <ol className="mt-5 space-y-0">
         {stages.map((stage, index) => {
           const stageActivities = activities.filter(
-            // Reservasi Material (9) and Perakitan & Tera APP (10) are completed
-            // atomically by one backend endpoint, so they read as a single step.
-            (activity) => activity.stage === stage.id && activity.id !== "10",
+            (activity) => activity.stage === stage.id,
           );
           const stageStatus = getStageStatus(stage.id, application);
           return (
@@ -539,9 +537,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
                       >
                         <span className="flex items-center gap-2 font-medium">
                           <ActivityStatusIcon status={status} />
-                          {activity.id === "9"
-                            ? "Reservasi Material & Perakitan/Tera APP"
-                            : activity.shortLabel}
+                          {activity.shortLabel}
                         </span>
                         <span className="text-muted-foreground text-xs">
                           {owner.lane} — {owner.label}

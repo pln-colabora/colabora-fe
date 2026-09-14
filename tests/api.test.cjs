@@ -354,16 +354,8 @@ const cases = [
   ["wo_tiang", "wo-vendor/tiang", {}, {}],
   ["wo_app", "wo-vendor/app", {}, {}],
   ["wo_pdkb", "wo-pdkb", {}, {}],
-  [
-    "reservasi_material",
-    "reservasi-material",
-    {
-      notes: "Must not be sent",
-      reservation_notes: "Reserve",
-      tera_notes: "Tera",
-    },
-    { reservation_notes: "Reserve", tera_notes: "Tera" },
-  ],
+  ["reservasi_material", "reservasi-material", { notes: "Reserve" }, { notes: "Reserve" }],
+  ["tera_app", "tera-app", { notes: "Tera" }, { notes: "Tera" }],
   [
     "pemasangan_tiang",
     "pelaksanaan-konstruksi",

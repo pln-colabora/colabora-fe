@@ -280,14 +280,9 @@ export async function submitAction(
         : "returned";
   if (workflowNode === "wo_konstruksi")
     payload.perlu_pdkb = values.perlu_pdkb === "Ya";
-  if (
-    workflowNode === "reservasi_material" ||
-    workflowNode === "tera_app"
-  ) {
-    if (values.reservation_notes)
-      payload.reservation_notes = values.reservation_notes;
-    if (values.tera_notes) payload.tera_notes = values.tera_notes;
-  } else if (values.notes) payload.notes = values.notes;
+  // reservasi_material (vendor-konstruksi) and tera_app (transaksi-energi) are
+  // now separate nodes; each takes a plain optional notes field.
+  if (values.notes) payload.notes = values.notes;
   if (workflowNode === "energize_jaringan")
     payload.operation_result = values.operation_result;
   if (

@@ -361,28 +361,13 @@ export const activities: ActivityDefinition[] = [
   {
     id: "9",
     stage: 4,
-    label: "Reservasi Material & Perakitan Tera APP",
-    shortLabel: "Reservasi material & Perakitan Tera APP",
+    label: "Reservasi Material",
+    shortLabel: "Reservasi material",
     description:
-      "Pastikan material utama tersedia dan lakukan perakitan dan tera APP.",
-    fields: [
-      {
-        name: "reservation_notes",
-        label: "Catatan reservasi material",
-        type: "textarea",
-        required: false,
-        maxLength: 2000,
-      },
-      {
-        name: "tera_notes",
-        label: "Catatan perakitan dan tera APP",
-        type: "textarea",
-        required: false,
-        maxLength: 2000,
-      },
-    ],
-    evidence: "Evidence aktivitas Perakitan & Tera APP",
-    owner: "transaksi-energi",
+      "Pastikan material utama tersedia dan telah dipesan dari gudang.",
+    fields: [notesField],
+    evidence: "Evidence aktivitas",
+    owner: "vendor-konstruksi",
   },
   {
     id: "10",

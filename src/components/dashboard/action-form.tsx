@@ -132,7 +132,6 @@ export function ActionForm({
     (
       {
         nps_delegation: "permohonan_perluasan",
-        tera_app: "reservasi_material",
         arsip_ail: "entri_mutasi_pdl",
         selesai: "entri_mutasi_pdl",
       } as Record<string, string>
