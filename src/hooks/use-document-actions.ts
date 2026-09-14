@@ -4,7 +4,10 @@ import { useState } from "react";
 
 import { toast } from "sonner";
 
-import { getApplicationDocument } from "@/lib/applications";
+import {
+  getApplicationDocument,
+  previewApplicationDocument,
+} from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import type { DocumentItem } from "@/lib/workflow";
 
@@ -24,7 +27,7 @@ export function useDocumentActions(applicationId: string) {
     }
     setActiveAction({ documentId: document.id, type: "open" });
     try {
-      const blob = await getApplicationDocument(applicationId, document.id);
+      const blob = await previewApplicationDocument(document.id);
       const objectUrl = URL.createObjectURL(blob);
       if (previewWindow) previewWindow.location.replace(objectUrl);
       else {

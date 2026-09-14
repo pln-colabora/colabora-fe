@@ -39,13 +39,12 @@ export function formatApiDate(
   return new Intl.DateTimeFormat("id-ID", options).format(date);
 }
 
-// Calendar-day difference between an SLA deadline (date or datetime string) and
-// today. Positive = days left, 0 = today, negative = overdue.
-export function slaDaysRemaining(deadline: string | null | undefined) {
-  if (!deadline) return null;
-  const dateOnly = deadline.slice(0, 10);
-  const parsed = parseDateValue(dateOnly) ?? new Date(deadline);
-  if (Number.isNaN(parsed.getTime())) return null;
+export function getSlaDaysRemaining(value: string | null | undefined) {
+  if (!value) return null;
+  const dateOnly = value.slice(0, 10);
+  const deadline = parseDateValue(dateOnly) ?? new Date(value);
+  if (Number.isNaN(deadline.getTime())) return null;
+
   const today = new Date();
   const todayStart = new Date(
     today.getFullYear(),
@@ -53,23 +52,21 @@ export function slaDaysRemaining(deadline: string | null | undefined) {
     today.getDate(),
   );
   const deadlineStart = new Date(
-    parsed.getFullYear(),
-    parsed.getMonth(),
-    parsed.getDate(),
+    deadline.getFullYear(),
+    deadline.getMonth(),
+    deadline.getDate(),
   );
   return Math.round(
     (deadlineStart.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000),
   );
 }
 
-// Relative SLA label, e.g. "2 hari lagi", "Besok", "Hari ini", "Terlambat 3 hari".
-export function formatSlaCountdown(deadline: string | null | undefined) {
-  const days = slaDaysRemaining(deadline);
-  if (days === null) return null;
-  if (days < 0) return `Terlambat ${Math.abs(days)} hari`;
-  if (days === 0) return "Hari ini";
-  if (days === 1) return "Besok";
-  return `${days} hari lagi`;
+export function formatSlaRemaining(daysRemaining: number | null) {
+  if (daysRemaining === null) return "";
+  if (daysRemaining < 0) return `Terlambat ${Math.abs(daysRemaining)} hari`;
+  if (daysRemaining === 0) return "Jatuh tempo hari ini";
+  if (daysRemaining === 1) return "Jatuh tempo besok";
+  return `Tersisa ${daysRemaining} hari`;
 }
 
 export function formatFileSize(bytes: number) {

@@ -1,7 +1,6 @@
 import { apiClient, apiRequest } from "@/lib/api";
 import { formatApiDate } from "@/lib/utils";
 import {
-  actionPrerequisitesMet,
   getActivity,
   nodeActions,
   type Application,
@@ -25,10 +24,9 @@ type PermohonanResponse = {
   kebutuhan_tiang: boolean | null;
   perlu_pdkb: boolean | null;
   nps_delegation_status: "delegated" | "returned" | null;
-  // Backend-derived SLA across actionable nodes: earliest deadline and the most
-  // urgent status. Preferred over recomputing from nodes on the client.
-  sla_deadline: string | null;
-  sla_status: "none" | "on_time" | "due_soon" | "overdue";
+  // The list endpoint exposes an aggregate SLA in addition to per-node data.
+  sla_deadline?: string | null;
+  sla_status?: "none" | "on_time" | "due_soon" | "overdue";
   workflow_nodes: WorkflowNode[];
   available_actions: AvailableAction[];
 };
@@ -53,16 +51,21 @@ export function mapApplication(data: PermohonanResponse): Application {
   const active = nodes.filter(
     (node) => node.status === "available" || node.status === "in_progress",
   );
-  // Prefer the backend-derived SLA; fall back to scanning nodes for older
-  // deployments that only expose per-node SLA.
+  const slaNode =
+    active.find((node) => node.sla_status === "overdue") ??
+    active.find((node) => node.sla_status === "due_soon") ??
+    active.find((node) => node.sla_status === "on_time");
+  // Prefer the aggregate values from the list response, while keeping the
+  // per-node fallback for older API responses.
   const sla =
     data.sla_status && data.sla_status !== "none"
       ? data.sla_status
-      : (active.find((node) => node.sla_status === "overdue") ??
-          active.find((node) => node.sla_status === "due_soon") ??
-          active.find((node) => node.sla_status === "on_time"))?.sla_status;
+      : slaNode?.sla_status;
+  // Active nodes may carry a deadline without a graded sla_status ("none");
+  // surface that date so the SLA column is informative instead of just "—".
   const deadline =
     data.sla_deadline ??
+    slaNode?.sla_deadline ??
     active.find((node) => node.sla_deadline)?.sla_deadline ??
     nodes.find(
       (node) =>
@@ -130,11 +133,7 @@ export function mapApplication(data: PermohonanResponse): Application {
       deadline,
     },
     nodes,
-    // Drop any action whose prerequisite nodes are not yet resolved, so a
-    // later step can never be completed ahead of a pending one.
-    availableActions: (data.available_actions ?? []).filter((action) =>
-      actionPrerequisitesMet(nodes, action.workflow_node, action.stage_number),
-    ),
+    availableActions: data.available_actions ?? [],
     history: [],
     documents: [],
   };
@@ -251,6 +250,10 @@ export async function getApplicationDocument(
   const path = `/api/permohonan/${encodeURIComponent(
     applicationId,
   )}/documents/${encodeURIComponent(documentId)}`;
+  return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
+}
+export async function previewApplicationDocument(documentId: string) {
+  const path = `/api/documents/${encodeURIComponent(documentId)}/preview`;
   return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
 }
 export async function submitAction(

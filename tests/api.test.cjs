@@ -89,6 +89,7 @@ api.apiClient.defaults.adapter = async (config) => {
   return axiosResponse;
 };
 const applications = load("@/lib/applications");
+const users = load("@/lib/users");
 const utils = load("@/lib/utils");
 const workflow = load("@/lib/workflow");
 const fixture = {
@@ -164,6 +165,12 @@ test("date formatting tolerates empty and invalid API values", () => {
   assert.notEqual(utils.formatApiDate("2026-09-09", options), "—");
 });
 
+test("SLA day labels handle late and upcoming deadlines", () => {
+  assert.equal(utils.getSlaDaysRemaining("not-a-date"), null);
+  assert.equal(utils.formatSlaRemaining(-2), "Terlambat 2 hari");
+  assert.equal(utils.formatSlaRemaining(3), "Tersisa 3 hari");
+});
+
 beforeEach(() => {
   storage.clear();
   api.saveTokens({
@@ -236,6 +243,17 @@ test("SLA deadline falls back to the current stage node", () => {
   assert.equal(mapped.sla.deadline, "2026-09-15");
 });
 
+test("list SLA fields take precedence over per-node fallback", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    sla_status: "on_time",
+    sla_deadline: "2026-10-30",
+  });
+
+  assert.equal(mapped.sla.tone, "safe");
+  assert.equal(mapped.sla.deadline, "2026-10-30");
+});
+
 test("list follows pagination without requesting details per row", async () => {
   const calls = [];
   global.fetch = async (url) => {
@@ -271,6 +289,17 @@ test("create sends only the supplied API fields and bearer token", async () => {
     return json({ status: true, data: fixture });
   };
   assert.equal((await applications.createApplication(payload)).id, fixture.id);
+});
+
+test("delete targets the selected account id, never the signed-in account", async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(url, "https://api.example.test/api/user/account-a-id");
+    assert.equal(init.method, "DELETE");
+    assert.equal(init.headers.get("Authorization"), "Bearer access-test");
+    return json({ status: true, data: null });
+  };
+
+  await users.deleteUser("account-a-id");
 });
 
 const cases = [
@@ -478,6 +507,22 @@ test("document content uses the authenticated permohonan endpoint", async () => 
     "document-id",
   );
   assert.equal(await blob.text(), "document bytes");
+});
+
+test("document preview uses the dedicated authenticated preview endpoint", async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(
+      url,
+      "https://api.example.test/api/documents/document-id/preview",
+    );
+    assert.equal(init.headers.get("Authorization"), "Bearer access-test");
+    return new Response("preview bytes", {
+      headers: { "Content-Type": "application/pdf" },
+    });
+  };
+
+  const blob = await applications.previewApplicationDocument("document-id");
+  assert.equal(await blob.text(), "preview bytes");
 });
 
 for (const status of [400, 403, 404, 409, 500]) {

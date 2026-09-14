@@ -33,7 +33,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApplications } from "@/hooks/use-applications";
 import { useSession } from "@/hooks/use-session";
-import { formatApiDate, formatSlaCountdown } from "@/lib/utils";
+import {
+  formatApiDate,
+  formatSlaRemaining,
+  getSlaDaysRemaining,
+} from "@/lib/utils";
 import {
   getActivity,
   getApplicationStatus,
@@ -720,33 +724,35 @@ function ApplicationRow({
 }
 
 function SlaIndicator({ application }: { application: Application }) {
-  const { deadline, tone } = application.sla;
-  const countdown = formatSlaCountdown(deadline);
-  if (application.completed || !deadline || !countdown) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-  // Colour by remaining time: overdue red, near-deadline amber, on time green.
+  const sla = application.sla;
+  const remainingLabel = formatSlaRemaining(
+    getSlaDaysRemaining(sla.deadline),
+  );
   const color =
-    tone === "late"
+    sla.tone === "late"
       ? "text-destructive"
-      : tone === "due"
+      : sla.tone === "due"
         ? "text-warning"
-        : "text-success";
+        : sla.tone === "done"
+          ? "text-success"
+          : "text-foreground";
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${color}`}
     >
       <Clock3 className="size-3.5" aria-hidden="true" />
       <span>
-        <span className="block">{countdown}</span>
-        <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
-          Batas{" "}
-          {formatApiDate(deadline.slice(0, 10), {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })}
-        </span>
+        <span className="block">{remainingLabel || sla.label}</span>
+        {sla.deadline ? (
+          <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
+            Batas{" "}
+            {formatApiDate(sla.deadline.slice(0, 10), {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+        ) : null}
       </span>
     </span>
   );
