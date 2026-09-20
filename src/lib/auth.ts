@@ -15,6 +15,7 @@ export type CreateUserInput = {
   password: string;
   telp_number?: string;
   role: RoleId;
+  unit?: string;
 };
 
 export async function getCurrentUser() {
@@ -36,17 +37,22 @@ export async function login(email: string, password: string) {
 }
 
 export async function createUser(input: CreateUserInput) {
-  const formData = new FormData();
-  formData.append("name", input.name);
-  formData.append("email", input.email);
-  formData.append("password", input.password);
-  formData.append("role", input.role);
-  if (input.telp_number) formData.append("telp_number", input.telp_number);
+  // POST /api/user honors the requested role (AccountCreateRequest). The old
+  // /api/auth/register path ignored it and always created a plain "user".
+  const payload: Record<string, unknown> = {
+    name: input.name,
+    email: input.email,
+    password: input.password,
+    role: input.role,
+  };
+  if (input.telp_number) payload.telp_number = input.telp_number;
+  // Operational roles require a unit; admin/user/super-user leave it empty.
+  if (input.unit) payload.unit = input.unit;
 
   return (
-    await apiRequest<User>("/api/auth/register", {
+    await apiRequest<User>("/api/user", {
       method: "POST",
-      data: formData,
+      data: payload,
     })
   ).data;
 }

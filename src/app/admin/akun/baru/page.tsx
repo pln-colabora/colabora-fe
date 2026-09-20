@@ -42,6 +42,22 @@ import { roles, type RoleId } from "@/lib/workflow";
 const roleOptions = roles;
 const roleValues = roleOptions.map((role) => role.id) as [RoleId, ...RoleId[]];
 
+const unitOptions = ["ULP Karang Pilang", "ULP Taman", "ULP Menganti"];
+const UP3_UNIT = "UP3 Surabaya Barat";
+
+// Teknik and Pelayanan Pelanggan pick their ULP; the field only shows for them.
+const rolesWithUlp: RoleId[] = ["teknik", "pelayanan-pelanggan"];
+const rolePicksUlp = (role: RoleId) => rolesWithUlp.includes(role);
+const isVendorRole = (role: RoleId) => role.startsWith("vendor-");
+
+// Unit sent to the backend: ULP roles use the selected ULP, vendors are tagged
+// "Vendor", every other role is scoped to the UP3.
+function resolveUnit(role: RoleId, selectedUlp: string) {
+  if (rolePicksUlp(role)) return selectedUlp;
+  if (isVendorRole(role)) return "Vendor";
+  return UP3_UNIT;
+}
+
 const accountSchema = z
   .object({
     name: z
@@ -60,12 +76,17 @@ const accountSchema = z
       )
       .max(20, "Nomor telepon maksimal 20 karakter."),
     role: z.enum(roleValues),
+    unit: z.string().trim().max(100, "Unit maksimal 100 karakter."),
     password: z.string().min(8, "Kata sandi minimal 8 karakter."),
     confirmPassword: z.string(),
   })
   .refine((values) => values.password === values.confirmPassword, {
     path: ["confirmPassword"],
     message: "Konfirmasi kata sandi belum sama.",
+  })
+  .refine((values) => !rolePicksUlp(values.role) || values.unit !== "", {
+    path: ["unit"],
+    message: "ULP wajib dipilih untuk peran ini.",
   });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
@@ -168,6 +189,7 @@ function AccountForm({
       email: "",
       telp_number: "",
       role: "user",
+      unit: "",
       password: "",
       confirmPassword: "",
     },
@@ -195,6 +217,7 @@ function AccountForm({
         telp_number: values.telp_number,
         password: values.password,
         role: values.role,
+        unit: resolveUnit(values.role, values.unit),
       });
       toast.success("Akun berhasil dibuat.");
       form.reset();
@@ -291,7 +314,15 @@ function AccountForm({
                       <FormLabel>Peran</FormLabel>
                       <Select
                         value={field.value}
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          // Reset the ULP when moving off a ULP role, so a stale
+                          // value is never submitted or left validating.
+                          if (!rolePicksUlp(value as RoleId))
+                            form.setValue("unit", "", {
+                              shouldValidate: true,
+                            });
+                        }}
                         disabled={busy}
                       >
                         <FormControl>
@@ -315,6 +346,39 @@ function AccountForm({
                     </FormItem>
                   )}
                 />
+                {rolePicksUlp(form.watch("role")) ? (
+                  <FormField
+                    control={form.control}
+                    name="unit"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Pilih ULP</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={busy}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="bg-background h-11 w-full">
+                              <SelectValue placeholder="Pilih ULP" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {unitOptions.map((unit) => (
+                              <SelectItem key={unit} value={unit}>
+                                {unit}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Unit tempat peran ini bertugas.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
                 <FormField
                   control={form.control}
                   name="password"
