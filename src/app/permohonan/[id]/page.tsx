@@ -192,6 +192,14 @@ export default function ApplicationDetailPage() {
           roleId={roleId}
           returnTo={returnTo}
         />
+        <div className="mt-2 flex justify-end">
+          <Button asChild variant="outline" className="min-h-11">
+            <a href="#documents-section">
+              <FileText aria-hidden="true" />
+              Dokumen & evidence ({documents.length})
+            </a>
+          </Button>
+        </div>
 
         {Boolean(relatedError) && (
           <div className="text-destructive mt-4">
@@ -633,7 +641,7 @@ function StageStatusLabel({ status }: { status: ProgressStatus }) {
         : status === "current"
           ? "Sedang berjalan"
           : status === "rejected"
-            ? "Ditolak"
+            ? "Dikembalikan"
             : status === "skipped"
               ? "Dilewati oleh keputusan"
               : "Belum dimulai"}
@@ -676,7 +684,7 @@ function activityStatusLabel(status: ProgressStatus) {
       : status === "skipped"
         ? "Dilewati oleh keputusan"
         : status === "rejected"
-          ? "Ditolak"
+          ? "Dikembalikan"
           : "Belum dimulai";
 }
 
@@ -697,6 +705,7 @@ function DocumentsSection({
   return (
     <section
       aria-labelledby="documents-title"
+      id="documents-section"
       className="bg-card rounded-lg p-5 sm:p-6"
     >
       <div className="border-b pb-3">

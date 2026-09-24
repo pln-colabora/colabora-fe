@@ -501,6 +501,12 @@ export const nodeActions: Record<string, ActionId> = {
 export function getActivity(id: ActionId | null | undefined) {
   return activities.find((activity) => activity.id === id);
 }
+export function getAvailableActivities(application: Application) {
+  return application.availableActions.flatMap((action) => {
+    const activity = getActivity(nodeActions[action.workflow_node]);
+    return activity ? [activity] : [];
+  });
+}
 // Stage 5 tasks each depend only on their matching stage-4 node, not on the
 // whole of stage 4 — e.g. Pemasangan tiang needs WO Tiang done but not WO
 // Konstruksi. Every other stage boundary requires all earlier stages resolved.
@@ -609,7 +615,7 @@ export function getApplicationStatus(application: Application) {
     (
       {
         in_progress: "Menunggu tindakan",
-        returned: "Ditolak",
+        returned: "PK dikembalikan",
         completed: "Selesai",
       } as Record<string, string>
     )[application.status] ?? application.status

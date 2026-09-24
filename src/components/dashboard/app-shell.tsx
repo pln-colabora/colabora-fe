@@ -21,6 +21,10 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { logout, type User } from "@/lib/auth";
+import {
+  confirmUnsavedNavigation,
+  hasUnsavedChanges,
+} from "@/lib/unsaved-navigation";
 import { getRole, type RoleId } from "@/lib/workflow";
 
 const SIDEBAR_STORAGE_KEY = "colabora:sidebar-collapsed";
@@ -106,10 +110,48 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
   }
 
   function handleLogout() {
+    if (hasUnsavedChanges()) {
+      void confirmUnsavedNavigation().then((confirmed) => {
+        if (confirmed) finishLogout();
+      });
+      return;
+    }
+    finishLogout();
+  }
+
+  function finishLogout() {
     setMobileMenuOpen(false);
     void logout();
     toast.success("Berhasil keluar.");
     router.replace("/login");
+  }
+
+  function handleNavigation(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    href: string,
+    onContinue?: () => void,
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+
+    if (!hasUnsavedChanges()) {
+      onContinue?.();
+      return;
+    }
+
+    event.preventDefault();
+    void confirmUnsavedNavigation().then((confirmed) => {
+      if (!confirmed) return;
+      onContinue?.();
+      router.push(href);
+    });
   }
 
   const role = getRole(roleId);
@@ -144,6 +186,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
         >
           <Link
             href="/dashboard"
+            onClick={(event) => handleNavigation(event, "/dashboard")}
             className={`flex min-w-0 items-center ${
               collapsed ? "justify-center" : "gap-3"
             }`}
@@ -179,6 +222,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
               <Link
                 key={id}
                 href={href}
+                onClick={(event) => handleNavigation(event, href)}
                 title={collapsed ? label : undefined}
                 aria-label={collapsed ? label : undefined}
                 aria-current={active === id ? "page" : undefined}
@@ -281,6 +325,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
             </Button>
             <Link
               href="/dashboard"
+              onClick={(event) => handleNavigation(event, "/dashboard")}
               className="flex shrink-0 items-center gap-2.5 py-2 lg:hidden"
             >
               <Image
@@ -384,7 +429,11 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                         key={id}
                         href={href}
                         aria-current={active === id ? "page" : undefined}
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={(event) =>
+                          handleNavigation(event, href, () =>
+                            setMobileMenuOpen(false),
+                          )
+                        }
                         className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium ${
                           active === id
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -429,6 +478,7 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
               <Link
                 key={id}
                 href={href}
+                onClick={(event) => handleNavigation(event, href)}
                 aria-current={active === id ? "page" : undefined}
                 className={`flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center gap-1 border-t-2 px-2 text-xs font-medium ${active === id ? "border-primary bg-accent text-primary" : "text-muted-foreground border-transparent"}`}
               >

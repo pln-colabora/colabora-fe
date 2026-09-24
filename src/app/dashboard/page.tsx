@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
 
@@ -61,6 +61,7 @@ import {
 import {
   getActivity,
   getApplicationStatus,
+  getAvailableActivities,
   getCurrentStage,
   getOwnedSla,
   getOwner,
@@ -330,10 +331,9 @@ function DashboardContent() {
                               <span className="block truncate text-sm font-medium">
                                 {application.customer}
                               </span>
-                              <span className="text-muted-foreground mt-0.5 block font-mono text-xs">
+                              <span className="text-muted-foreground mt-0.5 block truncate text-xs">
                                 {application.number} ·{" "}
-                                {getActivity(application.currentAction)
-                                  ?.shortLabel ?? "Lanjutkan permohonan"}
+                                {availableActivitySummary(application)}
                               </span>
                             </span>
                             <span className="flex shrink-0 items-center gap-3 text-sm">
@@ -887,9 +887,6 @@ function WelcomeDialog({
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold">Prioritas saat ini</h3>
-                <span className="text-muted-foreground text-xs">
-                  Terurut menurut tenggat
-                </span>
               </div>
               <ul className="divide-y rounded-lg border">
                 {topTasks.map(({ application, sla }) => (
@@ -903,10 +900,9 @@ function WelcomeDialog({
                         <span className="block truncate text-sm font-medium">
                           {application.customer}
                         </span>
-                        <span className="text-muted-foreground mt-0.5 block truncate font-mono text-xs">
+                        <span className="text-muted-foreground mt-0.5 block truncate text-xs">
                           {application.number} ·{" "}
-                          {getActivity(application.currentAction)?.shortLabel ??
-                            "Lanjutkan permohonan"}
+                          {availableActivitySummary(application)}
                         </span>
                       </span>
                       <SlaIndicator
@@ -1127,6 +1123,9 @@ function ApplicationRow({
     (item) => item.id === getCurrentStage(application),
   )!;
   const owned = isOwnedBy(application);
+  const activityLabel = owned
+    ? availableActivitySummary(application)
+    : activity?.shortLabel;
   const status = getApplicationStatus(application);
 
   return (
@@ -1148,9 +1147,9 @@ function ApplicationRow({
         <p className="max-w-44 truncate">
           {application.rejected ? "Delegasi PK NPS" : stage.shortLabel}
         </p>
-        {activity && !application.rejected ? (
+        {activityLabel && !application.rejected ? (
           <p className="text-muted-foreground mt-0.5 max-w-44 truncate text-sm">
-            {activity.shortLabel}
+            {activityLabel}
           </p>
         ) : null}
       </td>
@@ -1232,4 +1231,22 @@ function SlaIndicator({
 
 function isOwnedBy(application: Application) {
   return application.availableActions.length > 0;
+}
+
+function availableActivitySummary(application: Application) {
+  const labels = [
+    ...new Set(
+      getAvailableActivities(application).map(
+        (activity) => activity.shortLabel,
+      ),
+    ),
+  ];
+  return labels.length
+    ? `Aktivitas: ${labels.join(", ")}`
+    : application.availableActions.some((action) =>
+          action.path.endsWith("/vendor-assignments"),
+        )
+      ? "Penugasan vendor"
+      : (getActivity(application.currentAction)?.shortLabel ??
+        "Lanjutkan permohonan");
 }
