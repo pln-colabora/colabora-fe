@@ -31,6 +31,16 @@ import {
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DashboardSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -252,6 +262,17 @@ function DashboardContent() {
             />
           </div>
         )}
+        <WelcomeDialog
+          active={isHome && ready && !loadError && !!user}
+          user={user}
+          roleId={roleId}
+          roleQueue={roleQueue}
+          taskHref={dashboardHref("mine")}
+          totalCount={applications.length}
+          activeCount={activeCount}
+          completedCount={completedCount}
+          overdueCount={overdueCount}
+        />
         {isHome && (
           <>
             <p className="text-muted-foreground mt-2 text-sm">
@@ -762,6 +783,213 @@ function DashboardContent() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function WelcomeDialog({
+  active,
+  user,
+  roleId,
+  roleQueue,
+  taskHref,
+  totalCount,
+  activeCount,
+  completedCount,
+  overdueCount,
+}: {
+  active: boolean;
+  user: NonNullable<ReturnType<typeof useSession>["user"]> | null;
+  roleId: ReturnType<typeof getRole>["id"];
+  roleQueue: Application[];
+  taskHref: string;
+  totalCount: number;
+  activeCount: number;
+  completedCount: number;
+  overdueCount: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const isMonitoring = roleId === "admin" || roleId === "super-user";
+  const role = getRole(roleId);
+
+  useEffect(() => {
+    if (!active || !user) return;
+    const key = `colabora:welcome:${user.id}:${user.role}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "shown");
+    } catch {
+      // Keep the welcome available when browser storage is restricted.
+    }
+    setOpen(true);
+  }, [active, user]);
+
+  const topTasks = [...roleQueue]
+    .map((application) => ({
+      application,
+      sla: getOwnedSla(application, roleId) ?? application.sla,
+    }))
+    .sort((a, b) => {
+      const aDeadline = a.sla.deadline ?? "9999";
+      const bDeadline = b.sla.deadline ?? "9999";
+      return aDeadline.localeCompare(bDeadline);
+    })
+    .slice(0, 3);
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-xl gap-0 overflow-hidden border-0 p-0">
+        <AlertDialogHeader className="bg-primary text-primary-foreground flex-row items-start justify-between gap-4 px-5 py-4 text-left sm:px-6">
+          <div className="min-w-0">
+            <p className="text-primary-foreground/80 text-xs font-medium">
+              {role.label} · {role.lane}
+            </p>
+            <AlertDialogTitle className="text-primary-foreground mt-1 text-xl">
+              Selamat datang, {user?.name}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-primary-foreground mt-1 text-sm leading-5">
+              {isMonitoring
+                ? "Berikut ringkasan permohonan yang dapat Anda pantau."
+                : roleQueue.length
+                  ? `Ada ${roleQueue.length} permohonan menunggu tindakan peran Anda.`
+                  : "Saat ini tidak ada permohonan yang menunggu tindakan Anda."}
+            </AlertDialogDescription>
+          </div>
+          <AlertDialogCancel
+            aria-label="Tutup sapaan"
+            className="hover:bg-primary-foreground/15 text-primary-foreground hover:text-primary-foreground -mt-1 -mr-2 size-10 shrink-0 border-0 bg-transparent p-0 shadow-none [&_svg]:size-4"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </AlertDialogCancel>
+        </AlertDialogHeader>
+
+        <div className="max-h-[calc(85dvh-10rem)] overflow-y-auto p-4 sm:p-5">
+          {isMonitoring ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <WelcomeMetric label="Total" value={totalCount} icon={FileText} />
+              <WelcomeMetric
+                label="Dalam proses"
+                value={activeCount}
+                icon={Clock3}
+              />
+              <WelcomeMetric
+                label="Selesai"
+                value={completedCount}
+                icon={CircleCheck}
+              />
+              <WelcomeMetric
+                label="Over SLA"
+                value={overdueCount}
+                icon={TriangleAlert}
+                danger={overdueCount > 0}
+              />
+            </div>
+          ) : topTasks.length ? (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold">Prioritas saat ini</h3>
+                <span className="text-muted-foreground text-xs">
+                  Terurut menurut tenggat
+                </span>
+              </div>
+              <ul className="divide-y rounded-lg border">
+                {topTasks.map(({ application, sla }) => (
+                  <li key={application.id}>
+                    <Link
+                      href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(taskHref)}`}
+                      onClick={() => setOpen(false)}
+                      className="hover:bg-muted/40 flex min-h-16 items-center justify-between gap-3 px-3 py-2.5"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">
+                          {application.customer}
+                        </span>
+                        <span className="text-muted-foreground mt-0.5 block truncate font-mono text-xs">
+                          {application.number} ·{" "}
+                          {getActivity(application.currentAction)?.shortLabel ??
+                            "Lanjutkan permohonan"}
+                        </span>
+                      </span>
+                      <SlaIndicator
+                        application={application}
+                        sla={sla}
+                        compact
+                      />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="bg-muted/50 flex items-start gap-3 rounded-lg border p-4">
+              <CircleCheck
+                className="text-success mt-0.5 size-5 shrink-0"
+                aria-hidden="true"
+              />
+              <div>
+                <h3 className="text-sm font-semibold">
+                  Belum ada tugas untuk Anda
+                </h3>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Permohonan baru yang menjadi tanggung jawab peran Anda akan
+                  muncul di sini.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <AlertDialogFooter className="bg-muted/40 border-t p-4 sm:px-5">
+          <AlertDialogCancel className="min-h-11">Nanti</AlertDialogCancel>
+          <AlertDialogAction asChild className="min-h-11">
+            <Link
+              href={
+                isMonitoring
+                  ? "/dashboard?view=all"
+                  : roleQueue.length
+                    ? taskHref
+                    : "/dashboard?view=all"
+              }
+            >
+              {isMonitoring
+                ? "Buka pemantauan"
+                : roleQueue.length
+                  ? "Buka daftar tugas"
+                  : "Lihat permohonan"}
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function WelcomeMetric({
+  label,
+  value,
+  icon: Icon,
+  danger = false,
+}: {
+  label: string;
+  value: number;
+  icon: typeof FileText;
+  danger?: boolean;
+}) {
+  return (
+    <div className="bg-background rounded-lg border p-3">
+      <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        <Icon
+          className={`size-3.5 ${danger ? "text-destructive" : "text-primary"}`}
+          aria-hidden="true"
+        />
+        {label}
+      </div>
+      <p
+        className={`mt-1.5 text-2xl font-semibold tabular-nums ${danger ? "text-destructive" : "text-foreground"}`}
+      >
+        {value.toLocaleString("id-ID")}
+      </p>
+    </div>
   );
 }
 

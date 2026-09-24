@@ -421,22 +421,24 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
           aria-label="Navigasi seluler"
           className="bg-card fixed inset-x-0 bottom-0 z-20 grid border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
           style={{
-            gridTemplateColumns: `repeat(${destinations.length}, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${navigationDestinations.length}, minmax(0, 1fr))`,
           }}
         >
-          {destinations.map(({ id, href, mobileLabel, icon: Icon }) => (
-            <Link
-              key={id}
-              href={href}
-              aria-current={active === id ? "page" : undefined}
-              className={`flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center gap-1 border-t-2 px-2 text-xs font-medium ${active === id ? "border-primary bg-accent text-primary" : "text-muted-foreground border-transparent"}`}
-            >
-              <Icon className="size-[1.15rem] shrink-0" aria-hidden="true" />
-              <span className="max-w-full truncate leading-4">
-                {mobileLabel}
-              </span>
-            </Link>
-          ))}
+          {navigationDestinations.map(
+            ({ id, href, mobileLabel, icon: Icon }) => (
+              <Link
+                key={id}
+                href={href}
+                aria-current={active === id ? "page" : undefined}
+                className={`flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center gap-1 border-t-2 px-2 text-xs font-medium ${active === id ? "border-primary bg-accent text-primary" : "text-muted-foreground border-transparent"}`}
+              >
+                <Icon className="size-[1.15rem] shrink-0" aria-hidden="true" />
+                <span className="max-w-full truncate leading-4">
+                  {mobileLabel}
+                </span>
+              </Link>
+            ),
+          )}
         </nav>
       </div>
     </div>
