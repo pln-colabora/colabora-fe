@@ -17,11 +17,7 @@ import { useApplication } from "@/hooks/use-application";
 import { useSession } from "@/hooks/use-session";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { getDashboardReturnPath } from "@/lib/navigation";
-import {
-  getActivity,
-  getOwner,
-  getRole,
-} from "@/lib/workflow";
+import { getActivity, getOwner, getRole } from "@/lib/workflow";
 
 export default function SurveyPage() {
   const params = useParams<{ id: string }>();
@@ -30,7 +26,8 @@ export default function SurveyPage() {
   const returnTo = getDashboardReturnPath(searchParams.get("returnTo"));
   const detailHref = `/permohonan/${id}?returnTo=${encodeURIComponent(returnTo)}`;
   const [actionDirty, setActionDirty] = useState(false);
-  const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(actionDirty);
+  const { confirmDiscard, dialog: unsavedDialog } =
+    useUnsavedChanges(actionDirty);
   const { user, error: sessionError } = useSession();
   const router = useRouter();
   const roleId = user?.role ?? "user";
@@ -41,7 +38,10 @@ export default function SurveyPage() {
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
         {sessionError ? (
-          <ErrorNotice error={sessionError} onRetry={() => window.location.reload()} />
+          <ErrorNotice
+            error={sessionError}
+            onRetry={() => window.location.reload()}
+          />
         ) : (
           <FormPageSkeleton />
         )}
@@ -64,7 +64,7 @@ export default function SurveyPage() {
             />
           </div>
           <Button asChild variant="outline" className="mt-6">
-          <Link href={returnTo}>Kembali ke permohonan</Link>
+            <Link href={returnTo}>Kembali ke permohonan</Link>
           </Button>
         </div>
       </AppShell>
@@ -109,8 +109,8 @@ export default function SurveyPage() {
             Survei Perluasan Jaringan
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            {application.customer} · {application.connectionType} ·{" "}
-            <span className="font-mono text-xs">{application.id}</span>
+            {application.number} · {application.customer} ·{" "}
+            {application.connectionType}
           </p>
           <p className="text-muted-foreground mt-1 text-sm">
             PIC survei: {owner.lane} — {owner.label}

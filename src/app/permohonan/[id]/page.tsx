@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 import {
   ArrowLeft,
@@ -11,11 +11,13 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  CircleCheck,
   Circle,
   Clock3,
   Download,
   ExternalLink,
   FileText,
+  FastForward,
   Eye,
   LoaderCircle,
   LockKeyhole,
@@ -23,7 +25,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { ActionForm } from "@/components/dashboard/action-form";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
@@ -40,7 +41,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useApplication } from "@/hooks/use-application";
 import { useDocumentActions } from "@/hooks/use-document-actions";
 import { useSession } from "@/hooks/use-session";
-import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { getDashboardReturnPath } from "@/lib/navigation";
 import {
   formatApiDate,
@@ -68,7 +68,6 @@ import {
 
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const id = params.id;
   const returnTo = getDashboardReturnPath(searchParams.get("returnTo"));
@@ -76,7 +75,6 @@ export default function ApplicationDetailPage() {
   const roleId = user?.role ?? "user";
   const {
     application,
-    setApplication,
     loading,
     error: loadError,
     relatedError,
@@ -84,10 +82,6 @@ export default function ApplicationDetailPage() {
     reload,
   } = useApplication(id, !!user, true);
   const ready = !!application || !loading;
-  const [showForm, setShowForm] = useState(false);
-  const [actionDirty, setActionDirty] = useState(false);
-  const { confirmDiscard, dialog: unsavedDialog } =
-    useUnsavedChanges(actionDirty);
 
   if (!ready)
     return (
@@ -134,25 +128,11 @@ export default function ApplicationDetailPage() {
   const history = getHistory(application);
   const ownedSla = getOwnedSla(application, roleId);
 
-  function handleAdvanced(nextApplication: Application) {
-    setApplication(nextApplication);
-    setShowForm(false);
-    reload();
-  }
-
   return (
     <AppShell active="applications" roleId={roleId} user={user}>
-      {unsavedDialog}
       <div className="mx-auto w-full max-w-[1480px] min-w-0 overflow-x-clip">
         <Link
           href={returnTo}
-          onClick={(event) => {
-            if (!actionDirty) return;
-            event.preventDefault();
-            void confirmDiscard().then((confirmed) => {
-              if (confirmed) router.push(returnTo);
-            });
-          }}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -211,11 +191,6 @@ export default function ApplicationDetailPage() {
           application={application}
           roleId={roleId}
           returnTo={returnTo}
-          showForm={showForm}
-          onShowForm={() => setShowForm(true)}
-          onCancel={() => setShowForm(false)}
-          onAdvanced={handleAdvanced}
-          onDirtyChange={setActionDirty}
         />
 
         {Boolean(relatedError) && (
@@ -257,20 +232,10 @@ function CurrentAction({
   application,
   roleId,
   returnTo,
-  showForm,
-  onShowForm,
-  onCancel,
-  onAdvanced,
-  onDirtyChange,
 }: {
   application: Application;
   roleId: RoleId;
   returnTo: string;
-  showForm: boolean;
-  onShowForm: () => void;
-  onCancel: () => void;
-  onAdvanced: (application: Application) => void;
-  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [selectedNode, setSelectedNode] = useState("");
   const available = application.availableActions.filter(
@@ -362,7 +327,6 @@ function CurrentAction({
             value={action?.workflow_node}
             onValueChange={(value) => {
               setSelectedNode(value);
-              onCancel();
             }}
           >
             <SelectTrigger id="available-action" className="w-full">
@@ -431,26 +395,17 @@ function CurrentAction({
               <ChevronRight aria-hidden="true" />
             </Link>
           </Button>
-        ) : ownsAction && !showForm ? (
-          <Button
-            className="min-h-11 w-full shrink-0 sm:w-auto"
-            onClick={onShowForm}
-          >
-            Lanjutkan proses
-            <ChevronRight aria-hidden="true" />
+        ) : ownsAction && action ? (
+          <Button asChild className="min-h-11 w-full shrink-0 sm:w-auto">
+            <Link
+              href={`/permohonan/${application.id}/aktivitas?node=${encodeURIComponent(action.workflow_node)}&returnTo=${encodeURIComponent(`/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`)}`}
+            >
+              Lanjutkan proses
+              <ChevronRight aria-hidden="true" />
+            </Link>
           </Button>
         ) : null}
       </div>
-      {showForm && ownsAction && !isSurvey ? (
-        <ActionForm
-          application={application}
-          key={action!.workflow_node}
-          action={action!}
-          onCancel={onCancel}
-          onSaved={onAdvanced}
-          onDirtyChange={onDirtyChange}
-        />
-      ) : null}
     </section>
   );
 }
@@ -466,8 +421,7 @@ function getActivityNotes(id: ActionId, application: Application): string[] {
       const payload = (node.payload ?? {}) as Record<string, unknown>;
       keys.forEach((key) => {
         const value = payload[key];
-        if (typeof value === "string" && value.trim())
-          notes.push(value.trim());
+        if (typeof value === "string" && value.trim()) notes.push(value.trim());
       });
     });
   return notes;
@@ -653,15 +607,36 @@ function StageMarker({ status }: { status: ProgressStatus }) {
 }
 
 function StageStatusLabel({ status }: { status: ProgressStatus }) {
+  const Icon =
+    status === "done"
+      ? CircleCheck
+      : status === "current"
+        ? Clock3
+        : status === "rejected"
+          ? XCircle
+          : status === "skipped"
+            ? FastForward
+            : Circle;
+  const color =
+    status === "done"
+      ? "text-success"
+      : status === "current"
+        ? "text-warning"
+        : status === "rejected"
+          ? "text-destructive"
+          : "text-muted-foreground";
   return (
-    <span className="text-muted-foreground text-xs">
+    <span className={`inline-flex items-center gap-1.5 text-xs ${color}`}>
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       {status === "done"
         ? "Selesai"
         : status === "current"
           ? "Sedang berjalan"
           : status === "rejected"
             ? "Ditolak"
-            : "Belum dimulai"}
+            : status === "skipped"
+              ? "Dilewati oleh keputusan"
+              : "Belum dimulai"}
     </span>
   );
 }

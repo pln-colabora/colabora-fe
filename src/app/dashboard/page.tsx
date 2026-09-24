@@ -6,11 +6,21 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import {
+  Archive,
   ArrowRight,
+  Calculator,
+  CircleCheck,
+  ClipboardCheck,
+  Construction,
   Clock3,
+  FileText,
   FilePlus2,
+  ListTodo,
+  MapPin,
   Search,
   TriangleAlert,
+  UserRound,
+  Zap,
   X,
 } from "lucide-react";
 
@@ -42,6 +52,8 @@ import {
   getActivity,
   getApplicationStatus,
   getCurrentStage,
+  getOwnedSla,
+  getOwner,
   getRole,
   stages,
   type Application,
@@ -64,6 +76,7 @@ function DashboardContent() {
   const view: View = searchParams.get("view") === "mine" ? "mine" : "all";
   const urlQuery = searchParams.get("q") ?? "";
   const statusFilter = searchParams.get("status") ?? "";
+  const stageFilter = searchParams.get("stage") ?? "";
   const [searchQuery, setSearchQuery] = useState(urlQuery);
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
@@ -116,6 +129,7 @@ function DashboardContent() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("q");
     params.delete("status");
+    params.delete("stage");
     router.replace(`/dashboard?${params.toString()}`, { scroll: false });
   }
 
@@ -131,9 +145,11 @@ function DashboardContent() {
   const search = searchQuery.trim().toLocaleLowerCase("id-ID");
   const searchTerms = search.split(/\s+/).filter(Boolean);
 
-  const filteredApplications = (
-    view === "mine" ? roleQueue : applications
-  ).filter((application) => {
+  const sourceApplications = view === "mine" ? roleQueue : applications;
+  const filteredApplications = sourceApplications.filter((application) => {
+    if (stageFilter && String(getCurrentStage(application)) !== stageFilter) {
+      return false;
+    }
     if (statusFilter && getApplicationStatus(application) !== statusFilter) {
       return false;
     }
@@ -168,7 +184,7 @@ function DashboardContent() {
 
   const role = getRole(roleId);
   const visibleApplications =
-    isHome && !search && !statusFilter
+    isHome && !search && !statusFilter && !stageFilter
       ? [...applications]
           .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
           .slice(0, 5)
@@ -182,8 +198,8 @@ function DashboardContent() {
   const overdueCount = applications.filter(
     (item) => item.sla.tone === "late",
   ).length;
-  const showProcessDistribution =
-    !isHome && ready && (roleId === "admin" || roleId === "super-user");
+  const showKanban =
+    isHome && ready && (roleId === "admin" || roleId === "super-user");
 
   return (
     <AppShell
@@ -244,6 +260,87 @@ function DashboardContent() {
                 ? "Pemantauan tanpa mengubah aktivitas"
                 : "Permohonan PB/PD"}
             </p>
+            {roleId !== "admin" && roleId !== "super-user" ? (
+              <section
+                className="bg-card mt-5 rounded-lg border p-4 sm:p-5"
+                aria-labelledby="my-work-title"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+                  <div>
+                    <h2
+                      id="my-work-title"
+                      className="font-display text-lg font-semibold"
+                    >
+                      Tugas saya
+                    </h2>
+                    <p className="text-muted-foreground mt-1 text-sm">
+                      {ready
+                        ? `${roleQueue.length} permohonan menunggu tindakan peran Anda`
+                        : "Memuat tugas..."}
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" className="min-h-11">
+                    <Link href={dashboardHref("mine")}>
+                      Lihat semua tugas <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </div>
+                {ready && roleQueue.length ? (
+                  <ol className="divide-y">
+                    {[...roleQueue]
+                      .map((application) => ({
+                        application,
+                        sla:
+                          getOwnedSla(application, roleId) ?? application.sla,
+                      }))
+                      .sort((a, b) => {
+                        const aDeadline = a.sla.deadline ?? "9999";
+                        const bDeadline = b.sla.deadline ?? "9999";
+                        return aDeadline.localeCompare(bDeadline);
+                      })
+                      .slice(0, 3)
+                      .map(({ application, sla }) => (
+                        <li key={application.id}>
+                          <Link
+                            href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(`/dashboard?${searchParams.toString()}`)}`}
+                            className="hover:bg-muted/30 flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium">
+                                {application.customer}
+                              </span>
+                              <span className="text-muted-foreground mt-0.5 block font-mono text-xs">
+                                {application.number} ·{" "}
+                                {getActivity(application.currentAction)
+                                  ?.shortLabel ?? "Lanjutkan permohonan"}
+                              </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-3 text-sm">
+                              <SlaIndicator
+                                application={application}
+                                sla={sla}
+                              />
+                              <ArrowRight
+                                className="text-primary size-4"
+                                aria-hidden="true"
+                              />
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                  </ol>
+                ) : ready ? (
+                  <p className="text-muted-foreground py-4 text-sm">
+                    Belum ada tugas yang menunggu tindakan Anda.
+                  </p>
+                ) : (
+                  <div role="status" className="space-y-2 pt-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                )}
+              </section>
+            ) : null}
             <section
               aria-label="Ringkasan seluruh permohonan"
               className="mt-6 grid grid-cols-2 gap-3 lg:gap-4 xl:grid-cols-4"
@@ -273,69 +370,155 @@ function DashboardContent() {
                 ready={ready}
               />
             </section>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-muted-foreground text-sm">
-                {roleId === "super-user" ? (
-                  "Pantau progres seluruh permohonan PB/PD."
-                ) : (
-                  <>
-                    <strong className="text-foreground font-semibold">
-                      {ready ? roleQueue.length : "..."} permohonan
-                    </strong>{" "}
-                    menunggu tindakan peran Anda.
-                  </>
-                )}
-              </p>
-              <Button asChild className="min-h-11 w-full sm:w-auto">
-                <Link href={dashboardHref("mine")}>
-                  {roleId === "super-user"
-                    ? "Lihat permohonan dalam pemantauan"
-                    : "Lihat tugas saya"}{" "}
-                  <ArrowRight aria-hidden="true" />
-                </Link>
-              </Button>
-            </div>
           </>
         )}
 
-        {showProcessDistribution && (
-          <section
-            className="bg-card mt-6 overflow-hidden rounded-lg"
-            aria-labelledby="distribution-title"
-          >
-            <div className="flex items-center justify-between gap-4 border-b px-4 py-3.5">
-              <h2
-                id="distribution-title"
-                className="font-display text-base font-semibold"
+        {showKanban && (
+          <section className="mt-6" aria-labelledby="process-board-title">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2
+                  id="process-board-title"
+                  className="font-display text-lg font-semibold"
+                >
+                  Permohonan per tahap
+                </h2>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Pantau posisi proses dan SLA tanpa membuka setiap detail.
+                </p>
+              </div>
+              <Link
+                href={dashboardHref("all")}
+                className="text-primary inline-flex min-h-11 items-center gap-2 text-sm font-medium hover:underline"
               >
-                Posisi proses aktif
-              </h2>
-              <span className="text-muted-foreground text-sm">
-                {stages.length} tahap utama
-              </span>
+                Buka daftar <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7">
-              {stages.map((stage) => {
-                const count = applications.filter(
-                  (application) =>
-                    application.status === "in_progress" &&
-                    application.currentStage === stage.id,
-                ).length;
-                return (
-                  <div
-                    key={stage.id}
-                    className="border-r border-b px-4 py-3.5 last:border-r-0 xl:border-b-0 sm:[&:nth-child(4n)]:border-r-0 xl:[&:nth-child(4n)]:border-r xl:[&:nth-child(7n)]:border-r-0"
-                  >
-                    <p className="text-muted-foreground text-xs font-medium">
-                      Tahap {stage.id}
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums">
-                      {count}
-                    </p>
-                    <p className="mt-1 text-sm leading-5">{stage.shortLabel}</p>
-                  </div>
-                );
-              })}
+            <div
+              className="-mx-4 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6"
+              role="region"
+              aria-label="Papan proses permohonan"
+              tabIndex={0}
+            >
+              <div className="grid min-w-max auto-cols-[minmax(260px,300px)] grid-flow-col gap-3">
+                {stages.map((stage) => {
+                  const StageIcon = [
+                    FilePlus2,
+                    MapPin,
+                    Calculator,
+                    ClipboardCheck,
+                    Construction,
+                    Zap,
+                    Archive,
+                  ][stage.id - 1];
+                  const items = applications.filter(
+                    (application) =>
+                      application.status === "in_progress" &&
+                      getCurrentStage(application) === stage.id,
+                  );
+                  const late = items.filter(
+                    (application) => application.sla.tone === "late",
+                  ).length;
+                  return (
+                    <section
+                      key={stage.id}
+                      className="bg-muted/55 rounded-lg border p-3"
+                      aria-label={`Tahap ${stage.id}: ${stage.label}`}
+                    >
+                      <header className="border-border/80 flex items-center justify-between gap-3 border-b pb-3">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <StageIcon
+                            className="text-primary size-[1.125rem] shrink-0"
+                            aria-hidden="true"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-muted-foreground text-xs font-medium">
+                              Tahap {stage.id}
+                            </p>
+                            <h3 className="mt-0.5 truncate text-sm font-semibold">
+                              {stage.shortLabel}
+                            </h3>
+                          </div>
+                        </div>
+                        <span
+                          className="bg-background inline-flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold tabular-nums"
+                          aria-label={`${items.length} permohonan`}
+                        >
+                          {items.length}
+                        </span>
+                      </header>
+                      {late > 0 && (
+                        <p className="text-destructive mt-2 inline-flex items-center gap-1.5 text-xs font-medium">
+                          <TriangleAlert
+                            className="size-3.5"
+                            aria-hidden="true"
+                          />
+                          {late} melewati SLA
+                        </p>
+                      )}
+                      <div className="mt-2 space-y-2">
+                        {items.length ? (
+                          items.map((application) => {
+                            const activity = getActivity(
+                              application.currentAction,
+                            );
+                            const owner = activity
+                              ? getRole(getOwner(activity, application))
+                              : null;
+                            return (
+                              <Link
+                                key={application.id}
+                                href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(`/dashboard?${searchParams.toString()}`)}`}
+                                className="bg-card hover:border-primary/50 block rounded-md border p-3 transition-colors focus-visible:outline-2"
+                              >
+                                <span className="font-mono text-xs font-medium">
+                                  {application.number}
+                                </span>
+                                <span className="mt-1 block truncate text-sm font-medium">
+                                  {application.customer}
+                                </span>
+                                <span className="text-muted-foreground mt-2 flex min-w-0 items-center gap-1.5 truncate text-xs">
+                                  <ListTodo
+                                    className="size-3.5 shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="truncate">
+                                    {activity?.shortLabel ?? stage.shortLabel} ·{" "}
+                                    {application.unit}
+                                  </span>
+                                </span>
+                                <span className="border-border/80 mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-dashed pt-2.5">
+                                  {owner ? (
+                                    <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+                                      <UserRound
+                                        className="size-3.5 shrink-0"
+                                        aria-hidden="true"
+                                      />
+                                      <span className="truncate">
+                                        {owner.label}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span />
+                                  )}
+                                  <SlaIndicator
+                                    application={application}
+                                    compact
+                                  />
+                                </span>
+                              </Link>
+                            );
+                          })
+                        ) : (
+                          <p className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
+                            Tidak ada permohonan aktif
+                          </p>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             </div>
           </section>
         )}
@@ -348,7 +531,7 @@ function DashboardContent() {
           <div
             className={
               isHome
-                ? "flex items-center justify-between gap-4 border-b p-4 lg:px-5"
+                ? "flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between lg:px-5"
                 : "flex flex-col gap-4 border-b p-4 lg:p-5"
             }
           >
@@ -446,7 +629,7 @@ function DashboardContent() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {(searchQuery || statusFilter) && (
+                  {(searchQuery || statusFilter || stageFilter) && (
                     <Button
                       variant="ghost"
                       className="min-h-11"
@@ -459,6 +642,42 @@ function DashboardContent() {
               </div>
             )}
           </div>
+
+          {!isHome && (
+            <nav
+              aria-label="Filter tahap proses"
+              className="flex gap-2 overflow-x-auto border-b px-4 py-3 lg:px-5"
+            >
+              <Link
+                href={setDashboardStage(searchParams.toString(), "")}
+                aria-current={!stageFilter ? "page" : undefined}
+                className={`inline-flex min-h-10 shrink-0 items-center rounded-md px-3 text-sm font-medium ${!stageFilter ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+              >
+                Semua tahap
+              </Link>
+              {stages.map((stage) => {
+                const count = sourceApplications.filter(
+                  (application) => getCurrentStage(application) === stage.id,
+                ).length;
+                return (
+                  <Link
+                    key={stage.id}
+                    href={setDashboardStage(
+                      searchParams.toString(),
+                      String(stage.id),
+                    )}
+                    aria-current={
+                      stageFilter === String(stage.id) ? "page" : undefined
+                    }
+                    className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium ${stageFilter === String(stage.id) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {stage.shortLabel}
+                    <span className="tabular-nums">{count}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
 
           {!ready ? (
             <div role="status" aria-busy="true" className="space-y-3 p-5">
@@ -546,6 +765,13 @@ function DashboardContent() {
   );
 }
 
+function setDashboardStage(query: string, stage: string) {
+  const params = new URLSearchParams(query);
+  if (stage) params.set("stage", stage);
+  else params.delete("stage");
+  return `/dashboard?${params.toString()}`;
+}
+
 function ApplicationListItem({
   application,
   returnTo,
@@ -624,6 +850,13 @@ function SummaryMetric({
   ready: boolean;
   tone?: "default" | "primary" | "warning" | "success";
 }) {
+  const Icon = danger
+    ? TriangleAlert
+    : tone === "success"
+      ? CircleCheck
+      : tone === "warning"
+        ? Clock3
+        : FileText;
   const valueColor =
     danger && value > 0
       ? "text-destructive"
@@ -637,13 +870,13 @@ function SummaryMetric({
   return (
     <div className="bg-card rounded-lg px-4 py-4 lg:px-5 lg:py-5">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-foreground text-sm font-medium">{label}</p>
-        {danger && value > 0 ? (
-          <TriangleAlert
-            className="text-destructive size-4"
+        <p className="text-foreground inline-flex items-center gap-2 text-sm font-medium">
+          <Icon
+            className={`size-4 shrink-0 ${valueColor}`}
             aria-hidden="true"
           />
-        ) : null}
+          {label}
+        </p>
       </div>
       <p className={`mt-2 text-3xl font-semibold tabular-nums ${valueColor}`}>
         {ready ? value.toLocaleString("id-ID") : "—"}
@@ -723,11 +956,22 @@ function ApplicationRow({
   );
 }
 
-function SlaIndicator({ application }: { application: Application }) {
-  const sla = application.sla;
-  const remainingLabel = formatSlaRemaining(
-    getSlaDaysRemaining(sla.deadline),
-  );
+function SlaIndicator({
+  application,
+  sla = application.sla,
+  compact = false,
+}: {
+  application: Application;
+  sla?: Application["sla"];
+  compact?: boolean;
+}) {
+  const remainingLabel = formatSlaRemaining(getSlaDaysRemaining(sla.deadline));
+  const Icon =
+    sla.tone === "late"
+      ? TriangleAlert
+      : sla.tone === "done"
+        ? CircleCheck
+        : Clock3;
   const color =
     sla.tone === "late"
       ? "text-destructive"
@@ -738,9 +982,9 @@ function SlaIndicator({ application }: { application: Application }) {
           : "text-foreground";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${color}`}
+      className={`inline-flex items-center gap-1.5 font-medium ${compact ? "text-xs whitespace-nowrap" : "text-sm whitespace-nowrap"} ${color}`}
     >
-      <Clock3 className="size-3.5" aria-hidden="true" />
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       <span>
         <span className="block">{remainingLabel || sla.label}</span>
         {sla.deadline ? (
