@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -197,6 +198,15 @@ export function LoginForm({
           {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
           {busy ? "Memverifikasi..." : "Masuk"}
         </Button>
+        <p className="text-muted-foreground text-center text-sm">
+          Vendor belum punya akun?{" "}
+          <Link
+            href="/registrasi"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Registrasi vendor
+          </Link>
+        </p>
       </form>
     </Form>
   );
