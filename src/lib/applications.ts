@@ -336,7 +336,7 @@ export async function getVendorAccounts(role: string) {
   do {
     const response = await apiRequest<
       Array<{ id: string; name: string; role: string }>
-    >("/api/user?page=" + page + "&per_page=100");
+    >("/api/vendor?page=" + page + "&per_page=100");
     vendors.push(...response.data.filter((user) => user.role === role));
     maxPage = response.pagination?.max_page ?? 1;
     page++;
