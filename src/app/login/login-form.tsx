@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -58,6 +59,13 @@ export function LoginForm({
   async function handleSubmit(values: LoginValues) {
     try {
       const user = await login(values.email, values.password);
+      try {
+        window.sessionStorage.removeItem(
+          `colabora:welcome:${user.id}:${user.role}`,
+        );
+      } catch {
+        // A successful login should still proceed when browser storage is restricted.
+      }
       form.reset({ email: values.email, password: "" });
       toast.success(`Berhasil masuk sebagai ${user.name}.`);
       router.replace("/dashboard");
@@ -190,6 +198,15 @@ export function LoginForm({
           {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
           {busy ? "Memverifikasi..." : "Masuk"}
         </Button>
+        <p className="text-muted-foreground text-center text-sm">
+          Vendor belum punya akun?{" "}
+          <Link
+            href="/registrasi"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Registrasi vendor
+          </Link>
+        </p>
       </form>
     </Form>
   );

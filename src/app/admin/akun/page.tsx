@@ -157,7 +157,19 @@ export default function AccountsPage() {
                   Tidak ada akun yang sesuai pencarian.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div
+                  className="overflow-x-auto"
+                  role="region"
+                  aria-label="Daftar akun"
+                  aria-describedby="account-table-hint"
+                  tabIndex={0}
+                >
+                  <p
+                    id="account-table-hint"
+                    className="text-muted-foreground px-4 pt-3 text-xs sm:hidden"
+                  >
+                    Geser tabel ke samping untuk melihat semua kolom.
+                  </p>
                   <table className="w-full min-w-[40rem] text-left text-sm">
                     <thead className="bg-muted/60 text-muted-foreground border-b">
                       <tr>

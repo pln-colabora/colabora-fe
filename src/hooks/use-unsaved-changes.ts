@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from "react";
 
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { registerUnsavedChangeGuard } from "@/lib/unsaved-navigation";
 
 export function useUnsavedChanges(isDirty: boolean) {
   const { confirm, dialog } = useConfirmDialog();
@@ -27,6 +28,11 @@ export function useUnsavedChanges(isDirty: boolean) {
       destructive: true,
     });
   }, [confirm, isDirty]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    return registerUnsavedChangeGuard(confirmDiscard);
+  }, [confirmDiscard, isDirty]);
 
   return { confirmDiscard, dialog };
 }

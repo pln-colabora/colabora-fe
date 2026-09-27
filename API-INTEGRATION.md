@@ -44,7 +44,7 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 | Preview dokumen | GET `/api/documents/{doc_id}/preview` | Bearer token; bytes dokumen untuk dibuka di browser |
 | Unduh dokumen | GET `P/documents/{doc_id}` | Bearer token; response mengikuti redirect presigned URL |
 | Riwayat | GET `P/logs` | Judul aktivitas dipetakan dari `workflow_node`; `detail` ditampilkan terpisah |
-| Daftar akun vendor | GET `/api/user?page=...&per_page=100` | Filter role dari response; hanya dimuat saat disclosure penugasan dibuka |
+| Daftar akun vendor | GET `/api/vendor?page=...&per_page=100` | Filter role dari response; hanya dimuat saat disclosure penugasan dibuka |
 | Penugasan vendor | POST `P/vendor-assignments` | `vendor_id`, `vendor_role` |
 
 Submit memakai path dan method dari `available_actions` yang diterima server, dengan batas path permohonan yang sama. Tidak ada endpoint terpisah untuk aksi UI yang memang digabung backend. Response mutation langsung ditampilkan, kemudian detail, dokumen, dan riwayat dimuat ulang. Kegagalan refresh setelah mutation tidak meminta pengguna mengulang mutation yang sudah sukses.

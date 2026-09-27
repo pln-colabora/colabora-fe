@@ -7,7 +7,10 @@ export function StatusBadge({
 }: {
   status: ReturnType<typeof getApplicationStatus>;
 }) {
-  const isCritical = status === "Ditolak" || status === "Terlambat";
+  const isCritical =
+    status === "PK dikembalikan" ||
+    status === "Ditolak" ||
+    status === "Terlambat";
   const isComplete = status === "Selesai";
   const style = isCritical
     ? "border-destructive-border bg-destructive-surface text-destructive"

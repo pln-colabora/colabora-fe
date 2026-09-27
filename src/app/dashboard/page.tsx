@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
 
@@ -6,11 +6,21 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import {
+  Archive,
   ArrowRight,
+  Calculator,
+  CircleCheck,
+  ClipboardCheck,
+  Construction,
   Clock3,
+  FileText,
   FilePlus2,
+  ListTodo,
+  MapPin,
   Search,
   TriangleAlert,
+  UserRound,
+  Zap,
   X,
 } from "lucide-react";
 
@@ -21,6 +31,16 @@ import {
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DashboardSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -41,7 +61,10 @@ import {
 import {
   getActivity,
   getApplicationStatus,
+  getAvailableActivities,
   getCurrentStage,
+  getOwnedSla,
+  getOwner,
   getRole,
   stages,
   type Application,
@@ -64,6 +87,7 @@ function DashboardContent() {
   const view: View = searchParams.get("view") === "mine" ? "mine" : "all";
   const urlQuery = searchParams.get("q") ?? "";
   const statusFilter = searchParams.get("status") ?? "";
+  const stageFilter = searchParams.get("stage") ?? "";
   const [searchQuery, setSearchQuery] = useState(urlQuery);
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
@@ -116,6 +140,7 @@ function DashboardContent() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("q");
     params.delete("status");
+    params.delete("stage");
     router.replace(`/dashboard?${params.toString()}`, { scroll: false });
   }
 
@@ -131,9 +156,11 @@ function DashboardContent() {
   const search = searchQuery.trim().toLocaleLowerCase("id-ID");
   const searchTerms = search.split(/\s+/).filter(Boolean);
 
-  const filteredApplications = (
-    view === "mine" ? roleQueue : applications
-  ).filter((application) => {
+  const sourceApplications = view === "mine" ? roleQueue : applications;
+  const filteredApplications = sourceApplications.filter((application) => {
+    if (stageFilter && String(getCurrentStage(application)) !== stageFilter) {
+      return false;
+    }
     if (statusFilter && getApplicationStatus(application) !== statusFilter) {
       return false;
     }
@@ -168,7 +195,7 @@ function DashboardContent() {
 
   const role = getRole(roleId);
   const visibleApplications =
-    isHome && !search && !statusFilter
+    isHome && !search && !statusFilter && !stageFilter
       ? [...applications]
           .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
           .slice(0, 5)
@@ -182,8 +209,8 @@ function DashboardContent() {
   const overdueCount = applications.filter(
     (item) => item.sla.tone === "late",
   ).length;
-  const showProcessDistribution =
-    !isHome && ready && (roleId === "admin" || roleId === "super-user");
+  const showKanban =
+    isHome && ready && (roleId === "admin" || roleId === "super-user");
 
   return (
     <AppShell
@@ -236,6 +263,17 @@ function DashboardContent() {
             />
           </div>
         )}
+        <WelcomeDialog
+          active={isHome && ready && !loadError && !!user}
+          user={user}
+          roleId={roleId}
+          roleQueue={roleQueue}
+          taskHref={dashboardHref("mine")}
+          totalCount={applications.length}
+          activeCount={activeCount}
+          completedCount={completedCount}
+          overdueCount={overdueCount}
+        />
         {isHome && (
           <>
             <p className="text-muted-foreground mt-2 text-sm">
@@ -244,6 +282,86 @@ function DashboardContent() {
                 ? "Pemantauan tanpa mengubah aktivitas"
                 : "Permohonan PB/PD"}
             </p>
+            {roleId !== "admin" && roleId !== "super-user" ? (
+              <section
+                className="bg-card mt-5 rounded-lg border p-4 sm:p-5"
+                aria-labelledby="my-work-title"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+                  <div>
+                    <h2
+                      id="my-work-title"
+                      className="font-display text-lg font-semibold"
+                    >
+                      Tugas saya
+                    </h2>
+                    <p className="text-muted-foreground mt-1 text-sm">
+                      {ready
+                        ? `${roleQueue.length} permohonan menunggu tindakan peran Anda`
+                        : "Memuat tugas..."}
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" className="min-h-11">
+                    <Link href={dashboardHref("mine")}>
+                      Lihat semua tugas <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </div>
+                {ready && roleQueue.length ? (
+                  <ol className="divide-y">
+                    {[...roleQueue]
+                      .map((application) => ({
+                        application,
+                        sla:
+                          getOwnedSla(application, roleId) ?? application.sla,
+                      }))
+                      .sort((a, b) => {
+                        const aDeadline = a.sla.deadline ?? "9999";
+                        const bDeadline = b.sla.deadline ?? "9999";
+                        return aDeadline.localeCompare(bDeadline);
+                      })
+                      .slice(0, 3)
+                      .map(({ application, sla }) => (
+                        <li key={application.id}>
+                          <Link
+                            href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(`/dashboard?${searchParams.toString()}`)}`}
+                            className="hover:bg-muted/30 flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium">
+                                {application.customer}
+                              </span>
+                              <span className="text-muted-foreground mt-0.5 block truncate text-xs">
+                                {application.number} ·{" "}
+                                {availableActivitySummary(application)}
+                              </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-3 text-sm">
+                              <SlaIndicator
+                                application={application}
+                                sla={sla}
+                              />
+                              <ArrowRight
+                                className="text-primary size-4"
+                                aria-hidden="true"
+                              />
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                  </ol>
+                ) : ready ? (
+                  <p className="text-muted-foreground py-4 text-sm">
+                    Belum ada tugas yang menunggu tindakan Anda.
+                  </p>
+                ) : (
+                  <div role="status" className="space-y-2 pt-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                )}
+              </section>
+            ) : null}
             <section
               aria-label="Ringkasan seluruh permohonan"
               className="mt-6 grid grid-cols-2 gap-3 lg:gap-4 xl:grid-cols-4"
@@ -273,69 +391,155 @@ function DashboardContent() {
                 ready={ready}
               />
             </section>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-muted-foreground text-sm">
-                {roleId === "super-user" ? (
-                  "Pantau progres seluruh permohonan PB/PD."
-                ) : (
-                  <>
-                    <strong className="text-foreground font-semibold">
-                      {ready ? roleQueue.length : "..."} permohonan
-                    </strong>{" "}
-                    menunggu tindakan peran Anda.
-                  </>
-                )}
-              </p>
-              <Button asChild className="min-h-11 w-full sm:w-auto">
-                <Link href={dashboardHref("mine")}>
-                  {roleId === "super-user"
-                    ? "Lihat permohonan dalam pemantauan"
-                    : "Lihat tugas saya"}{" "}
-                  <ArrowRight aria-hidden="true" />
-                </Link>
-              </Button>
-            </div>
           </>
         )}
 
-        {showProcessDistribution && (
-          <section
-            className="bg-card mt-6 overflow-hidden rounded-lg"
-            aria-labelledby="distribution-title"
-          >
-            <div className="flex items-center justify-between gap-4 border-b px-4 py-3.5">
-              <h2
-                id="distribution-title"
-                className="font-display text-base font-semibold"
+        {showKanban && (
+          <section className="mt-6" aria-labelledby="process-board-title">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2
+                  id="process-board-title"
+                  className="font-display text-lg font-semibold"
+                >
+                  Permohonan per tahap
+                </h2>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Pantau posisi proses dan SLA tanpa membuka setiap detail.
+                </p>
+              </div>
+              <Link
+                href={dashboardHref("all")}
+                className="text-primary inline-flex min-h-11 items-center gap-2 text-sm font-medium hover:underline"
               >
-                Posisi proses aktif
-              </h2>
-              <span className="text-muted-foreground text-sm">
-                {stages.length} tahap utama
-              </span>
+                Buka daftar <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7">
-              {stages.map((stage) => {
-                const count = applications.filter(
-                  (application) =>
-                    application.status === "in_progress" &&
-                    application.currentStage === stage.id,
-                ).length;
-                return (
-                  <div
-                    key={stage.id}
-                    className="border-r border-b px-4 py-3.5 last:border-r-0 xl:border-b-0 sm:[&:nth-child(4n)]:border-r-0 xl:[&:nth-child(4n)]:border-r xl:[&:nth-child(7n)]:border-r-0"
-                  >
-                    <p className="text-muted-foreground text-xs font-medium">
-                      Tahap {stage.id}
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums">
-                      {count}
-                    </p>
-                    <p className="mt-1 text-sm leading-5">{stage.shortLabel}</p>
-                  </div>
-                );
-              })}
+            <div
+              className="-mx-4 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6"
+              role="region"
+              aria-label="Papan proses permohonan"
+              tabIndex={0}
+            >
+              <div className="grid min-w-max auto-cols-[minmax(260px,300px)] grid-flow-col gap-3">
+                {stages.map((stage) => {
+                  const StageIcon = [
+                    FilePlus2,
+                    MapPin,
+                    Calculator,
+                    ClipboardCheck,
+                    Construction,
+                    Zap,
+                    Archive,
+                  ][stage.id - 1];
+                  const items = applications.filter(
+                    (application) =>
+                      application.status === "in_progress" &&
+                      getCurrentStage(application) === stage.id,
+                  );
+                  const late = items.filter(
+                    (application) => application.sla.tone === "late",
+                  ).length;
+                  return (
+                    <section
+                      key={stage.id}
+                      className="bg-muted/55 rounded-lg border p-3"
+                      aria-label={`Tahap ${stage.id}: ${stage.label}`}
+                    >
+                      <header className="border-border/80 flex items-center justify-between gap-3 border-b pb-3">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <StageIcon
+                            className="text-primary size-[1.125rem] shrink-0"
+                            aria-hidden="true"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-muted-foreground text-xs font-medium">
+                              Tahap {stage.id}
+                            </p>
+                            <h3 className="mt-0.5 truncate text-sm font-semibold">
+                              {stage.shortLabel}
+                            </h3>
+                          </div>
+                        </div>
+                        <span
+                          className="bg-background inline-flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold tabular-nums"
+                          aria-label={`${items.length} permohonan`}
+                        >
+                          {items.length}
+                        </span>
+                      </header>
+                      {late > 0 && (
+                        <p className="text-destructive mt-2 inline-flex items-center gap-1.5 text-xs font-medium">
+                          <TriangleAlert
+                            className="size-3.5"
+                            aria-hidden="true"
+                          />
+                          {late} melewati SLA
+                        </p>
+                      )}
+                      <div className="mt-2 space-y-2">
+                        {items.length ? (
+                          items.map((application) => {
+                            const activity = getActivity(
+                              application.currentAction,
+                            );
+                            const owner = activity
+                              ? getRole(getOwner(activity, application))
+                              : null;
+                            return (
+                              <Link
+                                key={application.id}
+                                href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(`/dashboard?${searchParams.toString()}`)}`}
+                                className="bg-card hover:border-primary/50 block rounded-md border p-3 transition-colors focus-visible:outline-2"
+                              >
+                                <span className="font-mono text-xs font-medium">
+                                  {application.number}
+                                </span>
+                                <span className="mt-1 block truncate text-sm font-medium">
+                                  {application.customer}
+                                </span>
+                                <span className="text-muted-foreground mt-2 flex min-w-0 items-center gap-1.5 truncate text-xs">
+                                  <ListTodo
+                                    className="size-3.5 shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="truncate">
+                                    {activity?.shortLabel ?? stage.shortLabel} ·{" "}
+                                    {application.unit}
+                                  </span>
+                                </span>
+                                <span className="border-border/80 mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-dashed pt-2.5">
+                                  {owner ? (
+                                    <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+                                      <UserRound
+                                        className="size-3.5 shrink-0"
+                                        aria-hidden="true"
+                                      />
+                                      <span className="truncate">
+                                        {owner.label}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span />
+                                  )}
+                                  <SlaIndicator
+                                    application={application}
+                                    compact
+                                  />
+                                </span>
+                              </Link>
+                            );
+                          })
+                        ) : (
+                          <p className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
+                            Tidak ada permohonan aktif
+                          </p>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             </div>
           </section>
         )}
@@ -348,7 +552,7 @@ function DashboardContent() {
           <div
             className={
               isHome
-                ? "flex items-center justify-between gap-4 border-b p-4 lg:px-5"
+                ? "flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between lg:px-5"
                 : "flex flex-col gap-4 border-b p-4 lg:p-5"
             }
           >
@@ -446,7 +650,7 @@ function DashboardContent() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {(searchQuery || statusFilter) && (
+                  {(searchQuery || statusFilter || stageFilter) && (
                     <Button
                       variant="ghost"
                       className="min-h-11"
@@ -459,6 +663,42 @@ function DashboardContent() {
               </div>
             )}
           </div>
+
+          {!isHome && (
+            <nav
+              aria-label="Filter tahap proses"
+              className="flex gap-2 overflow-x-auto border-b px-4 py-3 lg:px-5"
+            >
+              <Link
+                href={setDashboardStage(searchParams.toString(), "")}
+                aria-current={!stageFilter ? "page" : undefined}
+                className={`inline-flex min-h-10 shrink-0 items-center rounded-md px-3 text-sm font-medium ${!stageFilter ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+              >
+                Semua tahap
+              </Link>
+              {stages.map((stage) => {
+                const count = sourceApplications.filter(
+                  (application) => getCurrentStage(application) === stage.id,
+                ).length;
+                return (
+                  <Link
+                    key={stage.id}
+                    href={setDashboardStage(
+                      searchParams.toString(),
+                      String(stage.id),
+                    )}
+                    aria-current={
+                      stageFilter === String(stage.id) ? "page" : undefined
+                    }
+                    className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium ${stageFilter === String(stage.id) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {stage.shortLabel}
+                    <span className="tabular-nums">{count}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
 
           {!ready ? (
             <div role="status" aria-busy="true" className="space-y-3 p-5">
@@ -546,6 +786,216 @@ function DashboardContent() {
   );
 }
 
+function WelcomeDialog({
+  active,
+  user,
+  roleId,
+  roleQueue,
+  taskHref,
+  totalCount,
+  activeCount,
+  completedCount,
+  overdueCount,
+}: {
+  active: boolean;
+  user: NonNullable<ReturnType<typeof useSession>["user"]> | null;
+  roleId: ReturnType<typeof getRole>["id"];
+  roleQueue: Application[];
+  taskHref: string;
+  totalCount: number;
+  activeCount: number;
+  completedCount: number;
+  overdueCount: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const isMonitoring = roleId === "admin" || roleId === "super-user";
+  const role = getRole(roleId);
+
+  useEffect(() => {
+    if (!active || !user) return;
+    const key = `colabora:welcome:${user.id}:${user.role}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "shown");
+    } catch {
+      // Keep the welcome available when browser storage is restricted.
+    }
+    setOpen(true);
+  }, [active, user]);
+
+  const topTasks = [...roleQueue]
+    .map((application) => ({
+      application,
+      sla: getOwnedSla(application, roleId) ?? application.sla,
+    }))
+    .sort((a, b) => {
+      const aDeadline = a.sla.deadline ?? "9999";
+      const bDeadline = b.sla.deadline ?? "9999";
+      return aDeadline.localeCompare(bDeadline);
+    })
+    .slice(0, 3);
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-xl gap-0 overflow-hidden border-0 p-0">
+        <AlertDialogHeader className="bg-primary text-primary-foreground flex-row items-start justify-between gap-4 px-5 py-4 text-left sm:px-6">
+          <div className="min-w-0">
+            <p className="text-primary-foreground/80 text-xs font-medium">
+              {role.label} · {role.lane}
+            </p>
+            <AlertDialogTitle className="text-primary-foreground mt-1 text-xl">
+              Selamat datang, {user?.name}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-primary-foreground mt-1 text-sm leading-5">
+              {isMonitoring
+                ? "Berikut ringkasan permohonan yang dapat Anda pantau."
+                : roleQueue.length
+                  ? `Ada ${roleQueue.length} permohonan menunggu tindakan peran Anda.`
+                  : "Saat ini tidak ada permohonan yang menunggu tindakan Anda."}
+            </AlertDialogDescription>
+          </div>
+          <AlertDialogCancel
+            aria-label="Tutup sapaan"
+            className="hover:bg-primary-foreground/15 text-primary-foreground hover:text-primary-foreground -mt-1 -mr-2 size-10 shrink-0 border-0 bg-transparent p-0 shadow-none [&_svg]:size-4"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </AlertDialogCancel>
+        </AlertDialogHeader>
+
+        <div className="max-h-[calc(85dvh-10rem)] overflow-y-auto p-4 sm:p-5">
+          {isMonitoring ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <WelcomeMetric label="Total" value={totalCount} icon={FileText} />
+              <WelcomeMetric
+                label="Dalam proses"
+                value={activeCount}
+                icon={Clock3}
+              />
+              <WelcomeMetric
+                label="Selesai"
+                value={completedCount}
+                icon={CircleCheck}
+              />
+              <WelcomeMetric
+                label="Over SLA"
+                value={overdueCount}
+                icon={TriangleAlert}
+                danger={overdueCount > 0}
+              />
+            </div>
+          ) : topTasks.length ? (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold">Prioritas saat ini</h3>
+              </div>
+              <ul className="divide-y rounded-lg border">
+                {topTasks.map(({ application, sla }) => (
+                  <li key={application.id}>
+                    <Link
+                      href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(taskHref)}`}
+                      onClick={() => setOpen(false)}
+                      className="hover:bg-muted/40 flex min-h-16 items-center justify-between gap-3 px-3 py-2.5"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">
+                          {application.customer}
+                        </span>
+                        <span className="text-muted-foreground mt-0.5 block truncate text-xs">
+                          {application.number} ·{" "}
+                          {availableActivitySummary(application)}
+                        </span>
+                      </span>
+                      <SlaIndicator
+                        application={application}
+                        sla={sla}
+                        compact
+                      />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="bg-muted/50 flex items-start gap-3 rounded-lg border p-4">
+              <CircleCheck
+                className="text-success mt-0.5 size-5 shrink-0"
+                aria-hidden="true"
+              />
+              <div>
+                <h3 className="text-sm font-semibold">
+                  Belum ada tugas untuk Anda
+                </h3>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Permohonan baru yang menjadi tanggung jawab peran Anda akan
+                  muncul di sini.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <AlertDialogFooter className="bg-muted/40 border-t p-4 sm:px-5">
+          <AlertDialogCancel className="min-h-11">Nanti</AlertDialogCancel>
+          <AlertDialogAction asChild className="min-h-11">
+            <Link
+              href={
+                isMonitoring
+                  ? "/dashboard?view=all"
+                  : roleQueue.length
+                    ? taskHref
+                    : "/dashboard?view=all"
+              }
+            >
+              {isMonitoring
+                ? "Buka pemantauan"
+                : roleQueue.length
+                  ? "Buka daftar tugas"
+                  : "Lihat permohonan"}
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function WelcomeMetric({
+  label,
+  value,
+  icon: Icon,
+  danger = false,
+}: {
+  label: string;
+  value: number;
+  icon: typeof FileText;
+  danger?: boolean;
+}) {
+  return (
+    <div className="bg-background rounded-lg border p-3">
+      <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        <Icon
+          className={`size-3.5 ${danger ? "text-destructive" : "text-primary"}`}
+          aria-hidden="true"
+        />
+        {label}
+      </div>
+      <p
+        className={`mt-1.5 text-2xl font-semibold tabular-nums ${danger ? "text-destructive" : "text-foreground"}`}
+      >
+        {value.toLocaleString("id-ID")}
+      </p>
+    </div>
+  );
+}
+
+function setDashboardStage(query: string, stage: string) {
+  const params = new URLSearchParams(query);
+  if (stage) params.set("stage", stage);
+  else params.delete("stage");
+  return `/dashboard?${params.toString()}`;
+}
+
 function ApplicationListItem({
   application,
   returnTo,
@@ -624,6 +1074,13 @@ function SummaryMetric({
   ready: boolean;
   tone?: "default" | "primary" | "warning" | "success";
 }) {
+  const Icon = danger
+    ? TriangleAlert
+    : tone === "success"
+      ? CircleCheck
+      : tone === "warning"
+        ? Clock3
+        : FileText;
   const valueColor =
     danger && value > 0
       ? "text-destructive"
@@ -637,13 +1094,13 @@ function SummaryMetric({
   return (
     <div className="bg-card rounded-lg px-4 py-4 lg:px-5 lg:py-5">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-foreground text-sm font-medium">{label}</p>
-        {danger && value > 0 ? (
-          <TriangleAlert
-            className="text-destructive size-4"
+        <p className="text-foreground inline-flex items-center gap-2 text-sm font-medium">
+          <Icon
+            className={`size-4 shrink-0 ${valueColor}`}
             aria-hidden="true"
           />
-        ) : null}
+          {label}
+        </p>
       </div>
       <p className={`mt-2 text-3xl font-semibold tabular-nums ${valueColor}`}>
         {ready ? value.toLocaleString("id-ID") : "—"}
@@ -666,6 +1123,9 @@ function ApplicationRow({
     (item) => item.id === getCurrentStage(application),
   )!;
   const owned = isOwnedBy(application);
+  const activityLabel = owned
+    ? availableActivitySummary(application)
+    : activity?.shortLabel;
   const status = getApplicationStatus(application);
 
   return (
@@ -687,9 +1147,9 @@ function ApplicationRow({
         <p className="max-w-44 truncate">
           {application.rejected ? "Delegasi PK NPS" : stage.shortLabel}
         </p>
-        {activity && !application.rejected ? (
+        {activityLabel && !application.rejected ? (
           <p className="text-muted-foreground mt-0.5 max-w-44 truncate text-sm">
-            {activity.shortLabel}
+            {activityLabel}
           </p>
         ) : null}
       </td>
@@ -723,11 +1183,22 @@ function ApplicationRow({
   );
 }
 
-function SlaIndicator({ application }: { application: Application }) {
-  const sla = application.sla;
-  const remainingLabel = formatSlaRemaining(
-    getSlaDaysRemaining(sla.deadline),
-  );
+function SlaIndicator({
+  application,
+  sla = application.sla,
+  compact = false,
+}: {
+  application: Application;
+  sla?: Application["sla"];
+  compact?: boolean;
+}) {
+  const remainingLabel = formatSlaRemaining(getSlaDaysRemaining(sla.deadline));
+  const Icon =
+    sla.tone === "late"
+      ? TriangleAlert
+      : sla.tone === "done"
+        ? CircleCheck
+        : Clock3;
   const color =
     sla.tone === "late"
       ? "text-destructive"
@@ -738,9 +1209,9 @@ function SlaIndicator({ application }: { application: Application }) {
           : "text-foreground";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${color}`}
+      className={`inline-flex items-center gap-1.5 font-medium ${compact ? "text-xs whitespace-nowrap" : "text-sm whitespace-nowrap"} ${color}`}
     >
-      <Clock3 className="size-3.5" aria-hidden="true" />
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       <span>
         <span className="block">{remainingLabel || sla.label}</span>
         {sla.deadline ? (
@@ -760,4 +1231,22 @@ function SlaIndicator({ application }: { application: Application }) {
 
 function isOwnedBy(application: Application) {
   return application.availableActions.length > 0;
+}
+
+function availableActivitySummary(application: Application) {
+  const labels = [
+    ...new Set(
+      getAvailableActivities(application).map(
+        (activity) => activity.shortLabel,
+      ),
+    ),
+  ];
+  return labels.length
+    ? `Aktivitas: ${labels.join(", ")}`
+    : application.availableActions.some((action) =>
+          action.path.endsWith("/vendor-assignments"),
+        )
+      ? "Penugasan vendor"
+      : (getActivity(application.currentAction)?.shortLabel ??
+        "Lanjutkan permohonan");
 }
