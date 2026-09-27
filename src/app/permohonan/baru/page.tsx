@@ -517,7 +517,7 @@ function CreateForm({
                       <FormLabel>Lokasi</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Jl. ... No. ..., Surabaya"
+                          placeholder="Jl. Pahlawan No. 10, Surabaya"
                           className="h-11"
                           {...field}
                         />
