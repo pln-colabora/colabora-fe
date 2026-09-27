@@ -273,19 +273,32 @@ test("list follows pagination without requesting details per row", async () => {
   assert.ok(calls.every((url) => url.includes("/api/permohonan?page=")));
 });
 
-test("create sends only the supplied API fields and bearer token", async () => {
+test("create posts multipart fields, evidence files, and bearer token", async () => {
+  const file = new File(["ktp bytes"], "ktp.pdf", { type: "application/pdf" });
   const payload = {
     jenis_permohonan: "Pasang Baru (PB)",
     jenis_sambungan: "JTR",
     pelanggan_nama: "Test",
     pelanggan_alamat: "Test address",
     pelanggan_no_hp: "08123456789",
+    tarif: "rumah_tangga",
+    daya_baru: 2200,
+    evidence_files: [file],
   };
   global.fetch = async (url, init) => {
     assert.equal(url, "https://api.example.test/api/permohonan");
     assert.equal(init.method, "POST");
     assert.equal(init.headers.get("Authorization"), "Bearer access-test");
-    assert.deepEqual(JSON.parse(init.body), payload);
+    assert.ok(init.body instanceof FormData);
+    assert.equal(init.body.get("jenis_permohonan"), "Pasang Baru (PB)");
+    assert.equal(init.body.get("jenis_sambungan"), "JTR");
+    assert.equal(init.body.get("tarif"), "rumah_tangga");
+    assert.equal(init.body.get("daya_baru"), "2200");
+    // Pasang Baru sends no daya_lama.
+    assert.equal(init.body.get("daya_lama"), null);
+    const files = init.body.getAll("evidence_files");
+    assert.equal(files.length, 1);
+    assert.equal(await files[0].text(), "ktp bytes");
     return json({ status: true, data: fixture });
   };
   assert.equal((await applications.createApplication(payload)).id, fixture.id);

@@ -16,6 +16,7 @@ import {
   canCreatePermohonan,
 } from "@/components/dashboard/app-shell";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
+import { EvidenceUploader } from "@/components/dashboard/evidence-uploader";
 import { FormPageSkeleton } from "@/components/dashboard/page-skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,7 +39,11 @@ import {
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import { createApplication } from "@/lib/applications";
+import {
+  createApplication,
+  getTariffOptions,
+  type TariffPowerOption,
+} from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
 import { getRole, type RoleId } from "@/lib/workflow";
@@ -50,6 +55,29 @@ const jenisByRole: Partial<Record<RoleId, string[]>> = {
 
 const requestTypes = ["Pasang baru", "Perubahan daya"] as const;
 const units = ["ULP Taman", "ULP Menganti", "ULP Karang Pilang"] as const;
+
+// Human-readable labels for the backend tarif enum, in presentation order.
+const tarifOrder = [
+  "rumah_tangga",
+  "sosial",
+  "bisnis",
+  "industri",
+  "pemerintah",
+] as const;
+const tarifLabels: Record<string, string> = {
+  rumah_tangga: "Rumah Tangga",
+  sosial: "Sosial",
+  bisnis: "Bisnis",
+  industri: "Industri",
+  pemerintah: "Pemerintah",
+};
+
+// Form uses display names; the tarif endpoint and create payload use the API name.
+const toApiJenis = (connectionType: string) =>
+  connectionType === "JTM / Gardu" ? "JTM/Gardu" : connectionType;
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const acceptedFile = /\.(pdf|jpe?g|png)$/i;
 
 const baseSchema = z.object({
   customer: z
@@ -74,6 +102,26 @@ const baseSchema = z.object({
     .trim()
     .min(2, "Lokasi minimal 2 karakter.")
     .max(255, "Lokasi maksimal 255 karakter."),
+  tarif: z.string().min(1, "Tarif wajib dipilih."),
+  dayaBaru: z.string().min(1, "Daya wajib dipilih."),
+  dayaLama: z.string(),
+  files: z
+    .array(
+      z
+        .custom<File>(
+          (value) => typeof File !== "undefined" && value instanceof File,
+          "Berkas evidence tidak valid.",
+        )
+        .refine(
+          (file) => file.size <= MAX_FILE_SIZE,
+          "Ukuran setiap evidence maksimal 10 MB.",
+        )
+        .refine(
+          (file) => acceptedFile.test(file.name),
+          "Evidence harus berupa PDF, JPG, JPEG, atau PNG.",
+        ),
+    )
+    .min(1, "Unggah minimal satu evidence."),
 });
 
 type FormValues = z.infer<typeof baseSchema>;
@@ -185,13 +233,22 @@ function CreateForm({
   const connectionOptions = useMemo(() => jenisByRole[roleId] ?? [], [roleId]);
   const schema = useMemo(
     () =>
-      baseSchema.refine(
-        (values) => connectionOptions.includes(values.connectionType),
-        {
-          path: ["connectionType"],
-          message: "Jenis sambungan tidak sesuai kewenangan peran.",
-        },
-      ),
+      baseSchema
+        .refine(
+          (values) => connectionOptions.includes(values.connectionType),
+          {
+            path: ["connectionType"],
+            message: "Jenis sambungan tidak sesuai kewenangan peran.",
+          },
+        )
+        .refine(
+          (values) =>
+            values.requestType !== "Perubahan daya" || values.dayaLama !== "",
+          {
+            path: ["dayaLama"],
+            message: "Daya lama wajib dipilih.",
+          },
+        ),
     [connectionOptions],
   );
   const router = useRouter();
@@ -204,6 +261,10 @@ function CreateForm({
       connectionType: connectionOptions[0] ?? "",
       unit: units[0],
       location: "",
+      tarif: "",
+      dayaBaru: "",
+      dayaLama: "",
+      files: [],
     },
   });
   const busy = form.formState.isSubmitting;
@@ -217,6 +278,53 @@ function CreateForm({
     onDirtyChange(form.formState.isDirty);
     return () => onDirtyChange(false);
   }, [form.formState.isDirty, onDirtyChange]);
+
+  const [tariffs, setTariffs] = useState<TariffPowerOption[]>([]);
+  const [tariffLoading, setTariffLoading] = useState(false);
+  const [tariffError, setTariffError] = useState<unknown>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTariffLoading(true);
+    setTariffError(null);
+    getTariffOptions()
+      .then((data) => {
+        if (!cancelled) setTariffs(data);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setTariffError(error);
+      })
+      .finally(() => {
+        if (!cancelled) setTariffLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const requestType = form.watch("requestType");
+  const connectionType = form.watch("connectionType");
+  const tarif = form.watch("tarif");
+  const apiJenis = toApiJenis(connectionType);
+
+  const tarifChoices = useMemo(() => {
+    const present = new Set(
+      tariffs.filter((o) => o.jenis_sambungan === apiJenis).map((o) => o.tarif),
+    );
+    return tarifOrder.filter((value) => present.has(value));
+  }, [tariffs, apiJenis]);
+
+  const dayaChoices = useMemo(() => {
+    const seen = new Set<number>();
+    return tariffs
+      .filter((o) => o.tarif === tarif && o.jenis_sambungan === apiJenis)
+      .filter((o) => {
+        if (seen.has(o.daya_min)) return false;
+        seen.add(o.daya_min);
+        return true;
+      })
+      .sort((a, b) => a.daya_min - b.daya_min);
+  }, [tariffs, tarif, apiJenis]);
 
   async function handleSubmit(values: FormValues) {
     if (
@@ -237,10 +345,13 @@ function CreateForm({
           values.requestType === "Pasang baru"
             ? "Pasang Baru (PB)"
             : "Perubahan Daya (PD)",
-        jenis_sambungan:
-          values.connectionType === "JTM / Gardu"
-            ? "JTM/Gardu"
-            : values.connectionType,
+        jenis_sambungan: toApiJenis(values.connectionType),
+        tarif: values.tarif,
+        daya_baru: Number(values.dayaBaru),
+        ...(values.requestType === "Perubahan daya"
+          ? { daya_lama: Number(values.dayaLama) }
+          : {}),
+        evidence_files: values.files,
         ...(values.connectionType.startsWith("PLG TM")
           ? { ulp_unit: values.unit }
           : {}),
@@ -340,7 +451,13 @@ function CreateForm({
                       <FormLabel>Jenis sambungan</FormLabel>
                       <Select
                         value={field.value}
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          // Tarif and daya options are scoped to jenis sambungan.
+                          form.setValue("tarif", "");
+                          form.setValue("dayaBaru", "");
+                          form.setValue("dayaLama", "");
+                        }}
                         disabled={busy}
                       >
                         <FormControl>
@@ -403,6 +520,147 @@ function CreateForm({
                           placeholder="Jl. ... No. ..., Surabaya"
                           className="h-11"
                           {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="tarif"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tarif</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue("dayaBaru", "");
+                          form.setValue("dayaLama", "");
+                        }}
+                        disabled={busy || tariffLoading || !tarifChoices.length}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background h-11 w-full">
+                            <SelectValue
+                              placeholder={
+                                tariffLoading ? "Memuat tarif..." : "Pilih tarif"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {tarifChoices.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {tarifLabels[value] ?? value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {Boolean(tariffError) && (
+                        <p className="text-destructive mt-2 text-sm">
+                          Daftar tarif gagal dimuat.
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {requestType === "Perubahan daya" && (
+                  <FormField
+                    control={form.control}
+                    name="dayaLama"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Daya lama</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={busy || !tarif || !dayaChoices.length}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="bg-background h-11 w-full">
+                              <SelectValue
+                                placeholder={
+                                  tarif ? "Pilih daya lama" : "Pilih tarif dulu"
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {dayaChoices.map((option) => (
+                              <SelectItem
+                                key={option.daya_min}
+                                value={String(option.daya_min)}
+                              >
+                                {option.golongan_tarif} · {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="dayaBaru"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {requestType === "Perubahan daya"
+                          ? "Daya baru"
+                          : "Permohonan daya"}
+                      </FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={busy || !tarif || !dayaChoices.length}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background h-11 w-full">
+                            <SelectValue
+                              placeholder={
+                                tarif ? "Pilih daya" : "Pilih tarif dulu"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {dayaChoices.map((option) => (
+                            <SelectItem
+                              key={option.daya_min}
+                              value={String(option.daya_min)}
+                            >
+                              {option.golongan_tarif} · {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="files"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Evidence permohonan</FormLabel>
+                      <FormControl>
+                        <EvidenceUploader
+                          files={field.value}
+                          disabled={busy}
+                          onFilesChange={(files) => {
+                            field.onChange(files);
+                            void form.trigger("files");
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
