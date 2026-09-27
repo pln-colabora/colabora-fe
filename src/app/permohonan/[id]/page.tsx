@@ -741,6 +741,11 @@ function DocumentsSection({
                   {formatFileSize(document.sizeBytes)} ·{" "}
                   {displayHistoryDate(document.addedAt)}
                 </p>
+                {document.uploadedBy ? (
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    Diunggah oleh {document.uploadedBy}
+                  </p>
+                ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Button

@@ -37,6 +37,7 @@ type DocumentResponse = {
   mime_type: string;
   size_bytes: number;
   workflow_nodes: string[];
+  uploaded_by_name?: string;
 };
 type ActivityLog = {
   id: string;
@@ -172,6 +173,7 @@ export async function getApplicationDocuments(id: string) {
     actionId: nodeActions[document.workflow_nodes[0]],
     mimeType: document.mime_type,
     sizeBytes: document.size_bytes,
+    uploadedBy: document.uploaded_by_name,
   }));
 }
 export async function getApplicationHistory(id: string) {
