@@ -41,6 +41,7 @@ export type RegistrationInput = {
   name: string;
   email: string;
   password: string;
+  role: RoleId;
   telp_number?: string;
   document: File;
 };
@@ -50,6 +51,7 @@ export async function registerAccount(input: RegistrationInput) {
   body.set("name", input.name);
   body.set("email", input.email);
   body.set("password", input.password);
+  body.set("role", input.role);
   if (input.telp_number) body.set("telp_number", input.telp_number);
   body.set("document", input.document);
 

@@ -42,13 +42,16 @@ import { useUsers } from "@/hooks/use-users";
 import { verifyUserAccount } from "@/lib/auth";
 import { presentApiError } from "@/lib/error-utils";
 import { deleteUser, updateUserRole } from "@/lib/users";
-import { getRole, type RoleId } from "@/lib/workflow";
+import { getRole, roles, type RoleId } from "@/lib/workflow";
 
-const vendorRoles: RoleId[] = [
-  "vendor-tiang",
-  "vendor-konstruksi",
-  "vendor-sr-app",
-];
+const assignableRoles = roles.filter(
+  ({ id }) => id !== "admin" && id !== "super-user",
+);
+const assignableRoleIds = assignableRoles.map(({ id }) => id);
+
+function isAssignableRole(role: RoleId) {
+  return assignableRoleIds.includes(role);
+}
 
 export default function AccountsPage() {
   const { user, error: sessionError } = useSession();
@@ -295,7 +298,7 @@ export default function AccountsPage() {
                                     <Select
                                       value={
                                         verificationRoles[account.id] ??
-                                        (vendorRoles.includes(account.role)
+                                        (isAssignableRole(account.role)
                                           ? account.role
                                           : undefined)
                                       }
@@ -311,15 +314,12 @@ export default function AccountsPage() {
                                         aria-label={`Peran untuk ${account.name}`}
                                         className="h-10 w-52"
                                       >
-                                        <SelectValue placeholder="Pilih peran vendor" />
+                                        <SelectValue placeholder="Pilih peran" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {vendorRoles.map((vendorRole) => (
-                                          <SelectItem
-                                            key={vendorRole}
-                                            value={vendorRole}
-                                          >
-                                            {getRole(vendorRole).label}
+                                        {assignableRoles.map(({ id }) => (
+                                          <SelectItem key={id} value={id}>
+                                            {getRole(id).label}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
@@ -331,7 +331,7 @@ export default function AccountsPage() {
                                       onClick={() => {
                                         const role =
                                           verificationRoles[account.id] ??
-                                          (vendorRoles.includes(account.role)
+                                          (isAssignableRole(account.role)
                                             ? account.role
                                             : undefined);
                                         if (role)
@@ -340,7 +340,7 @@ export default function AccountsPage() {
                                       disabled={
                                         !!verifyingId ||
                                         (!verificationRoles[account.id] &&
-                                          !vendorRoles.includes(account.role))
+                                          !isAssignableRole(account.role))
                                       }
                                     >
                                       {verifyingId === account.id ? (
