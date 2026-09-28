@@ -1,33 +1,102 @@
 "use client";
 
-import { useState } from "react";
-
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { ArrowLeft, FileUp } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ArrowLeft, LoaderCircle } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 
+import { EvidenceUploader } from "@/components/dashboard/evidence-uploader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { getRole, type RoleId } from "@/lib/workflow";
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { registerAccount } from "@/lib/auth";
+import { presentApiError } from "@/lib/error-utils";
 
-const vendorRoles: RoleId[] = [
-  "vendor-tiang",
-  "vendor-konstruksi",
-  "vendor-sr-app",
-];
+const registrationSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, "Nama minimal 2 karakter.")
+      .max(100, "Nama maksimal 100 karakter."),
+    email: z
+      .string()
+      .trim()
+      .min(1, "Email wajib diisi.")
+      .email("Format email tidak valid."),
+    telp_number: z
+      .string()
+      .trim()
+      .max(20, "Nomor telepon maksimal 20 karakter.")
+      .refine((value) => !value || value.length >= 8, {
+        message: "Nomor telepon minimal 8 karakter.",
+      }),
+    password: z.string().min(8, "Kata sandi minimal 8 karakter."),
+    confirmPassword: z.string().min(1, "Konfirmasi kata sandi wajib diisi."),
+    document: z
+      .file({ error: "Dokumen verifikasi wajib dilampirkan." })
+      .refine(
+        (file) =>
+          ["application/pdf", "image/jpeg", "image/png"].includes(
+            file.type,
+          ) || /\.(pdf|jpe?g|png)$/i.test(file.name),
+        { message: "Dokumen harus berupa PDF, JPG, JPEG, atau PNG." },
+      ),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: "Konfirmasi kata sandi tidak cocok.",
+    path: ["confirmPassword"],
+  });
 
-export default function VendorRegistrationPage() {
-  const [role, setRole] = useState<RoleId>();
-  const [files, setFiles] = useState<File[]>([]);
+type RegistrationValues = z.infer<typeof registrationSchema>;
+
+export default function RegistrationPage() {
+  const router = useRouter();
+  const form = useForm<RegistrationValues>({
+    resolver: zodResolver(registrationSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      telp_number: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
+  const busy = form.formState.isSubmitting;
+
+  async function handleSubmit(values: RegistrationValues) {
+    try {
+      await registerAccount({
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        telp_number: values.telp_number || undefined,
+        document: values.document,
+      });
+      toast.success("Registrasi terkirim untuk ditinjau.");
+      router.replace("/menunggu-verifikasi");
+    } catch (error) {
+      const message = presentApiError(
+        error,
+        "Registrasi gagal. Silakan coba lagi.",
+      ).message;
+      form.setError("root", { message });
+      toast.error(message);
+    }
+  }
 
   return (
     <main className="bg-background min-h-dvh px-4 py-8 sm:px-6 sm:py-12">
@@ -63,152 +132,176 @@ export default function VendorRegistrationPage() {
             Registrasi vendor
           </h1>
           <p className="text-muted-foreground mt-2 text-sm leading-6">
-            Isi informasi akun dan lampirkan dokumen pendukung. Pendaftaran
-            akan ditinjau oleh Super User.
+            Isi informasi akun dan lampirkan satu dokumen verifikasi. Admin
+            atau Super User akan memeriksa dokumen serta menetapkan peran vendor
+            sebelum akun dapat digunakan.
           </p>
 
-          <div
-            className="bg-warning-surface border-warning-border text-warning mt-5 rounded-md border px-4 py-3 text-sm"
-            role="status"
-          >
-            Pengiriman registrasi dan lampiran belum tersedia. Form ini belum
-            mengirim atau menyimpan data.
-          </div>
+          <Form {...form}>
+            <form
+              className="bg-card mt-6 space-y-5 rounded-lg border p-5 sm:p-6"
+              onSubmit={form.handleSubmit(handleSubmit)}
+              noValidate
+            >
+              <fieldset
+                disabled={busy}
+                className="grid min-w-0 gap-5 md:grid-cols-2"
+              >
+                <legend className="font-display mb-5 text-lg font-semibold">
+                  Informasi akun
+                </legend>
 
-          <form className="bg-card mt-6 rounded-lg border p-5 sm:p-6">
-            <fieldset className="grid min-w-0 gap-5 md:grid-cols-2">
-              <legend className="font-display mb-5 text-lg font-semibold">
-                Informasi akun
-              </legend>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="vendor-name">Nama lengkap</Label>
-                <Input
-                  id="vendor-name"
+                <FormField
+                  control={form.control}
                   name="name"
-                  autoComplete="name"
-                  className="h-11"
-                  placeholder="Nama pemohon"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="vendor-email">Email</Label>
-                <Input
-                  id="vendor-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  className="h-11"
-                  placeholder="nama@perusahaan.co.id"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="vendor-phone">No. HP / telepon</Label>
-                <Input
-                  id="vendor-phone"
-                  name="telp_number"
-                  type="tel"
-                  autoComplete="tel"
-                  className="h-11"
-                  placeholder="08xxxxxxxxxx"
-                />
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="vendor-role">Peran vendor</Label>
-                <Select
-                  value={role}
-                  onValueChange={(value) => setRole(value as RoleId)}
-                >
-                  <SelectTrigger id="vendor-role" className="h-11 w-full">
-                    <SelectValue placeholder="Pilih peran vendor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vendorRoles.map((vendorRole) => (
-                      <SelectItem key={vendorRole} value={vendorRole}>
-                        {getRole(vendorRole).label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="vendor-password">Kata sandi</Label>
-                <Input
-                  id="vendor-password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  className="h-11"
-                  placeholder="Minimal 8 karakter"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="vendor-password-confirm">
-                  Konfirmasi kata sandi
-                </Label>
-                <Input
-                  id="vendor-password-confirm"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  className="h-11"
-                  placeholder="Ulangi kata sandi"
-                />
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="vendor-attachments">Lampiran</Label>
-                <Input
-                  id="vendor-attachments"
-                  name="attachments"
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="min-h-11 cursor-pointer py-2"
-                  onChange={(event) =>
-                    setFiles(Array.from(event.currentTarget.files ?? []))
-                  }
-                  aria-describedby="vendor-attachments-help"
-                />
-                <p
-                  id="vendor-attachments-help"
-                  className="text-muted-foreground text-xs"
-                >
-                  PDF, JPG, JPEG, atau PNG.
-                </p>
-                {files.length > 0 ? (
-                  <ul className="text-muted-foreground space-y-1 text-sm">
-                    {files.map((file) => (
-                      <li
-                        key={`${file.name}:${file.size}:${file.lastModified}`}
-                        className="flex min-w-0 items-center gap-2"
-                      >
-                        <FileUp
-                          className="size-4 shrink-0"
-                          aria-hidden="true"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Nama lengkap</FormLabel>
+                      <FormControl>
+                        <Input
+                          autoComplete="name"
+                          className="h-11"
+                          placeholder="Nama pemohon"
+                          {...field}
                         />
-                        <span className="truncate">{file.name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end md:col-span-2">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          autoComplete="email"
+                          className="h-11"
+                          placeholder="nama@perusahaan.co.id"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="telp_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>No. HP / telepon (opsional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="tel"
+                          autoComplete="tel"
+                          className="h-11"
+                          placeholder="08xxxxxxxxxx"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Kata sandi</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          autoComplete="new-password"
+                          className="h-11"
+                          placeholder="Minimal 8 karakter"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Konfirmasi kata sandi</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          autoComplete="new-password"
+                          className="h-11"
+                          placeholder="Ulangi kata sandi"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="document"
+                  render={({ field, fieldState }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel id="registration-document-label">
+                        Dokumen verifikasi
+                      </FormLabel>
+                      <FormControl>
+                        <EvidenceUploader
+                          files={field.value ? [field.value] : []}
+                          selectionMode="single"
+                          fileLabel="dokumen verifikasi"
+                          helpText="Pilih satu file PDF, JPG, JPEG, atau PNG."
+                          aria-labelledby="registration-document-label"
+                          aria-invalid={fieldState.invalid}
+                          disabled={busy}
+                          onFilesChange={(files) => {
+                            field.onChange(files[0]);
+                            void form.trigger("document");
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        File akan dikirim bersama data registrasi untuk
+                        pemeriksaan akun.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </fieldset>
+
+              {form.formState.errors.root?.message ? (
+                <p role="alert" className="text-destructive text-sm">
+                  {form.formState.errors.root.message}
+                </p>
+              ) : null}
+
+              <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
                 <Button asChild variant="outline" className="min-h-11">
                   <Link href="/login">Kembali ke masuk</Link>
                 </Button>
-                <Button type="button" className="min-h-11" disabled>
-                  Pendaftaran belum tersedia
+                <Button type="submit" className="min-h-11" disabled={busy}>
+                  {busy ? (
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                  ) : null}
+                  {busy ? "Mengirim registrasi..." : "Kirim registrasi"}
                 </Button>
               </div>
-            </fieldset>
-          </form>
+            </form>
+          </Form>
         </section>
       </div>
     </main>

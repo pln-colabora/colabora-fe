@@ -38,15 +38,16 @@ export default function WaitingForVerificationPage() {
           Menunggu verifikasi
         </h1>
         <p className="text-muted-foreground mt-3 text-sm leading-6">
-          Registrasi vendor sedang menunggu pemeriksaan Super User. Kamu dapat
-          masuk setelah akun diverifikasi.
+          Dokumen registrasi sedang ditinjau oleh Admin atau Super User. Peran
+          vendor akan ditetapkan sebelum akun diaktifkan.
         </p>
 
         <div className="mt-6 border-t pt-5">
           <p className="text-sm font-medium">Apa yang terjadi selanjutnya?</p>
           <p className="text-muted-foreground mt-1 text-sm leading-6">
-            Super User akan meninjau informasi dan lampiran registrasi. Status
-            akun akan diperbarui setelah proses verifikasi selesai.
+            Jika kamu mencoba masuk sebelum pemeriksaan selesai, COLABORA akan
+            mengarahkanmu kembali ke halaman ini. Kamu dapat masuk setelah
+            dokumen disetujui dan akun diverifikasi.
           </p>
         </div>
 

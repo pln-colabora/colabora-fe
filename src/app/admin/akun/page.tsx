@@ -4,7 +4,14 @@ import { useMemo, useState } from "react";
 
 import Link from "next/link";
 
-import { CheckCircle2, FilePlus2, Search, Trash2, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  FilePlus2,
+  LoaderCircle,
+  Search,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell, canManageAccounts } from "@/components/dashboard/app-shell";
@@ -23,11 +30,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
 import { useUsers } from "@/hooks/use-users";
+import { verifyUserAccount } from "@/lib/auth";
 import { presentApiError } from "@/lib/error-utils";
-import { deleteUser } from "@/lib/users";
-import { getRole } from "@/lib/workflow";
+import { deleteUser, updateUserRole } from "@/lib/users";
+import { getRole, type RoleId } from "@/lib/workflow";
+
+const vendorRoles: RoleId[] = [
+  "vendor-tiang",
+  "vendor-konstruksi",
+  "vendor-sr-app",
+];
 
 export default function AccountsPage() {
   const { user, error: sessionError } = useSession();
@@ -39,6 +60,10 @@ export default function AccountsPage() {
     null | (typeof users)[number]
   >(null);
   const [deleting, setDeleting] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verificationRoles, setVerificationRoles] = useState<
+    Record<string, RoleId>
+  >({});
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -73,6 +98,29 @@ export default function AccountsPage() {
       );
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleVerify(
+    account: (typeof users)[number],
+    role: RoleId,
+  ) {
+    setVerifyingId(account.id);
+    try {
+      if (account.role !== role) await updateUserRole(account.id, role);
+      await verifyUserAccount(account.id);
+      toast.success(`${account.name} berhasil diverifikasi.`);
+      reload();
+    } catch (requestError) {
+      reload();
+      toast.error(
+        presentApiError(
+          requestError,
+          "Akun tidak dapat diverifikasi.",
+        ).message,
+      );
+    } finally {
+      setVerifyingId(null);
     }
   }
 
@@ -170,7 +218,7 @@ export default function AccountsPage() {
                   >
                     Geser tabel ke samping untuk melihat semua kolom.
                   </p>
-                  <table className="w-full min-w-[40rem] text-left text-sm">
+                  <table className="w-full min-w-[52rem] text-left text-sm">
                     <thead className="bg-muted/60 text-muted-foreground border-b">
                       <tr>
                         <th
@@ -241,21 +289,90 @@ export default function AccountsPage() {
                               )}
                             </td>
                             <td className="px-4 py-4 text-right sm:px-5">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="text-destructive hover:text-destructive min-h-10"
-                                onClick={() => setPendingDelete(account)}
-                                disabled={account.id === user.id}
-                                title={
-                                  account.id === user.id
-                                    ? "Akun yang sedang digunakan tidak dapat dihapus"
-                                    : "Hapus akun"
-                                }
-                              >
-                                <Trash2 aria-hidden="true" />
-                                Hapus
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                {account.is_verified === false ? (
+                                  <div className="flex items-center gap-2">
+                                    <Select
+                                      value={
+                                        verificationRoles[account.id] ??
+                                        (vendorRoles.includes(account.role)
+                                          ? account.role
+                                          : undefined)
+                                      }
+                                      onValueChange={(role) =>
+                                        setVerificationRoles((current) => ({
+                                          ...current,
+                                          [account.id]: role as RoleId,
+                                        }))
+                                      }
+                                      disabled={!!verifyingId}
+                                    >
+                                      <SelectTrigger
+                                        aria-label={`Peran untuk ${account.name}`}
+                                        className="h-10 w-52"
+                                      >
+                                        <SelectValue placeholder="Pilih peran vendor" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {vendorRoles.map((vendorRole) => (
+                                          <SelectItem
+                                            key={vendorRole}
+                                            value={vendorRole}
+                                          >
+                                            {getRole(vendorRole).label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="min-h-10"
+                                      onClick={() => {
+                                        const role =
+                                          verificationRoles[account.id] ??
+                                          (vendorRoles.includes(account.role)
+                                            ? account.role
+                                            : undefined);
+                                        if (role)
+                                          void handleVerify(account, role);
+                                      }}
+                                      disabled={
+                                        !!verifyingId ||
+                                        (!verificationRoles[account.id] &&
+                                          !vendorRoles.includes(account.role))
+                                      }
+                                    >
+                                      {verifyingId === account.id ? (
+                                        <LoaderCircle
+                                          className="animate-spin"
+                                          aria-hidden="true"
+                                        />
+                                      ) : (
+                                        <CheckCircle2 aria-hidden="true" />
+                                      )}
+                                      {verifyingId === account.id
+                                        ? "Memverifikasi..."
+                                        : "Verifikasi"}
+                                    </Button>
+                                  </div>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="text-destructive hover:text-destructive min-h-10"
+                                  onClick={() => setPendingDelete(account)}
+                                  disabled={account.id === user.id}
+                                  title={
+                                    account.id === user.id
+                                      ? "Akun yang sedang digunakan tidak dapat dihapus"
+                                      : "Hapus akun"
+                                  }
+                                >
+                                  <Trash2 aria-hidden="true" />
+                                  Hapus
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         );

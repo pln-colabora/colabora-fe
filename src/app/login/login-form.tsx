@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ApiError } from "@/lib/api";
 import { login } from "@/lib/auth";
 import { presentApiError } from "@/lib/error-utils";
 
@@ -70,6 +71,11 @@ export function LoginForm({
       toast.success(`Berhasil masuk sebagai ${user.name}.`);
       router.replace("/dashboard");
     } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        toast.info("Akun belum diverifikasi. Registrasi Anda masih ditinjau.");
+        router.replace("/menunggu-verifikasi");
+        return;
+      }
       const message = presentApiError(error, "Login gagal.", "login").message;
       form.setError("root", { message });
       toast.error(message);
@@ -180,6 +186,14 @@ export function LoginForm({
                 </Button>
               </div>
               <FormMessage />
+              <p className="text-right text-sm">
+                <Link
+                  href="/lupa-kata-sandi"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Lupa kata sandi?
+                </Link>
+              </p>
             </FormItem>
           )}
         />
