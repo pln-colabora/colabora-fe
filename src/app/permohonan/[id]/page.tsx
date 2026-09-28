@@ -61,10 +61,10 @@ import {
   getRole,
   stages,
   type ActionId,
-  type ActivityDefinition,
   type Application,
   type RoleId,
   type StageId,
+  type WorkflowNode,
 } from "@/lib/workflow";
 
 // The one work-order activity whose evidence each vendor role may read.
@@ -462,6 +462,48 @@ function getActivityNotes(id: ActionId, application: Application): string[] {
   return notes;
 }
 
+// Map a backend node status onto the timeline's presentation status.
+function nodeProgressStatus(status: WorkflowNode["status"]): ProgressStatus {
+  switch (status) {
+    case "completed":
+      return "done";
+    case "skipped":
+      return "skipped";
+    case "available":
+    case "in_progress":
+      return "current";
+    default:
+      return "future"; // locked
+  }
+}
+
+function getNodeNotes(node: WorkflowNode): string[] {
+  const payload = (node.payload ?? {}) as Record<string, unknown>;
+  const notes: string[] = [];
+  ["notes", "reservation_notes", "tera_notes"].forEach((key) => {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) notes.push(value.trim());
+  });
+  return notes;
+}
+
+function NotesList({ notes }: { notes: string[] }) {
+  return notes.map((note, index) => (
+    <p
+      key={index}
+      className="border-border border-l-primary/60 bg-muted/60 mt-1 rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-relaxed sm:col-span-3"
+    >
+      <span className="text-muted-foreground inline-flex items-center gap-1 font-semibold">
+        <StickyNote className="size-3.5" aria-hidden="true" />
+        Catatan
+      </span>
+      <span className="text-foreground mt-0.5 block whitespace-pre-line">
+        {note}
+      </span>
+    </p>
+  ));
+}
+
 function WorkflowTimeline({
   application,
   roleId,
@@ -469,42 +511,12 @@ function WorkflowTimeline({
   application: Application;
   roleId: RoleId;
 }) {
-  // Vendors are external to PLN: show only the activities they own (actor is
-  // this vendor), so the timeline reflects their part of the flow — not the
-  // full internal process.
-  const isVendor = roleId.startsWith("vendor-");
-  const ownedByVendor = (activity: ActivityDefinition) =>
-    getOwner(activity, application) === roleId;
-  const visibleStages = isVendor
-    ? stages.filter((stage) =>
-        activities.some(
-          (activity) => activity.stage === stage.id && ownedByVendor(activity),
-        ),
-      )
-    : stages;
-  // The vendor projection omits nodes outside their current one, so activities
-  // in already-passed stages have no node and would read as "future". Infer
-  // their status from the request's current stage instead.
-  const activityView = (activity: ActivityDefinition): ProgressStatus => {
-    const status = getActivityStatus(activity.id, application);
-    if (!isVendor) return status;
-    const hasNode = application.nodes.some(
-      (node) => nodeActions[node.workflow_node] === activity.id,
-    );
-    if (hasNode) return status;
-    if (activity.stage < application.currentStage) return "done";
-    return status;
-  };
-  const stageView = (stageId: StageId): ProgressStatus => {
-    if (!isVendor) return getStageStatus(stageId, application);
-    const statuses = activities
-      .filter((activity) => activity.stage === stageId && ownedByVendor(activity))
-      .map(activityView);
-    if (statuses.length && statuses.every((s) => s === "done" || s === "skipped"))
-      return "done";
-    if (statuses.some((s) => s === "current")) return "current";
-    return "future";
-  };
+  // Vendors are external to PLN and see only the nodes the backend returns for
+  // them, so their timeline is driven by workflow_nodes (source of truth),
+  // never the full static activity list.
+  if (roleId.startsWith("vendor-")) {
+    return <VendorTimeline application={application} />;
+  }
   return (
     <section
       aria-labelledby="workflow-title"
@@ -519,31 +531,25 @@ function WorkflowTimeline({
             Tahapan proses
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            {isVendor
-              ? "Aktivitas yang ditugaskan ke Anda."
-              : "17 aktivitas utama dan percabangan yang berlaku."}
+            17 aktivitas utama dan percabangan yang berlaku.
           </p>
         </div>
-        {!isVendor && (
-          <span className="text-muted-foreground text-xs">
-            Tahap {getCurrentStage(application)} dari 7
-          </span>
-        )}
+        <span className="text-muted-foreground text-xs">
+          Tahap {getCurrentStage(application)} dari 7
+        </span>
       </div>
       <ol className="mt-5 space-y-0">
-        {visibleStages.map((stage, index) => {
+        {stages.map((stage, index) => {
           const stageActivities = activities.filter(
-            (activity) =>
-              activity.stage === stage.id &&
-              (!isVendor || ownedByVendor(activity)),
+            (activity) => activity.stage === stage.id,
           );
-          const stageStatus = stageView(stage.id);
+          const stageStatus = getStageStatus(stage.id, application);
           return (
             <li
               key={stage.id}
               className="relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-6 last:pb-0"
             >
-              {index < visibleStages.length - 1 ? (
+              {index < stages.length - 1 ? (
                 <span
                   className="bg-border absolute top-7 bottom-0 left-[13px] w-px"
                   aria-hidden="true"
@@ -553,11 +559,9 @@ function WorkflowTimeline({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    {!isVendor && (
-                      <span className="text-muted-foreground mr-2 text-xs">
-                        Tahap {stage.id}
-                      </span>
-                    )}
+                    <span className="text-muted-foreground mr-2 text-xs">
+                      Tahap {stage.id}
+                    </span>
                     <h3 className="font-display inline font-semibold">
                       {stage.label}
                     </h3>
@@ -566,7 +570,7 @@ function WorkflowTimeline({
                 </div>
                 <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
                   {stageActivities.map((activity) => {
-                    const status = activityView(activity);
+                    const status = getActivityStatus(activity.id, application);
                     const owner = getRole(getOwner(activity, application));
                     const notes = getActivityNotes(activity.id, application);
                     return (
@@ -584,23 +588,7 @@ function WorkflowTimeline({
                         <span className="text-muted-foreground text-xs sm:text-right">
                           {activityStatusLabel(status)}
                         </span>
-                        {notes.map((note, index) => (
-                          <p
-                            key={index}
-                            className="border-border border-l-primary/60 bg-muted/60 mt-1 rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-relaxed sm:col-span-3"
-                          >
-                            <span className="text-muted-foreground inline-flex items-center gap-1 font-semibold">
-                              <StickyNote
-                                className="size-3.5"
-                                aria-hidden="true"
-                              />
-                              Catatan
-                            </span>
-                            <span className="text-foreground mt-0.5 block whitespace-pre-line">
-                              {note}
-                            </span>
-                          </p>
-                        ))}
+                        <NotesList notes={notes} />
                       </li>
                     );
                   })}
@@ -610,6 +598,110 @@ function WorkflowTimeline({
           );
         })}
       </ol>
+    </section>
+  );
+}
+
+// Node-driven timeline for vendors: renders exactly the workflow_nodes returned
+// by the backend, grouped by their stage, using each node's own status.
+function VendorTimeline({ application }: { application: Application }) {
+  const byStage = new Map<StageId, WorkflowNode[]>();
+  for (const node of application.nodes) {
+    const list = byStage.get(node.stage_number) ?? [];
+    list.push(node);
+    byStage.set(node.stage_number, list);
+  }
+  const visibleStages = stages.filter((stage) => byStage.has(stage.id));
+
+  const stageStatusOf = (nodes: WorkflowNode[]): ProgressStatus => {
+    const statuses = nodes.map((node) => nodeProgressStatus(node.status));
+    if (
+      statuses.length &&
+      statuses.every((s) => s === "done" || s === "skipped")
+    )
+      return "done";
+    if (statuses.some((s) => s === "current")) return "current";
+    return "future";
+  };
+
+  return (
+    <section
+      aria-labelledby="workflow-title"
+      className="bg-card rounded-lg p-5 sm:p-6"
+    >
+      <div className="border-b pb-3">
+        <h2 id="workflow-title" className="font-display text-lg font-semibold">
+          Tahapan proses
+        </h2>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Aktivitas yang ditugaskan ke Anda.
+        </p>
+      </div>
+      {visibleStages.length === 0 ? (
+        <p className="text-muted-foreground mt-5 text-sm">
+          Belum ada aktivitas untuk Anda pada permohonan ini.
+        </p>
+      ) : (
+        <ol className="mt-5 space-y-0">
+          {visibleStages.map((stage, index) => {
+            const nodes = byStage.get(stage.id) ?? [];
+            const stageStatus = stageStatusOf(nodes);
+            return (
+              <li
+                key={stage.id}
+                className="relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-6 last:pb-0"
+              >
+                {index < visibleStages.length - 1 ? (
+                  <span
+                    className="bg-border absolute top-7 bottom-0 left-[13px] w-px"
+                    aria-hidden="true"
+                  />
+                ) : null}
+                <StageMarker status={stageStatus} />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-display font-semibold">
+                      {stage.label}
+                    </h3>
+                    <StageStatusLabel status={stageStatus} />
+                  </div>
+                  <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
+                    {nodes.map((node) => {
+                      // Node may not map to a static activity; guard every read.
+                      const activity = getActivity(
+                        nodeActions[node.workflow_node],
+                      );
+                      const status = nodeProgressStatus(node.status);
+                      const owner = activity
+                        ? getRole(getOwner(activity, application))
+                        : null;
+                      const notes = getNodeNotes(node);
+                      return (
+                        <li
+                          key={node.workflow_node}
+                          className="grid gap-1 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_180px_110px] sm:items-center"
+                        >
+                          <span className="flex items-center gap-2 font-medium">
+                            <ActivityStatusIcon status={status} />
+                            {activity?.shortLabel ?? node.workflow_node}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {owner ? `${owner.lane} — ${owner.label}` : "Vendor"}
+                          </span>
+                          <span className="text-muted-foreground text-xs sm:text-right">
+                            {activityStatusLabel(status)}
+                          </span>
+                          <NotesList notes={notes} />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </section>
   );
 }
