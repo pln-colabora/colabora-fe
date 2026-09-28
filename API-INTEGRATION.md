@@ -18,12 +18,13 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 
 | UI / action | Method dan endpoint | Request penting |
 | --- | --- | --- |
-| Registrasi vendor | POST `/api/auth/register` | Multipart `name`, `email`, `password`, satu `document` wajib; `telp_number` opsional. Akun menunggu verifikasi. |
+| Registrasi akun | POST `/api/auth/register` | Multipart `name`, `email`, `password`, satu `document` wajib; `telp_number` opsional. API belum menerima atau menyimpan `role`; role final ditentukan saat verifikasi. Akun menunggu verifikasi. |
+| Daftar role | GET `/api/auth/roles` | Bearer token Admin/Super User; tanpa parameter; `data` berisi enum role yang tersedia. |
 | Login | POST `/api/auth/login` | `email`, `password`; 403 berarti akun belum diverifikasi |
 | Minta reset kata sandi | POST `/api/auth/send-password-reset` | `email`; UI menampilkan pesan netral untuk menjaga privasi akun |
 | Simpan kata sandi baru | POST `/api/auth/reset-password` | `token`, `new_password` (minimal 8 karakter) |
-| Verifikasi akun | POST `/api/auth/verify/{user_id}` | Bearer token Admin/Super User; menyetujui dokumen dan mengaktifkan akun |
-| Ubah peran akun | PATCH `/api/user/{id}` | Bearer token Admin/Super User; `{ role }`, dipanggil sebelum verifikasi vendor |
+| Verifikasi akun | POST `/api/auth/verify/{user_id}` | Bearer token Admin/Super User; `user_id` UUID dan body JSON `{ role }` wajib. Role ditetapkan dan akun diaktifkan dalam request yang sama. |
+| Ubah peran akun | PATCH `/api/user/{id}` | Bearer token Admin/Super User; body `{ role }` untuk perubahan role di luar verifikasi |
 | Profil / role / unit | GET `/api/user/me` | Bearer token |
 | Refresh token | POST `/api/auth/refresh` | `refresh_token` |
 | Logout | POST `/api/auth/logout` | Bearer token |
@@ -96,7 +97,7 @@ Daftar 15 akun yang diberikan disimpan di `.env.local` yang diabaikan Git, melal
 - `src/app/login/*`: credential helper development dan login nyata, dengan layout yang sama.
 - `src/app/registrasi/page.tsx`: registrasi multipart dengan dokumen verifikasi wajib.
 - `src/app/lupa-kata-sandi/` dan `src/app/reset-password/`: permintaan email reset serta penggantian kata sandi dengan token.
-- `src/app/admin/akun/page.tsx`: penetapan role vendor dan verifikasi akun pending.
+- `src/app/admin/akun/page.tsx`: penetapan role internal/vendor dan verifikasi akun pending.
 - `src/app/dashboard/page.tsx`: data list API, total/filter, caller-specific task queue, loading/error/retry.
 - `src/app/permohonan/baru/page.tsx`: create API sesuai schema.
 - `src/app/permohonan/[id]/page.tsx`: detail server, pilihan aksi paralel, node timeline, dokumen/log, penugasan vendor.

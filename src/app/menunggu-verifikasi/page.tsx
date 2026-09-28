@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Menunggu verifikasi | COLABORA",
-  description: "Status verifikasi registrasi vendor COLABORA",
+  description: "Status verifikasi registrasi COLABORA",
 };
 
 export default function WaitingForVerificationPage() {
@@ -39,7 +39,7 @@ export default function WaitingForVerificationPage() {
         </h1>
         <p className="text-muted-foreground mt-3 text-sm leading-6">
           Dokumen registrasi sedang ditinjau oleh Admin atau Super User. Peran
-          vendor akan ditetapkan sebelum akun diaktifkan.
+          akan ditetapkan sebelum akun diaktifkan.
         </p>
 
         <div className="mt-6 border-t pt-5">

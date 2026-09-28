@@ -213,12 +213,12 @@ export function LoginForm({
           {busy ? "Memverifikasi..." : "Masuk"}
         </Button>
         <p className="text-muted-foreground text-center text-sm">
-          Vendor belum punya akun?{" "}
+          Belum punya akun?{" "}
           <Link
             href="/registrasi"
             className="text-primary underline-offset-4 hover:underline"
           >
-            Registrasi vendor
+            Registrasi
           </Link>
         </p>
       </form>

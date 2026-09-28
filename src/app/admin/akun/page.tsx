@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
 
@@ -39,16 +39,10 @@ import {
 } from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
 import { useUsers } from "@/hooks/use-users";
-import { verifyUserAccount } from "@/lib/auth";
+import { getAccountRoles, verifyUserAccount } from "@/lib/auth";
 import { presentApiError } from "@/lib/error-utils";
-import { deleteUser, updateUserRole } from "@/lib/users";
+import { deleteUser } from "@/lib/users";
 import { getRole, type RoleId } from "@/lib/workflow";
-
-const vendorRoles: RoleId[] = [
-  "vendor-tiang",
-  "vendor-konstruksi",
-  "vendor-sr-app",
-];
 
 export default function AccountsPage() {
   const { user, error: sessionError } = useSession();
@@ -61,9 +55,37 @@ export default function AccountsPage() {
   >(null);
   const [deleting, setDeleting] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<RoleId[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [rolesError, setRolesError] = useState<unknown>(null);
+  const [rolesReload, setRolesReload] = useState(0);
   const [verificationRoles, setVerificationRoles] = useState<
     Record<string, RoleId>
   >({});
+  const managerId = user?.id;
+
+  useEffect(() => {
+    if (!managerId || !allowed) return;
+
+    let active = true;
+    setRolesLoading(true);
+    setRolesError(null);
+
+    getAccountRoles()
+      .then((roles) => {
+        if (active) setAvailableRoles(roles);
+      })
+      .catch((requestError) => {
+        if (active) setRolesError(requestError);
+      })
+      .finally(() => {
+        if (active) setRolesLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [allowed, managerId, rolesReload]);
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -107,8 +129,7 @@ export default function AccountsPage() {
   ) {
     setVerifyingId(account.id);
     try {
-      if (account.role !== role) await updateUserRole(account.id, role);
-      await verifyUserAccount(account.id);
+      await verifyUserAccount(account.id, role);
       toast.success(`${account.name} berhasil diverifikasi.`);
       reload();
     } catch (requestError) {
@@ -185,6 +206,16 @@ export default function AccountsPage() {
         ) : (
           <Card className="mt-6 rounded-lg">
             <CardContent className="p-0">
+              {rolesError ? (
+                <div className="border-b p-4 sm:p-5">
+                  <ErrorNotice
+                    error={rolesError}
+                    fallback="Daftar peran tidak dapat dimuat."
+                    onRetry={() => setRolesReload((current) => current + 1)}
+                    retrying={rolesLoading}
+                  />
+                </div>
+              ) : null}
               <div className="border-b p-4 sm:p-5">
                 <div className="relative w-full max-w-md">
                   <Search
@@ -293,33 +324,35 @@ export default function AccountsPage() {
                                 {account.is_verified === false ? (
                                   <div className="flex items-center gap-2">
                                     <Select
-                                      value={
-                                        verificationRoles[account.id] ??
-                                        (vendorRoles.includes(account.role)
-                                          ? account.role
-                                          : undefined)
-                                      }
+                                      value={verificationRoles[account.id]}
                                       onValueChange={(role) =>
                                         setVerificationRoles((current) => ({
                                           ...current,
                                           [account.id]: role as RoleId,
                                         }))
                                       }
-                                      disabled={!!verifyingId}
+                                      disabled={
+                                        !!verifyingId ||
+                                        rolesLoading ||
+                                        !!rolesError
+                                      }
                                     >
                                       <SelectTrigger
                                         aria-label={`Peran untuk ${account.name}`}
                                         className="h-10 w-52"
                                       >
-                                        <SelectValue placeholder="Pilih peran vendor" />
+                                        <SelectValue
+                                          placeholder={
+                                            rolesLoading
+                                              ? "Memuat peran..."
+                                              : "Pilih peran"
+                                          }
+                                        />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {vendorRoles.map((vendorRole) => (
-                                          <SelectItem
-                                            key={vendorRole}
-                                            value={vendorRole}
-                                          >
-                                            {getRole(vendorRole).label}
+                                        {availableRoles.map((role) => (
+                                          <SelectItem key={role} value={role}>
+                                            {getRole(role).label}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
@@ -329,18 +362,18 @@ export default function AccountsPage() {
                                       variant="outline"
                                       className="min-h-10"
                                       onClick={() => {
-                                        const role =
-                                          verificationRoles[account.id] ??
-                                          (vendorRoles.includes(account.role)
-                                            ? account.role
-                                            : undefined);
-                                        if (role)
+                                        const role = verificationRoles[account.id];
+                                        if (role && availableRoles.includes(role))
                                           void handleVerify(account, role);
                                       }}
                                       disabled={
                                         !!verifyingId ||
-                                        (!verificationRoles[account.id] &&
-                                          !vendorRoles.includes(account.role))
+                                        !verificationRoles[account.id] ||
+                                        rolesLoading ||
+                                        !availableRoles.includes(
+                                          verificationRoles[account.id],
+                                        ) ||
+                                        !!rolesError
                                       }
                                     >
                                       {verifyingId === account.id ? (

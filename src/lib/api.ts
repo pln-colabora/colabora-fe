@@ -61,16 +61,49 @@ function readTokens(): Tokens | null {
   }
 }
 
+function collectErrorMessages(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(collectErrorMessages);
+  if (!value || typeof value !== "object") return [];
+
+  const details = value as Record<string, unknown>;
+  const message =
+    typeof details.msg === "string"
+      ? details.msg
+      : typeof details.message === "string"
+        ? details.message
+        : "";
+  const nestedMessages = Object.entries(details)
+    .filter(
+      ([key]) =>
+        !["code", "ctx", "input", "loc", "message", "msg", "type"].includes(
+          key,
+        ),
+    )
+    .flatMap(([key, nestedValue]) =>
+      collectErrorMessages(nestedValue).map((message) => `${key}: ${message}`),
+    );
+  if (nestedMessages.length > 0) return nestedMessages;
+
+  if (!message) return [];
+
+  const location = Array.isArray(details.loc)
+    ? details.loc.filter((part): part is string => typeof part === "string")
+    : [];
+  return [`${location.length ? `${location.join(".")}: ` : ""}${message}`];
+}
+
 function getErrorDetail(body: unknown) {
   if (!body || typeof body !== "object") return "";
+  const response = body as Record<string, unknown>;
   const envelope = body as Partial<ApiEnvelope<unknown>>;
-  if (typeof envelope.error === "string") return envelope.error;
-  if (envelope.error && typeof envelope.error === "object") {
-    return Object.values(envelope.error)
-      .filter((value) => typeof value === "string")
-      .join("; ");
-  }
-  return typeof envelope.message === "string" ? envelope.message : "";
+  const detail = collectErrorMessages(
+    envelope.error ?? response.detail ?? response.errors,
+  ).join("; ");
+  const message = typeof envelope.message === "string" ? envelope.message : "";
+  if (detail && !["bad request", "invalid request"].includes(detail.toLowerCase()))
+    return detail;
+  return message || detail;
 }
 
 function toApiError(error: AxiosError) {

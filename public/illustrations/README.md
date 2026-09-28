@@ -1,7 +1,9 @@
 # Ilustrasi COLABORA
 
 - `coordination-grid.png`: sumber hasil generasi, 1448 × 1086 piksel.
-- `coordination-grid.webp`: aset halaman login, 127.138 byte. Dikonversi dari PNG dengan Sharp (kualitas 85), tanpa perubahan komposisi.
+- `coordination-grid.webp`: ilustrasi login versi sebelumnya, dipertahankan sebagai aset historis.
+- `coordination-grid-isometric.png`: ilustrasi login isometrik terbaru, dibuat dari adegan koordinasi kelistrikan yang sama dengan sudut axonometric konsisten.
+- `coordination-grid-isometric.webp`: aset halaman login, dikonversi dari PNG dengan Sharp (kualitas 85), 202.770 byte.
 - `field-technicians.png`: dua teknisi meninjau pekerjaan bersama.
 - `field-maintenance.png`: teknisi memeriksa panel jaringan.
 - `neighborhood-power-grid.png`: lingkungan dan gardu distribusi.

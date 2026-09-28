@@ -34,10 +34,3 @@ export async function deleteUser(id: string) {
     method: "DELETE",
   });
 }
-
-export async function updateUserRole(id: string, role: RoleId) {
-  return apiRequest<Account>(`/api/user/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    data: { role },
-  });
-}
