@@ -37,6 +37,7 @@ type DocumentResponse = {
   mime_type: string;
   size_bytes: number;
   workflow_nodes: string[];
+  uploaded_by_name?: string;
 };
 type ActivityLog = {
   id: string;
@@ -172,6 +173,7 @@ export async function getApplicationDocuments(id: string) {
     actionId: nodeActions[document.workflow_nodes[0]],
     mimeType: document.mime_type,
     sizeBytes: document.size_bytes,
+    uploadedBy: document.uploaded_by_name,
   }));
 }
 export async function getApplicationHistory(id: string) {
@@ -202,20 +204,55 @@ export async function getApplicationHistory(id: string) {
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
+export type TariffPowerOption = {
+  tarif: string;
+  golongan_tarif: string;
+  jenis_sambungan: string;
+  label: string;
+  daya_min: number;
+  daya_max: number | null;
+};
+// Active tarif + power bands, optionally scoped to a jenis sambungan.
+export async function getTariffOptions(jenisSambungan?: string) {
+  const query = jenisSambungan
+    ? `?jenis_sambungan=${encodeURIComponent(jenisSambungan)}`
+    : "";
+  return (await apiRequest<TariffPowerOption[]>(`/api/tariffs${query}`)).data;
+}
+
 export type CreateApplicationRequest = {
   jenis_permohonan: string;
   jenis_sambungan: string;
   pelanggan_nama: string;
   pelanggan_alamat: string;
   pelanggan_no_hp: string;
+  tarif: string;
+  daya_baru: number;
+  daya_lama?: number;
   ulp_unit?: string;
+  evidence_files: File[];
 };
 export async function createApplication(payload: CreateApplicationRequest) {
+  // Multipart: the create endpoint binds the customer's evidence to the new
+  // permohonan atomically, so files are sent alongside the fields.
+  const body = new FormData();
+  body.set("jenis_permohonan", payload.jenis_permohonan);
+  body.set("jenis_sambungan", payload.jenis_sambungan);
+  body.set("pelanggan_nama", payload.pelanggan_nama);
+  body.set("pelanggan_alamat", payload.pelanggan_alamat);
+  body.set("pelanggan_no_hp", payload.pelanggan_no_hp);
+  body.set("tarif", payload.tarif);
+  body.set("daya_baru", String(payload.daya_baru));
+  if (payload.daya_lama !== undefined)
+    body.set("daya_lama", String(payload.daya_lama));
+  if (payload.ulp_unit) body.set("ulp_unit", payload.ulp_unit);
+  for (const file of payload.evidence_files)
+    body.append("evidence_files", file);
   return mapApplication(
     (
       await apiRequest<PermohonanResponse>("/api/permohonan", {
         method: "POST",
-        data: payload,
+        data: body,
       })
     ).data,
   );

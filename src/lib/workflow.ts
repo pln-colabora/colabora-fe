@@ -82,6 +82,7 @@ export type DocumentItem = {
   addedAt: string;
   mimeType: string;
   sizeBytes: number;
+  uploadedBy?: string;
 };
 
 export type WorkflowNode = {
