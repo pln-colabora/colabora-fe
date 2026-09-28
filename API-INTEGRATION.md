@@ -18,12 +18,13 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 
 | UI / action | Method dan endpoint | Request penting |
 | --- | --- | --- |
-| Registrasi akun | POST `/api/auth/register` | Multipart `name`, `email`, `password`, satu `document` wajib; `telp_number` opsional. Frontend mengirim `role`, tetapi field tersebut belum tercantum pada schema API registrasi. Akun menunggu verifikasi. |
+| Registrasi akun | POST `/api/auth/register` | Multipart `name`, `email`, `password`, satu `document` wajib; `telp_number` opsional. API belum menerima atau menyimpan `role`; role final ditentukan saat verifikasi. Akun menunggu verifikasi. |
+| Daftar role | GET `/api/auth/roles` | Bearer token Admin/Super User; tanpa parameter; `data` berisi enum role yang tersedia. |
 | Login | POST `/api/auth/login` | `email`, `password`; 403 berarti akun belum diverifikasi |
 | Minta reset kata sandi | POST `/api/auth/send-password-reset` | `email`; UI menampilkan pesan netral untuk menjaga privasi akun |
 | Simpan kata sandi baru | POST `/api/auth/reset-password` | `token`, `new_password` (minimal 8 karakter) |
-| Verifikasi akun | POST `/api/auth/verify/{user_id}` | Bearer token Admin/Super User; menyetujui dokumen dan mengaktifkan akun |
-| Ubah peran akun | PATCH `/api/user/{id}` | Bearer token Admin/Super User; `{ role }`, dipanggil sebelum verifikasi akun |
+| Verifikasi akun | POST `/api/auth/verify/{user_id}` | Bearer token Admin/Super User; `user_id` UUID dan body JSON `{ role }` wajib. Role ditetapkan dan akun diaktifkan dalam request yang sama. |
+| Ubah peran akun | PATCH `/api/user/{id}` | Bearer token Admin/Super User; body `{ role }` untuk perubahan role di luar verifikasi |
 | Profil / role / unit | GET `/api/user/me` | Bearer token |
 | Refresh token | POST `/api/auth/refresh` | `refresh_token` |
 | Logout | POST `/api/auth/logout` | Bearer token |

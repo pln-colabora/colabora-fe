@@ -99,7 +99,6 @@ export default function RegistrationPage() {
         name: values.name,
         email: values.email,
         password: values.password,
-        role: values.role,
         telp_number: values.telp_number || undefined,
         document: values.document,
       });
@@ -232,7 +231,7 @@ export default function RegistrationPage() {
                   name="role"
                   render={({ field }) => (
                     <FormItem className="md:col-span-2">
-                      <FormLabel>Peran yang diajukan</FormLabel>
+                      <FormLabel>Preferensi peran</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
@@ -256,8 +255,9 @@ export default function RegistrationPage() {
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        Peran dapat disesuaikan oleh Admin atau Super User saat
-                        meninjau akun.
+                        Peran final dipilih Admin atau Super User saat
+                        verifikasi. API registrasi saat ini belum menyimpan
+                        pilihan ini.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

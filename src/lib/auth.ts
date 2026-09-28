@@ -1,5 +1,5 @@
 import { apiRequest, clearSession, saveTokens } from "@/lib/api";
-import type { RoleId } from "@/lib/workflow";
+import { roles, type RoleId } from "@/lib/workflow";
 
 export type User = {
   id: string;
@@ -41,7 +41,6 @@ export type RegistrationInput = {
   name: string;
   email: string;
   password: string;
-  role: RoleId;
   telp_number?: string;
   document: File;
 };
@@ -51,7 +50,6 @@ export async function registerAccount(input: RegistrationInput) {
   body.set("name", input.name);
   body.set("email", input.email);
   body.set("password", input.password);
-  body.set("role", input.role);
   if (input.telp_number) body.set("telp_number", input.telp_number);
   body.set("document", input.document);
 
@@ -64,11 +62,17 @@ export async function registerAccount(input: RegistrationInput) {
   ).data;
 }
 
-export async function verifyUserAccount(id: string) {
+export async function getAccountRoles() {
+  const knownRoles = new Set<string>(roles.map(({ id }) => id));
+  const { data } = await apiRequest<string[]>("/api/auth/roles");
+  return data.filter((role): role is RoleId => knownRoles.has(role));
+}
+
+export async function verifyUserAccount(id: string, role: RoleId) {
   return (
-    await apiRequest<Pick<User, "id" | "email" | "is_verified">>(
+    await apiRequest<Pick<User, "id" | "email" | "is_verified" | "role">>(
       `/api/auth/verify/${encodeURIComponent(id)}`,
-      { method: "POST" },
+      { method: "POST", data: { role } },
     )
   ).data;
 }
