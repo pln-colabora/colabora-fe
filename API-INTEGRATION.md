@@ -18,7 +18,12 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 
 | UI / action | Method dan endpoint | Request penting |
 | --- | --- | --- |
-| Login | POST `/api/auth/login` | `email`, `password` |
+| Registrasi vendor | POST `/api/auth/register` | Multipart `name`, `email`, `password`, satu `document` wajib; `telp_number` opsional. Akun menunggu verifikasi. |
+| Login | POST `/api/auth/login` | `email`, `password`; 403 berarti akun belum diverifikasi |
+| Minta reset kata sandi | POST `/api/auth/send-password-reset` | `email`; UI menampilkan pesan netral untuk menjaga privasi akun |
+| Simpan kata sandi baru | POST `/api/auth/reset-password` | `token`, `new_password` (minimal 8 karakter) |
+| Verifikasi akun | POST `/api/auth/verify/{user_id}` | Bearer token Admin/Super User; menyetujui dokumen dan mengaktifkan akun |
+| Ubah peran akun | PATCH `/api/user/{id}` | Bearer token Admin/Super User; `{ role }`, dipanggil sebelum verifikasi vendor |
 | Profil / role / unit | GET `/api/user/me` | Bearer token |
 | Refresh token | POST `/api/auth/refresh` | `refresh_token` |
 | Logout | POST `/api/auth/logout` | Bearer token |
@@ -46,6 +51,8 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 | Riwayat | GET `P/logs` | Judul aktivitas dipetakan dari `workflow_node`; `detail` ditampilkan terpisah |
 | Daftar akun vendor | GET `/api/vendor?page=...&per_page=100` | Filter role dari response; hanya dimuat saat disclosure penugasan dibuka |
 | Penugasan vendor | POST `P/vendor-assignments` | `vendor_id`, `vendor_role` |
+
+Token dari email reset diterima halaman `/reset-password` melalui query `token` dan dikirim kembali dalam body `POST /api/auth/reset-password`. OpenAPI menentukan body endpoint reset, tetapi tidak menentukan URL tujuan email; backend perlu mengarahkan email ke URL frontend tersebut.
 
 Submit memakai path dan method dari `available_actions` yang diterima server, dengan batas path permohonan yang sama. Tidak ada endpoint terpisah untuk aksi UI yang memang digabung backend. Response mutation langsung ditampilkan, kemudian detail, dokumen, dan riwayat dimuat ulang. Kegagalan refresh setelah mutation tidak meminta pengguna mengulang mutation yang sudah sukses.
 
@@ -87,6 +94,9 @@ Daftar 15 akun yang diberikan disimpan di `.env.local` yang diabaikan Git, melal
 - `src/hooks/use-document-actions.ts`: buka evidence di tab browser dan unduh melalui request terautentikasi.
 - `src/components/dashboard/app-shell.tsx`: identitas backend dan logout; switch peran/reset demo dihapus.
 - `src/app/login/*`: credential helper development dan login nyata, dengan layout yang sama.
+- `src/app/registrasi/page.tsx`: registrasi multipart dengan dokumen verifikasi wajib.
+- `src/app/lupa-kata-sandi/` dan `src/app/reset-password/`: permintaan email reset serta penggantian kata sandi dengan token.
+- `src/app/admin/akun/page.tsx`: penetapan role vendor dan verifikasi akun pending.
 - `src/app/dashboard/page.tsx`: data list API, total/filter, caller-specific task queue, loading/error/retry.
 - `src/app/permohonan/baru/page.tsx`: create API sesuai schema.
 - `src/app/permohonan/[id]/page.tsx`: detail server, pilihan aksi paralel, node timeline, dokumen/log, penugasan vendor.

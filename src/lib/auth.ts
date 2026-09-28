@@ -7,6 +7,7 @@ export type User = {
   email: string;
   role: RoleId;
   unit?: string;
+  is_verified?: boolean;
 };
 
 export type CreateUserInput = {
@@ -34,6 +35,62 @@ export async function login(email: string, password: string) {
     clearSession();
     throw error;
   }
+}
+
+export type RegistrationInput = {
+  name: string;
+  email: string;
+  password: string;
+  telp_number?: string;
+  document: File;
+};
+
+export async function registerAccount(input: RegistrationInput) {
+  const body = new FormData();
+  body.set("name", input.name);
+  body.set("email", input.email);
+  body.set("password", input.password);
+  if (input.telp_number) body.set("telp_number", input.telp_number);
+  body.set("document", input.document);
+
+  return (
+    await apiRequest<User>(
+      "/api/auth/register",
+      { method: "POST", data: body },
+      false,
+    )
+  ).data;
+}
+
+export async function verifyUserAccount(id: string) {
+  return (
+    await apiRequest<Pick<User, "id" | "email" | "is_verified">>(
+      `/api/auth/verify/${encodeURIComponent(id)}`,
+      { method: "POST" },
+    )
+  ).data;
+}
+
+export async function sendPasswordReset(email: string) {
+  return apiRequest(
+    "/api/auth/send-password-reset",
+    {
+      method: "POST",
+      data: { email },
+    },
+    false,
+  );
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  return apiRequest(
+    "/api/auth/reset-password",
+    {
+      method: "POST",
+      data: { token, new_password: newPassword },
+    },
+    false,
+  );
 }
 
 export async function createUser(input: CreateUserInput) {

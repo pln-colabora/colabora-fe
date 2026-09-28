@@ -25,9 +25,12 @@ type EvidenceUploaderProps = {
   onFilesChange: (files: File[]) => void;
   statuses?: Map<File, EvidenceFileStatus>;
   disabled?: boolean;
+  selectionMode?: "single" | "multiple";
+  fileLabel?: string;
+  helpText?: string;
 } & Pick<
   ComponentProps<"div">,
-  "id" | "aria-describedby" | "aria-invalid"
+  "id" | "aria-describedby" | "aria-invalid" | "aria-labelledby"
 >;
 
 export function EvidenceUploader({
@@ -35,12 +38,20 @@ export function EvidenceUploader({
   onFilesChange,
   statuses = new Map(),
   disabled = false,
+  selectionMode = "multiple",
+  fileLabel = "evidence",
+  helpText = "PDF, JPG, JPEG, atau PNG · maksimal 10 MB per berkas",
   ...controlProps
 }: EvidenceUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const singleFile = selectionMode === "single";
 
   function addFiles(incoming: File[]) {
+    if (singleFile) {
+      if (incoming.length > 0) onFilesChange(incoming.slice(0, 1));
+      return;
+    }
     const unique = new Map(
       [...files, ...incoming].map((file) => [
         `${file.name}:${file.size}:${file.lastModified}`,
@@ -92,10 +103,10 @@ export function EvidenceUploader({
           <UploadCloud className="size-5" aria-hidden="true" />
         </span>
         <p className="mt-4 text-sm font-medium">
-          Tarik dan letakkan evidence di sini
+          Tarik dan letakkan {fileLabel} di sini
         </p>
         <p className="text-muted-foreground mt-1 text-xs">
-          PDF, JPG, JPEG, atau PNG · maksimal 10 MB per berkas
+          {helpText}
         </p>
         <Button
           type="button"
@@ -112,7 +123,7 @@ export function EvidenceUploader({
         <Input
           ref={inputRef}
           type="file"
-          multiple
+          multiple={!singleFile}
           accept=".pdf,.jpg,.jpeg,.png"
           className="sr-only"
           disabled={disabled}
