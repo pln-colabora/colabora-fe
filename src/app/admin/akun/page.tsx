@@ -73,11 +73,7 @@ export default function AccountsPage() {
 
     getAccountRoles()
       .then((roles) => {
-        if (active) {
-          setAvailableRoles(
-            roles.filter((role) => role !== "admin" && role !== "super-user"),
-          );
-        }
+        if (active) setAvailableRoles(roles);
       })
       .catch((requestError) => {
         if (active) setRolesError(requestError);
