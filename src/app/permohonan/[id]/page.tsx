@@ -61,10 +61,18 @@ import {
   getRole,
   stages,
   type ActionId,
+  type ActivityDefinition,
   type Application,
   type RoleId,
   type StageId,
 } from "@/lib/workflow";
+
+// The one work-order activity whose evidence each vendor role may read.
+const vendorWoActionId: Partial<Record<RoleId, ActionId>> = {
+  "vendor-tiang": "6", // WO Vendor Tiang (by Perencanaan)
+  "vendor-konstruksi": "7", // WO Vendor Konstruksi (by Konstruksi UP3)
+  "vendor-sr-app": "8", // WO Vendor APP (by Transaksi Energi)
+};
 
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
@@ -127,6 +135,24 @@ export default function ApplicationDetailPage() {
   const documents = getDocuments(application);
   const history = getHistory(application);
   const ownedSla = getOwnedSla(application, roleId);
+  // Vendors are external to PLN: hide internal panels and keep only their own log.
+  const isVendor = roleId.startsWith("vendor-");
+  // Vendors only see log entries for activities they own.
+  const visibleHistory = isVendor
+    ? history.filter((item) => {
+        const activity = getActivity(item.actionId);
+        return activity ? getOwner(activity, application) === roleId : false;
+      })
+    : history;
+  // Vendors see their own work-order document plus documents they uploaded.
+  const woActionId = vendorWoActionId[roleId];
+  const visibleDocuments = isVendor
+    ? documents.filter(
+        (document) =>
+          (woActionId && document.actionId === woActionId) ||
+          document.uploadedBy === user?.name,
+      )
+    : documents;
 
   return (
     <AppShell active="applications" roleId={roleId} user={user}>
@@ -213,19 +239,20 @@ export default function ApplicationDetailPage() {
         )}
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
-            <WorkflowTimeline application={application} />
+            <WorkflowTimeline application={application} roleId={roleId} />
             <DocumentsSection
               applicationId={application.id}
-              documents={documents}
+              documents={visibleDocuments}
               loading={relatedLoading}
               error={relatedError}
+              isVendor={isVendor}
             />
           </div>
           <aside className="space-y-6">
-            <ApplicationFacts application={application} />
-            <DecisionSummary application={application} />
+            {!isVendor && <ApplicationFacts application={application} />}
+            {!isVendor && <DecisionSummary application={application} />}
             <HistorySection
-              history={history}
+              history={visibleHistory}
               loading={relatedLoading}
               error={relatedError}
             />
@@ -435,7 +462,49 @@ function getActivityNotes(id: ActionId, application: Application): string[] {
   return notes;
 }
 
-function WorkflowTimeline({ application }: { application: Application }) {
+function WorkflowTimeline({
+  application,
+  roleId,
+}: {
+  application: Application;
+  roleId: RoleId;
+}) {
+  // Vendors are external to PLN: show only the activities they own (actor is
+  // this vendor), so the timeline reflects their part of the flow — not the
+  // full internal process.
+  const isVendor = roleId.startsWith("vendor-");
+  const ownedByVendor = (activity: ActivityDefinition) =>
+    getOwner(activity, application) === roleId;
+  const visibleStages = isVendor
+    ? stages.filter((stage) =>
+        activities.some(
+          (activity) => activity.stage === stage.id && ownedByVendor(activity),
+        ),
+      )
+    : stages;
+  // The vendor projection omits nodes outside their current one, so activities
+  // in already-passed stages have no node and would read as "future". Infer
+  // their status from the request's current stage instead.
+  const activityView = (activity: ActivityDefinition): ProgressStatus => {
+    const status = getActivityStatus(activity.id, application);
+    if (!isVendor) return status;
+    const hasNode = application.nodes.some(
+      (node) => nodeActions[node.workflow_node] === activity.id,
+    );
+    if (hasNode) return status;
+    if (activity.stage < application.currentStage) return "done";
+    return status;
+  };
+  const stageView = (stageId: StageId): ProgressStatus => {
+    if (!isVendor) return getStageStatus(stageId, application);
+    const statuses = activities
+      .filter((activity) => activity.stage === stageId && ownedByVendor(activity))
+      .map(activityView);
+    if (statuses.length && statuses.every((s) => s === "done" || s === "skipped"))
+      return "done";
+    if (statuses.some((s) => s === "current")) return "current";
+    return "future";
+  };
   return (
     <section
       aria-labelledby="workflow-title"
@@ -450,25 +519,31 @@ function WorkflowTimeline({ application }: { application: Application }) {
             Tahapan proses
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            17 aktivitas utama dan percabangan yang berlaku.
+            {isVendor
+              ? "Aktivitas yang ditugaskan ke Anda."
+              : "17 aktivitas utama dan percabangan yang berlaku."}
           </p>
         </div>
-        <span className="text-muted-foreground text-xs">
-          Tahap {getCurrentStage(application)} dari 7
-        </span>
+        {!isVendor && (
+          <span className="text-muted-foreground text-xs">
+            Tahap {getCurrentStage(application)} dari 7
+          </span>
+        )}
       </div>
       <ol className="mt-5 space-y-0">
-        {stages.map((stage, index) => {
+        {visibleStages.map((stage, index) => {
           const stageActivities = activities.filter(
-            (activity) => activity.stage === stage.id,
+            (activity) =>
+              activity.stage === stage.id &&
+              (!isVendor || ownedByVendor(activity)),
           );
-          const stageStatus = getStageStatus(stage.id, application);
+          const stageStatus = stageView(stage.id);
           return (
             <li
               key={stage.id}
               className="relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-6 last:pb-0"
             >
-              {index < stages.length - 1 ? (
+              {index < visibleStages.length - 1 ? (
                 <span
                   className="bg-border absolute top-7 bottom-0 left-[13px] w-px"
                   aria-hidden="true"
@@ -478,9 +553,11 @@ function WorkflowTimeline({ application }: { application: Application }) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <span className="text-muted-foreground mr-2 text-xs">
-                      Tahap {stage.id}
-                    </span>
+                    {!isVendor && (
+                      <span className="text-muted-foreground mr-2 text-xs">
+                        Tahap {stage.id}
+                      </span>
+                    )}
                     <h3 className="font-display inline font-semibold">
                       {stage.label}
                     </h3>
@@ -489,7 +566,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
                 </div>
                 <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
                   {stageActivities.map((activity) => {
-                    const status = getActivityStatus(activity.id, application);
+                    const status = activityView(activity);
                     const owner = getRole(getOwner(activity, application));
                     const notes = getActivityNotes(activity.id, application);
                     return (
@@ -693,11 +770,13 @@ function DocumentsSection({
   documents,
   loading,
   error,
+  isVendor = false,
 }: {
   applicationId: string;
   loading: boolean;
   error: unknown;
   documents: ReturnType<typeof getDocuments>;
+  isVendor?: boolean;
 }) {
   const { activeAction, openDocument, downloadDocument } =
     useDocumentActions(applicationId);
@@ -713,7 +792,9 @@ function DocumentsSection({
           Dokumen & Evidence
         </h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Hanya dokumen dari aktivitas yang telah diselesaikan.
+          {isVendor
+            ? "Dokumen work order dan evidence yang Anda unggah."
+            : "Hanya dokumen dari aktivitas yang telah diselesaikan."}
         </p>
       </div>
       {loading ? (

@@ -199,6 +199,7 @@ export async function getApplicationHistory(id: string) {
           activity?.label ?? log.workflow_node ?? "Aktivitas workflow",
         detail: log.detail ?? undefined,
         by: log.actor,
+        actionId: nodeActions[log.workflow_node ?? ""],
       };
     })
     .sort((a, b) => b.at.localeCompare(a.at));
@@ -298,6 +299,7 @@ export async function submitAction(
   action: AvailableAction,
   values: Record<string, string>,
   documentIds: string[],
+  locationCoordinates?: { latitude: number; longitude: number } | null,
 ) {
   // Some API deployments expose the combined planning node under the
   // decision name; both names use the same rab-kko-kkf contract.
@@ -327,6 +329,9 @@ export async function submitAction(
     workflowNode === "pelaksanaan_konstruksi"
   )
     payload.workflow_node = action.workflow_node;
+  // Optional WGS84 point captured by vendor tiang on the pemasangan_tiang node.
+  if (locationCoordinates)
+    payload.location_coordinates = locationCoordinates;
   const path = action.path.replace("{id}", encodeURIComponent(id));
   if (
     !path.startsWith(`/api/permohonan/${encodeURIComponent(id)}/`) ||

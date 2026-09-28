@@ -202,7 +202,7 @@ test("server projection retains parallel and skipped nodes and server permission
   assert.deepEqual(mapped.history, []);
   assert.equal(
     workflow.getApplicationStatus({ ...mapped, status: "returned" }),
-    "Ditolak",
+    "PK dikembalikan",
   );
   assert.equal(
     workflow.getApplicationStatus({ ...mapped, status: "completed" }),

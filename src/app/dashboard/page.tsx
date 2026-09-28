@@ -59,6 +59,7 @@ import {
   getSlaDaysRemaining,
 } from "@/lib/utils";
 import {
+  activities,
   getActivity,
   getApplicationStatus,
   getAvailableActivities,
@@ -67,10 +68,23 @@ import {
   getOwner,
   getRole,
   stages,
+  type ActivityDefinition,
   type Application,
+  type ApplicationSummary,
+  type RoleId,
 } from "@/lib/workflow";
 
 type View = "all" | "mine";
+
+// getOwner only reads connectionType (for the PLG TM branches), so test an
+// activity against both branch shapes to see if this vendor ever owns it.
+const SAMPLE_CONNECTIONS = ["JTR", "PLG TM <5 GWNG"] as const;
+function isVendorActivity(activity: ActivityDefinition, roleId: RoleId) {
+  return SAMPLE_CONNECTIONS.some(
+    (connectionType) =>
+      getOwner(activity, { connectionType } as ApplicationSummary) === roleId,
+  );
+}
 
 export default function DashboardPage() {
   return (
@@ -91,6 +105,16 @@ function DashboardContent() {
   const [searchQuery, setSearchQuery] = useState(urlQuery);
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
+  const isVendor = roleId.startsWith("vendor-");
+  // Vendors only see the stages they act in.
+  const filterStages = isVendor
+    ? stages.filter((stage) =>
+        activities.some(
+          (activity) =>
+            activity.stage === stage.id && isVendorActivity(activity, roleId),
+        ),
+      )
+    : stages;
   const {
     applications,
     loading: applicationsLoading,
@@ -676,7 +700,7 @@ function DashboardContent() {
               >
                 Semua tahap
               </Link>
-              {stages.map((stage) => {
+              {filterStages.map((stage) => {
                 const count = sourceApplications.filter(
                   (application) => getCurrentStage(application) === stage.id,
                 ).length;

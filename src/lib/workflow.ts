@@ -73,6 +73,7 @@ export type HistoryItem = {
   title: string;
   detail?: string;
   by: string;
+  actionId?: ActionId;
 };
 
 export type DocumentItem = {
