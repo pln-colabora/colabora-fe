@@ -118,6 +118,7 @@ export default function ActivityPage() {
           <ActionForm
             application={application}
             action={action}
+            embedded
             onCancel={() => router.push(detailHref)}
             onSaved={() => router.replace(detailHref)}
           />

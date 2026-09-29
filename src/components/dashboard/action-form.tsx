@@ -44,7 +44,7 @@ import {
   uploadEvidence,
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
-import { isValidDateValue } from "@/lib/utils";
+import { cn, isValidDateValue } from "@/lib/utils";
 import {
   getActivity,
   getRole,
@@ -124,7 +124,7 @@ const CoordinatePicker = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="bg-muted h-64 w-full animate-pulse rounded-lg" />
+      <div className="bg-muted h-80 w-full animate-pulse rounded-lg" />
     ),
   },
 );
@@ -220,6 +220,7 @@ export function ActionForm({
     "pemasangan_sr_app",
   ].includes(formNode.replaceAll("-", "_"));
   const [coordinate, setCoordinate] = useState<Coordinate | null>(null);
+  const [coordinateError, setCoordinateError] = useState(false);
   const uploads = useRef(new Map<File, string>());
   const [fileStatuses, setFileStatuses] = useState(
     new Map<File, EvidenceFileStatus>(),
@@ -244,7 +245,6 @@ export function ActionForm({
 
   const beforeNotes = baseFields.filter((field) => field.name !== "notes");
   const notesDef = baseFields.find((field) => field.name === "notes");
-  const notesBeforeEvidence = beforeNotes.length > 0 || Boolean(vendorRole);
 
   const renderField = (definition: FieldDefinition) => (
     <FormField
@@ -253,7 +253,10 @@ export function ActionForm({
       name={`values.${definition.name}`}
       render={({ field }) => (
         <FormItem
-          className={definition.type === "textarea" ? "md:col-span-2" : ""}
+          className={cn(
+            definition.type === "textarea" && "md:col-span-2",
+            definition.name === "notes" && "mt-5",
+          )}
         >
           <FormLabel>
             {definition.label}
@@ -312,6 +315,11 @@ export function ActionForm({
   );
 
   async function submit(data: ActionFormValues) {
+    if (needsCoordinate && !coordinate) {
+      setCoordinateError(true);
+      return;
+    }
+    setCoordinateError(false);
     if (
       !(await confirmAction({
         title: "Lanjutkan aktivitas?",
@@ -377,7 +385,7 @@ export function ActionForm({
         className={
           embedded
             ? "min-w-0"
-            : "border-border mt-5 min-w-0 border-t pt-5"
+            : "mt-5 min-w-0"
         }
         noValidate
       >
@@ -430,24 +438,28 @@ export function ActionForm({
                 )}
               />
             ) : null}
-            {notesBeforeEvidence && notesDef ? renderField(notesDef) : null}
           </div>
 
           {needsCoordinate ? (
-            <div className="mt-5 min-w-0">
+            <div className="min-w-0">
               <p className="text-sm font-medium">
-                Lokasi pemasangan{" "}
-                <span className="text-muted-foreground font-normal">
-                  (opsional)
-                </span>
+                Lokasi pemasangan
               </p>
               <div className="mt-2">
                 <CoordinatePicker
                   value={coordinate}
-                  onChange={setCoordinate}
+                  onChange={(nextCoordinate) => {
+                    setCoordinate(nextCoordinate);
+                    if (nextCoordinate) setCoordinateError(false);
+                  }}
                   disabled={busy}
                 />
               </div>
+              {coordinateError ? (
+                <p className="text-destructive mt-2 text-sm" role="alert">
+                  Lokasi pemasangan wajib ditentukan.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -474,9 +486,7 @@ export function ActionForm({
             )}
           />
 
-          {!beforeNotes.length && !vendorRole && notesDef
-            ? renderField(notesDef)
-            : null}
+          {notesDef ? renderField(notesDef) : null}
 
           {Boolean(requestError) && (
             <ErrorNotice

@@ -1,6 +1,29 @@
 @import "tailwindcss";
 
 @import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
+
+.coordinate-map .leaflet-pane,
+.coordinate-map .leaflet-tile,
+.coordinate-map .leaflet-marker-icon,
+.coordinate-map .leaflet-marker-shadow,
+.coordinate-map .leaflet-tile-container,
+.coordinate-map .leaflet-overlay-pane,
+.coordinate-map .leaflet-shadow-pane,
+.coordinate-map .leaflet-marker-pane,
+.coordinate-map .leaflet-popup-pane {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.coordinate-map .leaflet-tile {
+  width: 256px;
+  height: 256px;
+  max-width: none;
+  max-height: none;
+}
+
 
 @variant dark (&:is(.dark *));
 

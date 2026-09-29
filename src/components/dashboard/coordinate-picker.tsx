@@ -3,19 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
 import { Input } from "@/components/ui/input";
 
-// Bundlers rewrite Leaflet's default icon paths, so point them at the bundled
-// assets explicitly or the marker renders blank.
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x.src,
-  iconUrl: markerIcon.src,
-  shadowUrl: markerShadow.src,
+const locationIcon = L.icon({
+  iconUrl: "/icons/location.png",
+  iconSize: [48, 48],
+  iconAnchor: [24, 38],
 });
 
 export type Coordinate = { latitude: number; longitude: number };
@@ -50,7 +44,10 @@ export function CoordinatePicker({
     const map = mapRef.current;
     if (!map) return;
     if (markerRef.current) markerRef.current.setLatLng([latitude, longitude]);
-    else markerRef.current = L.marker([latitude, longitude]).addTo(map);
+    else
+      markerRef.current = L.marker([latitude, longitude], {
+        icon: locationIcon,
+      }).addTo(map);
   }
 
   useEffect(() => {
@@ -74,7 +71,13 @@ export function CoordinatePicker({
     });
     mapRef.current = map;
     if (value) placeMarker(value.latitude, value.longitude);
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false });
+    });
+    resizeObserver.observe(containerRef.current);
+    requestAnimationFrame(() => map.invalidateSize({ animate: false }));
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -108,7 +111,7 @@ export function CoordinatePicker({
     <div className="space-y-3">
       <div
         ref={containerRef}
-        className="border-border h-64 w-full overflow-hidden rounded-lg border"
+        className="coordinate-map border-border relative isolate h-80 w-full overflow-hidden rounded-lg border"
         aria-label="Peta pemilih koordinat"
       />
       <p className="text-muted-foreground text-xs">
