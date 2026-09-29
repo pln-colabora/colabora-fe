@@ -335,6 +335,12 @@ export const activities: ActivityDefinition[] = [
         options: ["Ya", "Tidak"],
         required: true,
       },
+      {
+        name: "estimasi_tanggal_selesai",
+        label: "Estimasi tanggal selesai",
+        type: "date",
+        required: true,
+      },
       notesField,
     ],
     evidence: "Evidence aktivitas",

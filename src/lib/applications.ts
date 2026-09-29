@@ -317,8 +317,10 @@ export async function submitAction(
       values.nps_delegation_status === "Didelegasikan"
         ? "delegated"
         : "returned";
-  if (workflowNode === "wo_konstruksi")
+  if (workflowNode === "wo_konstruksi") {
     payload.perlu_pdkb = values.perlu_pdkb === "Ya";
+    payload.estimasi_tanggal_selesai = values.estimasi_tanggal_selesai;
+  }
   // reservasi_material (vendor-konstruksi) and tera_app (transaksi-energi) are
   // now separate nodes; each takes a plain optional notes field.
   if (values.notes) payload.notes = values.notes;
