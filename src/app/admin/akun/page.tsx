@@ -41,8 +41,27 @@ import { useSession } from "@/hooks/use-session";
 import { useUsers } from "@/hooks/use-users";
 import { getAccountRoles, verifyUserAccount } from "@/lib/auth";
 import { presentApiError } from "@/lib/error-utils";
-import { deleteUser } from "@/lib/users";
+import { deleteUser, updateUserUnit } from "@/lib/users";
 import { getRole, type RoleId } from "@/lib/workflow";
+
+const ulpUnits = ["ULP Karang Pilang", "ULP Taman", "ULP Menganti"];
+const ulpRoles: RoleId[] = ["teknik", "pelayanan-pelanggan"];
+const up3Roles: RoleId[] = [
+  "nps",
+  "perencanaan",
+  "konstruksi",
+  "transaksi-energi",
+  "jaringan",
+  "pdkb",
+];
+
+function getUnitOptions(role: RoleId | "") {
+  if (!role || role.startsWith("vendor-") || ["admin", "user", "super-user"].includes(role))
+    return ["-"];
+  if (ulpRoles.includes(role)) return ulpUnits;
+  if (up3Roles.includes(role)) return ["UP3"];
+  return [];
+}
 
 export default function AccountsPage() {
   const { user, error: sessionError } = useSession();
@@ -59,9 +78,12 @@ export default function AccountsPage() {
   const [rolesLoading, setRolesLoading] = useState(false);
   const [rolesError, setRolesError] = useState<unknown>(null);
   const [rolesReload, setRolesReload] = useState(0);
-  const [verificationRoles, setVerificationRoles] = useState<
-    Record<string, RoleId>
-  >({});
+  const [pendingVerification, setPendingVerification] = useState<
+    (typeof users)[number] | null
+  >(null);
+  const [verificationRole, setVerificationRole] = useState<RoleId | "">("");
+  const [verificationUnit, setVerificationUnit] = useState("");
+  const [verificationError, setVerificationError] = useState<unknown>(null);
   const managerId = user?.id;
 
   useEffect(() => {
@@ -126,14 +148,20 @@ export default function AccountsPage() {
   async function handleVerify(
     account: (typeof users)[number],
     role: RoleId,
+    unit: string,
   ) {
     setVerifyingId(account.id);
+    setVerificationError(null);
     try {
+      await updateUserUnit(account.id, unit);
       await verifyUserAccount(account.id, role);
       toast.success(`${account.name} berhasil diverifikasi.`);
+      setPendingVerification(null);
+      setVerificationRole("");
+      setVerificationUnit("");
       reload();
     } catch (requestError) {
-      reload();
+      setVerificationError(requestError);
       toast.error(
         presentApiError(
           requestError,
@@ -322,73 +350,25 @@ export default function AccountsPage() {
                             <td className="px-4 py-4 text-right sm:px-5">
                               <div className="flex justify-end gap-2">
                                 {account.is_verified === false ? (
-                                  <div className="flex items-center gap-2">
-                                    <Select
-                                      value={verificationRoles[account.id]}
-                                      onValueChange={(role) =>
-                                        setVerificationRoles((current) => ({
-                                          ...current,
-                                          [account.id]: role as RoleId,
-                                        }))
-                                      }
-                                      disabled={
-                                        !!verifyingId ||
-                                        rolesLoading ||
-                                        !!rolesError
-                                      }
-                                    >
-                                      <SelectTrigger
-                                        aria-label={`Peran untuk ${account.name}`}
-                                        className="h-10 w-52"
-                                      >
-                                        <SelectValue
-                                          placeholder={
-                                            rolesLoading
-                                              ? "Memuat peran..."
-                                              : "Pilih peran"
-                                          }
-                                        />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {availableRoles.map((role) => (
-                                          <SelectItem key={role} value={role}>
-                                            {getRole(role).label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      className="min-h-10"
-                                      onClick={() => {
-                                        const role = verificationRoles[account.id];
-                                        if (role && availableRoles.includes(role))
-                                          void handleVerify(account, role);
-                                      }}
-                                      disabled={
-                                        !!verifyingId ||
-                                        !verificationRoles[account.id] ||
-                                        rolesLoading ||
-                                        !availableRoles.includes(
-                                          verificationRoles[account.id],
-                                        ) ||
-                                        !!rolesError
-                                      }
-                                    >
-                                      {verifyingId === account.id ? (
-                                        <LoaderCircle
-                                          className="animate-spin"
-                                          aria-hidden="true"
-                                        />
-                                      ) : (
-                                        <CheckCircle2 aria-hidden="true" />
-                                      )}
-                                      {verifyingId === account.id
-                                        ? "Memverifikasi..."
-                                        : "Verifikasi"}
-                                    </Button>
-                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="min-h-10"
+                                    onClick={() => {
+                                      setPendingVerification(account);
+                                      setVerificationRole("");
+                                      setVerificationUnit("");
+                                      setVerificationError(null);
+                                    }}
+                                    disabled={
+                                      !!verifyingId ||
+                                      rolesLoading ||
+                                      !!rolesError
+                                    }
+                                  >
+                                    <CheckCircle2 aria-hidden="true" />
+                                    Verifikasi
+                                  </Button>
                                 ) : null}
                                 <Button
                                   type="button"
@@ -439,6 +419,129 @@ export default function AccountsPage() {
             >
               {deleting ? "Menghapus..." : "Hapus akun"}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={!!pendingVerification}
+        onOpenChange={(open) => {
+          if (!open && !verifyingId) {
+            setPendingVerification(null);
+            setVerificationRole("");
+            setVerificationUnit("");
+            setVerificationError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Verifikasi akun</AlertDialogTitle>
+            <AlertDialogDescription>
+              Pilih role dan unit untuk {pendingVerification?.name ?? "akun ini"}
+              sebelum akun diaktifkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {verificationError ? (
+            <p role="alert" className="text-destructive text-sm">
+              {presentApiError(
+                verificationError,
+                "Akun tidak dapat diverifikasi.",
+              ).message}
+            </p>
+          ) : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="min-w-0 space-y-2">
+              <label
+                htmlFor="verification-role"
+                className="text-sm font-medium"
+              >
+                Role
+              </label>
+              <Select
+                value={verificationRole}
+                onValueChange={(value) => {
+                  setVerificationRole(value as RoleId);
+                  setVerificationUnit("");
+                  setVerificationError(null);
+                }}
+                disabled={!!verifyingId || rolesLoading || !!rolesError}
+              >
+                <SelectTrigger id="verification-role" className="h-11 w-full">
+                  <SelectValue
+                    placeholder={rolesLoading ? "Memuat role..." : "Pilih role"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRoles.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {getRole(role).label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-0 space-y-2">
+              <label
+                htmlFor="verification-unit"
+                className="text-sm font-medium"
+              >
+                Unit
+              </label>
+              <Select
+                value={verificationUnit}
+                onValueChange={(unit) => {
+                  setVerificationUnit(unit);
+                  setVerificationError(null);
+                }}
+                disabled={!verificationRole || !!verifyingId}
+              >
+                <SelectTrigger id="verification-unit" className="h-11 w-full">
+                  <SelectValue
+                    placeholder={
+                      verificationRole ? "Pilih unit" : "Pilih role dahulu"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {getUnitOptions(verificationRole).map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {unit === "-" ? "- (tanpa unit)" : unit}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!verifyingId}>Batal</AlertDialogCancel>
+            <Button
+              type="button"
+              onClick={() => {
+                if (
+                  pendingVerification &&
+                  availableRoles.includes(verificationRole as RoleId) &&
+                  getUnitOptions(verificationRole).includes(verificationUnit)
+                )
+                  void handleVerify(
+                    pendingVerification,
+                    verificationRole as RoleId,
+                    verificationUnit,
+                  );
+              }}
+              disabled={
+                !!verifyingId ||
+                rolesLoading ||
+                !!rolesError ||
+                !verificationRole ||
+                !availableRoles.includes(verificationRole as RoleId) ||
+                !getUnitOptions(verificationRole).includes(verificationUnit)
+              }
+            >
+              {verifyingId ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : null}
+              {verifyingId ? "Memverifikasi..." : "Verifikasi akun"}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
