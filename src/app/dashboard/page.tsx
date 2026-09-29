@@ -185,7 +185,7 @@ function DashboardContent() {
     if (stageFilter && String(getCurrentStage(application)) !== stageFilter) {
       return false;
     }
-    if (statusFilter && getApplicationStatus(application) !== statusFilter) {
+    if (statusFilter && getApplicationStatus(application, roleId) !== statusFilter) {
       return false;
     }
     if (searchTerms.length === 0) {
@@ -208,7 +208,7 @@ function DashboardContent() {
       stage?.shortLabel,
       activity?.label,
       activity?.shortLabel,
-      getApplicationStatus(application),
+      getApplicationStatus(application, roleId),
     ]
       .filter(Boolean)
       .join(" ")
@@ -225,7 +225,7 @@ function DashboardContent() {
           .slice(0, 5)
       : filteredApplications;
   const completedCount = applications.filter(
-    (item) => getApplicationStatus(item) === "Selesai",
+    (item) => getApplicationStatus(item, roleId) === "Selesai",
   ).length;
   const activeCount = applications.filter(
     (item) => item.status === "in_progress",
@@ -666,7 +666,7 @@ function DashboardContent() {
                     <SelectContent>
                       <SelectItem value="all">Semua status</SelectItem>
                       {Array.from(
-                        new Set(applications.map(getApplicationStatus)),
+                        new Set(applications.map((item) => getApplicationStatus(item, roleId))),
                       ).map((status) => (
                         <SelectItem key={status} value={status}>
                           {status}
@@ -744,6 +744,7 @@ function DashboardContent() {
                   <ApplicationListItem
                     key={application.id}
                     application={application}
+                    roleId={roleId}
                     returnTo={returnTo}
                   />
                 ))}
@@ -783,6 +784,7 @@ function DashboardContent() {
                         compact={isHome}
                         key={application.id}
                         application={application}
+                        roleId={roleId}
                         returnTo={returnTo}
                       />
                     ))}
@@ -1022,9 +1024,11 @@ function setDashboardStage(query: string, stage: string) {
 
 function ApplicationListItem({
   application,
+  roleId,
   returnTo,
 }: {
   application: Application;
+  roleId: RoleId;
   returnTo: string;
 }) {
   const stage = stages.find(
@@ -1044,7 +1048,7 @@ function ApplicationListItem({
             {application.number}
           </p>
         </div>
-        <StatusBadge status={getApplicationStatus(application)} />
+        <StatusBadge status={getApplicationStatus(application, roleId)} />
       </div>
 
       <dl className="mt-3 grid min-w-0 grid-cols-2 gap-3 text-sm sm:grid-cols-2">
@@ -1057,7 +1061,7 @@ function ApplicationListItem({
         <div className="min-w-0">
           <dt className="text-muted-foreground text-sm">SLA</dt>
           <dd className="mt-1">
-            <SlaIndicator application={application} />
+            <SlaIndicator application={application} roleId={roleId} />
           </dd>
         </div>
       </dl>
@@ -1136,10 +1140,12 @@ function SummaryMetric({
 function ApplicationRow({
   application,
   compact = false,
+  roleId,
   returnTo,
 }: {
   application: Application;
   compact?: boolean;
+  roleId: RoleId;
   returnTo: string;
 }) {
   const activity = getActivity(application.currentAction);
@@ -1150,7 +1156,7 @@ function ApplicationRow({
   const activityLabel = owned
     ? availableActivitySummary(application)
     : activity?.shortLabel;
-  const status = getApplicationStatus(application);
+  const status = getApplicationStatus(application, roleId);
 
   return (
     <tr className="hover:bg-muted/35 border-b transition-colors duration-150 last:border-b-0">
@@ -1192,7 +1198,7 @@ function ApplicationRow({
         </td>
       )}
       <td className="px-4 py-3">
-        <SlaIndicator application={application} />
+        <SlaIndicator application={application} roleId={roleId} />
       </td>
       <td className="px-4 py-3 text-right">
         <Link
@@ -1209,26 +1215,31 @@ function ApplicationRow({
 
 function SlaIndicator({
   application,
-  sla = application.sla,
+  roleId,
+  sla,
   compact = false,
 }: {
   application: Application;
+  roleId?: RoleId;
   sla?: Application["sla"];
   compact?: boolean;
 }) {
-  const remainingLabel = formatSlaRemaining(getSlaDaysRemaining(sla.deadline));
+  const effectiveSla = sla ?? getOwnedSla(application, roleId ?? "user") ?? application.sla;
+  const remainingLabel = formatSlaRemaining(
+    getSlaDaysRemaining(effectiveSla.deadline),
+  );
   const Icon =
-    sla.tone === "late"
+    effectiveSla.tone === "late"
       ? TriangleAlert
-      : sla.tone === "done"
+      : effectiveSla.tone === "done"
         ? CircleCheck
         : Clock3;
   const color =
-    sla.tone === "late"
+    effectiveSla.tone === "late"
       ? "text-destructive"
-      : sla.tone === "due"
+      : effectiveSla.tone === "due"
         ? "text-warning"
-        : sla.tone === "done"
+        : effectiveSla.tone === "done"
           ? "text-success"
           : "text-foreground";
   return (
@@ -1237,11 +1248,11 @@ function SlaIndicator({
     >
       <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       <span>
-        <span className="block">{remainingLabel || sla.label}</span>
-        {sla.deadline ? (
+        <span className="block">{remainingLabel || effectiveSla.label}</span>
+        {effectiveSla.deadline ? (
           <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
             Batas{" "}
-            {formatApiDate(sla.deadline.slice(0, 10), {
+            {formatApiDate(effectiveSla.deadline.slice(0, 10), {
               day: "numeric",
               month: "short",
               year: "numeric",

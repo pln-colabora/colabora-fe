@@ -172,7 +172,7 @@ export default function ApplicationDetailPage() {
                 <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
                   {application.customer}
                 </h1>
-                <StatusBadge status={getApplicationStatus(application)} />
+                <StatusBadge status={getApplicationStatus(application, roleId)} />
               </div>
               <p className="text-muted-foreground mt-2 font-mono text-xs">
                 {application.number}

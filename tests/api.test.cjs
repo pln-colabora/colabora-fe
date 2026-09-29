@@ -210,6 +210,60 @@ test("server projection retains parallel and skipped nodes and server permission
   );
 });
 
+test("vendor status resolves to completed when all vendor-owned tasks are finished", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    status: "in_progress",
+    workflow_nodes: [
+      ...fixture.workflow_nodes,
+      {
+        workflow_node: "pemasangan_tiang",
+        stage_number: 5,
+        status: "completed",
+        sla_status: "none",
+      },
+    ],
+    available_actions: [],
+  });
+
+  assert.equal(
+    workflow.getApplicationStatus(mapped, "vendor-tiang"),
+    "Selesai",
+  );
+  assert.equal(
+    workflow.getApplicationStatus(mapped, "vendor-konstruksi"),
+    "Menunggu tindakan",
+  );
+});
+
+test("vendor SLA is hidden when the remaining overdue work belongs to another role", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    status: "in_progress",
+    workflow_nodes: [
+      {
+        workflow_node: "pelaksanaan_konstruksi",
+        stage_number: 5,
+        status: "completed",
+        sla_status: "none",
+      },
+      {
+        workflow_node: "pemasangan_tiang",
+        stage_number: 5,
+        status: "completed",
+        sla_status: "none",
+      },
+    ],
+    available_actions: [],
+  });
+
+  assert.deepEqual(workflow.getOwnedSla(mapped, "vendor-konstruksi"), {
+    tone: "done",
+    label: "Selesai",
+    deadline: null,
+  });
+});
+
 test("SLA reminder is scoped to the role that owns the available node", () => {
   const mapped = applications.mapApplication({
     ...fixture,

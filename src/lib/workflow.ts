@@ -563,6 +563,14 @@ export function getOwner(
 }
 
 export function getOwnedSla(application: Application, roleId: RoleId) {
+  if (roleId.startsWith("vendor-") && hasRoleCompletedAllVendorTasks(application, roleId)) {
+    return {
+      tone: "done" as const,
+      label: "Selesai",
+      deadline: null,
+    };
+  }
+
   if (application.status !== "in_progress") return null;
 
   // The API returns available_actions for the authenticated caller. Pairing
@@ -618,8 +626,50 @@ export function getRole(id: RoleId) {
 export function getCurrentStage(application: Application) {
   return application.currentStage;
 }
-export function getApplicationStatus(application: Application) {
+
+function hasRoleCompletedAllVendorTasks(
+  application: Application,
+  roleId: RoleId,
+) {
+  if (!roleId.startsWith("vendor-")) return false;
+
+  const relevantActionIds = new Set(
+    activities
+      .filter((activity) => getOwner(activity, application) === roleId)
+      .map((activity) => activity.id),
+  );
+
+  const relevantActions = application.availableActions.filter((availableAction) => {
+    const actionId = nodeActions[availableAction.workflow_node];
+    return actionId ? relevantActionIds.has(actionId) : false;
+  });
+
+  const relevantNodes = application.nodes.filter((node) => {
+    const actionId = nodeActions[node.workflow_node];
+    return actionId ? relevantActionIds.has(actionId) : false;
+  });
+
+  const hasOutstandingVendorWork =
+    relevantActions.length > 0 ||
+    relevantNodes.some(
+      (node) => node.status === "available" || node.status === "in_progress",
+    );
+
+  if (hasOutstandingVendorWork) return false;
+
   return (
+    relevantNodes.length === 0 ||
+    relevantNodes.every(
+      (node) => node.status === "completed" || node.status === "skipped",
+    )
+  );
+}
+
+export function getApplicationStatus(
+  application: Application,
+  roleId?: RoleId,
+) {
+  const status = (
     (
       {
         in_progress: "Menunggu tindakan",
@@ -628,6 +678,16 @@ export function getApplicationStatus(application: Application) {
       } as Record<string, string>
     )[application.status] ?? application.status
   );
+
+  if (
+    roleId &&
+    status === "Menunggu tindakan" &&
+    hasRoleCompletedAllVendorTasks(application, roleId)
+  ) {
+    return "Selesai";
+  }
+
+  return status;
 }
 export function getDocuments(application: Application) {
   return application.documents;
