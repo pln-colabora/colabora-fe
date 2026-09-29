@@ -355,14 +355,14 @@ const cases = [
   [
     "wo_konstruksi",
     "wo-vendor/konstruksi",
-    { perlu_pdkb: "Tidak" },
-    { perlu_pdkb: false },
+    { perlu_pdkb: "Tidak", estimasi_tanggal_selesai: "2026-10-15" },
+    { perlu_pdkb: false, estimasi_tanggal_selesai: "2026-10-15" },
   ],
   [
     "wo_konstruksi",
     "wo-vendor/konstruksi",
-    { perlu_pdkb: "Ya" },
-    { perlu_pdkb: true },
+    { perlu_pdkb: "Ya", estimasi_tanggal_selesai: "2026-11-01" },
+    { perlu_pdkb: true, estimasi_tanggal_selesai: "2026-11-01" },
   ],
   ["wo_tiang", "wo-vendor/tiang", {}, {}],
   ["wo_app", "wo-vendor/app", {}, {}],
