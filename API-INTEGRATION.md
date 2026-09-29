@@ -35,7 +35,7 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 | Action 3 + kebutuhan tiang | POST `P/rab-kko-kkf` | `kebutuhan_tiang`, `document_ids`, optional `notes` |
 | Action 4 + 5 | POST `P/permohonan-perluasan` | `nps_delegation_status`, `document_ids`, optional `notes` |
 | Action 6 | POST `P/wo-vendor/tiang` | `document_ids`, optional `notes` |
-| Action 7 | POST `P/wo-vendor/konstruksi` | `perlu_pdkb`, `document_ids`, optional `notes` |
+| Action 7 | POST `P/wo-vendor/konstruksi` | `perlu_pdkb`, `estimasi_tanggal_selesai`, `document_ids`, optional `notes` |
 | Action 7b | POST `P/wo-pdkb` | `document_ids`, optional `notes` |
 | PK vendor | POST `P/pk-vendor` | `document_ids`, optional `notes` |
 | Action 8 | POST `P/wo-vendor/app` | `document_ids`, optional `notes` |

@@ -1,14 +1,16 @@
 "use client";
 
-import { useRef, useState, type ComponentProps } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 
 import {
+  Camera,
   CheckCircle2,
   FileText,
   LoaderCircle,
   Trash2,
   UploadCloud,
   XCircle,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,7 @@ type EvidenceUploaderProps = {
   statuses?: Map<File, EvidenceFileStatus>;
   disabled?: boolean;
   selectionMode?: "single" | "multiple";
+  enableCamera?: boolean;
   fileLabel?: string;
   helpText?: string;
 } & Pick<
@@ -39,13 +42,24 @@ export function EvidenceUploader({
   statuses = new Map(),
   disabled = false,
   selectionMode = "multiple",
+  enableCamera = false,
   fileLabel = "evidence",
   helpText = "PDF, JPG, JPEG, atau PNG · maksimal 10 MB per berkas",
   ...controlProps
 }: EvidenceUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const cameraRequestRef = useRef(0);
   const [dragging, setDragging] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const singleFile = selectionMode === "single";
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
 
   function addFiles(incoming: File[]) {
     if (singleFile) {
@@ -59,6 +73,63 @@ export function EvidenceUploader({
       ]),
     );
     onFilesChange([...unique.values()]);
+  }
+
+  async function openCamera() {
+    if (disabled) return;
+    const requestId = ++cameraRequestRef.current;
+    setCameraError(null);
+    setCameraStarting(true);
+    setCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: "environment" } },
+      });
+      if (requestId !== cameraRequestRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch {
+      setCameraError(
+        "Kamera tidak dapat diakses. Periksa izin kamera atau gunakan Pilih berkas.",
+      );
+    } finally {
+      setCameraStarting(false);
+    }
+  }
+
+  function stopCamera() {
+    cameraRequestRef.current += 1;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOpen(false);
+    setCameraStarting(false);
+  }
+
+  function capturePhoto() {
+    const video = videoRef.current;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setCameraError("Foto gagal dibuat. Coba ambil foto lagi.");
+        return;
+      }
+      addFiles([
+        new File([blob], `foto-lokasi-${Date.now()}.jpg`, {
+          type: "image/jpeg",
+          lastModified: Date.now(),
+        }),
+      ]);
+      stopCamera();
+    }, "image/jpeg", 0.92);
   }
 
   return (
@@ -120,6 +191,21 @@ export function EvidenceUploader({
         >
           Pilih berkas
         </Button>
+        {enableCamera ? (
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-2"
+            disabled={disabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              void openCamera();
+            }}
+          >
+            <Camera aria-hidden="true" />
+            Ambil foto
+          </Button>
+        ) : null}
         <Input
           ref={inputRef}
           type="file"
@@ -134,6 +220,63 @@ export function EvidenceUploader({
           }}
         />
       </div>
+
+      {enableCamera && cameraOpen ? (
+        <div
+          className="border-border bg-background space-y-3 rounded-lg border p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="camera-dialog-title"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="camera-dialog-title" className="text-sm font-medium">
+              Ambil foto lokasi
+            </h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Tutup kamera"
+              onClick={stopCamera}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+          <div className="bg-muted aspect-video overflow-hidden rounded-md">
+            <video
+              ref={videoRef}
+              className="size-full object-cover"
+              autoPlay
+              playsInline
+              muted
+              aria-label="Pratinjau kamera"
+            />
+          </div>
+          {cameraStarting ? (
+            <p className="text-muted-foreground text-sm" role="status">
+              Meminta akses kamera...
+            </p>
+          ) : null}
+          {cameraError ? (
+            <p className="text-destructive text-sm" role="alert">
+              {cameraError}
+            </p>
+          ) : null}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={stopCamera}>
+              Batal
+            </Button>
+            <Button
+              type="button"
+              onClick={capturePhoto}
+              disabled={cameraStarting || !streamRef.current}
+            >
+              <Camera aria-hidden="true" />
+              Ambil foto
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {files.length > 0 && (
         <div className="min-w-0" aria-live="polite">

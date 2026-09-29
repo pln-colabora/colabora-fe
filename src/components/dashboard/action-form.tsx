@@ -212,6 +212,13 @@ export function ActionForm({
   }, [vendorRole]);
   // Vendor tiang records where the pole was installed on the pemasangan_tiang node.
   const needsCoordinate = formNode.replaceAll("-", "_") === "pemasangan_tiang";
+  const supportsCamera = [
+    "pemasangan_tiang",
+    "pelaksanaan_konstruksi",
+    "pdkb_documentation",
+    "energize_jaringan",
+    "pemasangan_sr_app",
+  ].includes(formNode.replaceAll("-", "_"));
   const [coordinate, setCoordinate] = useState<Coordinate | null>(null);
   const uploads = useRef(new Map<File, string>());
   const [fileStatuses, setFileStatuses] = useState(
@@ -237,6 +244,7 @@ export function ActionForm({
 
   const beforeNotes = baseFields.filter((field) => field.name !== "notes");
   const notesDef = baseFields.find((field) => field.name === "notes");
+  const notesBeforeEvidence = beforeNotes.length > 0 || Boolean(vendorRole);
 
   const renderField = (definition: FieldDefinition) => (
     <FormField
@@ -422,7 +430,7 @@ export function ActionForm({
                 )}
               />
             ) : null}
-            {notesDef ? renderField(notesDef) : null}
+            {notesBeforeEvidence && notesDef ? renderField(notesDef) : null}
           </div>
 
           {needsCoordinate ? (
@@ -454,6 +462,7 @@ export function ActionForm({
                     files={field.value}
                     statuses={fileStatuses}
                     disabled={busy}
+                    enableCamera={supportsCamera}
                     onFilesChange={(files) => {
                       field.onChange(files);
                       void form.trigger("files");
@@ -464,6 +473,10 @@ export function ActionForm({
               </FormItem>
             )}
           />
+
+          {!beforeNotes.length && !vendorRole && notesDef
+            ? renderField(notesDef)
+            : null}
 
           {Boolean(requestError) && (
             <ErrorNotice
