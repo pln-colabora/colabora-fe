@@ -177,6 +177,13 @@ function DashboardContent() {
   const returnTo = `/dashboard?${searchParams.toString()}`;
 
   const roleQueue = applications.filter(isOwnedBy);
+  const isRelevantToRole = (application: Application) => {
+    if (roleId === "admin" || roleId === "super-user") return true;
+    if (isOwnedBy(application)) return true;
+    if (getApplicationStatus(application, roleId) === "Selesai") return true;
+    return getOwnedSla(application, roleId) !== null;
+  };
+  const roleScopedApplications = applications.filter(isRelevantToRole);
   const search = searchQuery.trim().toLocaleLowerCase("id-ID");
   const searchTerms = search.split(/\s+/).filter(Boolean);
 
@@ -224,15 +231,16 @@ function DashboardContent() {
           .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
           .slice(0, 5)
       : filteredApplications;
-  const completedCount = applications.filter(
+  const completedCount = roleScopedApplications.filter(
     (item) => getApplicationStatus(item, roleId) === "Selesai",
   ).length;
-  const activeCount = applications.filter(
-    (item) => item.status === "in_progress",
+  const activeCount = roleScopedApplications.filter(
+    (item) => item.status === "in_progress" && isOwnedBy(item),
   ).length;
-  const overdueCount = applications.filter(
-    (item) => item.sla.tone === "late",
-  ).length;
+  const overdueCount = roleScopedApplications.filter((item) => {
+    const sla = getOwnedSla(item, roleId) ?? item.sla;
+    return sla.tone === "late";
+  }).length;
   const showKanban =
     isHome && ready && (roleId === "admin" || roleId === "super-user");
 
@@ -293,7 +301,7 @@ function DashboardContent() {
           roleId={roleId}
           roleQueue={roleQueue}
           taskHref={dashboardHref("mine")}
-          totalCount={applications.length}
+          totalCount={roleScopedApplications.length}
           activeCount={activeCount}
           completedCount={completedCount}
           overdueCount={overdueCount}
