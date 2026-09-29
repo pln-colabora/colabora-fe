@@ -112,7 +112,7 @@ export default function ActivityPage() {
           </p>
         </header>
         <section
-          className="bg-card mt-5 rounded-lg border p-4 sm:p-6"
+          className="bg-card mt-5 rounded-lg border px-4 py-3 sm:px-5 sm:py-4"
           aria-label={`Form ${activity.label}`}
         >
           <ActionForm
