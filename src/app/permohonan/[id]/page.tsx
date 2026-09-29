@@ -21,7 +21,6 @@ import {
   Eye,
   LoaderCircle,
   LockKeyhole,
-  StickyNote,
   XCircle,
 } from "lucide-react";
 
@@ -87,6 +86,7 @@ export default function ApplicationDetailPage() {
     error: loadError,
     relatedError,
     relatedLoading,
+    activityInputs,
     reload,
   } = useApplication(id, !!user, true);
   const ready = !!application || !loading;
@@ -203,7 +203,7 @@ export default function ApplicationDetailPage() {
               />
               <HeaderFact
                 label="Terakhir diperbarui"
-                value={application.updatedAt}
+                value={displayHistoryDate(application.updatedAt)}
               />
             </dl>
           </div>
@@ -218,15 +218,6 @@ export default function ApplicationDetailPage() {
           roleId={roleId}
           returnTo={returnTo}
         />
-        <div className="mt-2 flex justify-end">
-          <Button asChild variant="outline" className="min-h-11">
-            <a href="#documents-section">
-              <FileText aria-hidden="true" />
-              Dokumen & evidence ({documents.length})
-            </a>
-          </Button>
-        </div>
-
         {Boolean(relatedError) && (
           <div className="text-destructive mt-4">
             <ErrorNotice
@@ -239,7 +230,11 @@ export default function ApplicationDetailPage() {
         )}
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
-            <WorkflowTimeline application={application} roleId={roleId} />
+            <WorkflowTimeline
+              application={application}
+              roleId={roleId}
+              activityInputs={activityInputs}
+            />
             <DocumentsSection
               applicationId={application.id}
               documents={visibleDocuments}
@@ -250,6 +245,16 @@ export default function ApplicationDetailPage() {
           </div>
           <aside className="space-y-6">
             {!isVendor && <ApplicationFacts application={application} />}
+            <Button
+              asChild
+              variant="outline"
+              className="min-h-10 w-full"
+            >
+              <a href="#documents-section">
+                <FileText aria-hidden="true" />
+                Dokumen & evidence ({documents.length})
+              </a>
+            </Button>
             {!isVendor && <DecisionSummary application={application} />}
             <HistorySection
               history={visibleHistory}
@@ -445,23 +450,6 @@ function CurrentAction({
   );
 }
 
-// Optional notes submitted with an activity live in its workflow node payload
-// (Catatan, plus the reservation/tera notes). Surface them so they are not lost.
-function getActivityNotes(id: ActionId, application: Application): string[] {
-  const keys = ["notes", "reservation_notes", "tera_notes"];
-  const notes: string[] = [];
-  application.nodes
-    .filter((node) => nodeActions[node.workflow_node] === id)
-    .forEach((node) => {
-      const payload = (node.payload ?? {}) as Record<string, unknown>;
-      keys.forEach((key) => {
-        const value = payload[key];
-        if (typeof value === "string" && value.trim()) notes.push(value.trim());
-      });
-    });
-  return notes;
-}
-
 // Map a backend node status onto the timeline's presentation status.
 function nodeProgressStatus(status: WorkflowNode["status"]): ProgressStatus {
   switch (status) {
@@ -477,45 +465,110 @@ function nodeProgressStatus(status: WorkflowNode["status"]): ProgressStatus {
   }
 }
 
-function getNodeNotes(node: WorkflowNode): string[] {
-  const payload = (node.payload ?? {}) as Record<string, unknown>;
-  const notes: string[] = [];
-  ["notes", "reservation_notes", "tera_notes"].forEach((key) => {
-    const value = payload[key];
-    if (typeof value === "string" && value.trim()) notes.push(value.trim());
-  });
-  return notes;
+function formatActivityInput(value: unknown) {
+  if (typeof value === "boolean") return value ? "Ya" : "Tidak";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value);
+  return "";
 }
 
-function NotesList({ notes }: { notes: string[] }) {
-  return notes.map((note, index) => (
-    <p
-      key={index}
-      className="border-border border-l-primary/60 bg-muted/60 mt-1 rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-relaxed sm:col-span-3"
-    >
-      <span className="text-muted-foreground inline-flex items-center gap-1 font-semibold">
-        <StickyNote className="size-3.5" aria-hidden="true" />
-        Catatan
-      </span>
-      <span className="text-foreground mt-0.5 block whitespace-pre-line">
-        {note}
-      </span>
-    </p>
-  ));
+function formatLocationCoordinates(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const coordinates = value as Record<string, unknown>;
+  const latitude = coordinates.latitude;
+  const longitude = coordinates.longitude;
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  )
+    return "";
+  return `${latitude}, ${longitude}`;
+}
+
+function formatInputLabel(key: string) {
+  const labels: Record<string, string> = {
+    reservation_notes: "Catatan reservasi",
+    tera_notes: "Catatan tera",
+    vendor_id: "Vendor",
+    location_coordinates: "Koordinat pemasangan",
+  };
+  return (
+    labels[key] ??
+    key
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (character) => character.toUpperCase())
+  );
+}
+
+function formatInputValue(key: string, value: unknown) {
+  if (key === "location_coordinates") return formatLocationCoordinates(value);
+  return formatActivityInput(value);
+}
+
+function ActivityInputList({
+  node,
+  inputs,
+}: {
+  node: WorkflowNode;
+  inputs?: Record<string, unknown>;
+}) {
+  const activity = getActivity(nodeActions[node.workflow_node]);
+  if (node.status !== "completed" || !activity || !inputs) return null;
+  const knownLabels = new Map(
+    activity.fields.map((field) => [field.name, field.label]),
+  );
+  const excludedKeys = new Set([
+    "document_ids",
+    "workflow_node",
+    "created_at",
+    "completed_at",
+    "completed_by",
+  ]);
+  const entries = Object.entries(inputs)
+    .filter(([key]) => !excludedKeys.has(key))
+    .map(([key, value]) => ({
+      label: knownLabels.get(key) ?? formatInputLabel(key),
+      value: formatInputValue(key, value),
+    }))
+    .filter((entry) => entry.value);
+  if (!entries.length) return null;
+  return (
+    <div className="border-border bg-muted/60 mt-1 space-y-1 rounded-md border px-2.5 py-1.5 text-xs sm:col-span-3">
+      {entries.map((entry) => (
+        <p key={entry.label} className="leading-relaxed">
+          <span className="text-muted-foreground font-semibold">
+            {entry.label}: {" "}
+          </span>
+          <span className="text-foreground whitespace-pre-line">
+            {entry.value}
+          </span>
+        </p>
+      ))}
+    </div>
+  );
 }
 
 function WorkflowTimeline({
   application,
   roleId,
+  activityInputs,
 }: {
   application: Application;
   roleId: RoleId;
+  activityInputs: Record<string, Record<string, unknown>>;
 }) {
   // Vendors are external to PLN and see only the nodes the backend returns for
   // them, so their timeline is driven by workflow_nodes (source of truth),
   // never the full static activity list.
   if (roleId.startsWith("vendor-")) {
-    return <VendorTimeline application={application} />;
+    return (
+      <VendorTimeline
+        application={application}
+        activityInputs={activityInputs}
+      />
+    );
   }
   return (
     <section
@@ -572,7 +625,9 @@ function WorkflowTimeline({
                   {stageActivities.map((activity) => {
                     const status = getActivityStatus(activity.id, application);
                     const owner = getRole(getOwner(activity, application));
-                    const notes = getActivityNotes(activity.id, application);
+                    const nodes = application.nodes.filter(
+                      (node) => nodeActions[node.workflow_node] === activity.id,
+                    );
                     return (
                       <li
                         key={activity.id}
@@ -588,7 +643,13 @@ function WorkflowTimeline({
                         <span className="text-muted-foreground text-xs sm:text-right">
                           {activityStatusLabel(status)}
                         </span>
-                        <NotesList notes={notes} />
+                        {nodes.map((node) => (
+                          <ActivityInputList
+                            key={node.workflow_node}
+                            node={node}
+                            inputs={activityInputs[node.workflow_node]}
+                          />
+                        ))}
                       </li>
                     );
                   })}
@@ -604,7 +665,13 @@ function WorkflowTimeline({
 
 // Node-driven timeline for vendors: renders exactly the workflow_nodes returned
 // by the backend, grouped by their stage, using each node's own status.
-function VendorTimeline({ application }: { application: Application }) {
+function VendorTimeline({
+  application,
+  activityInputs,
+}: {
+  application: Application;
+  activityInputs: Record<string, Record<string, unknown>>;
+}) {
   const byStage = new Map<StageId, WorkflowNode[]>();
   for (const node of application.nodes) {
     const list = byStage.get(node.stage_number) ?? [];
@@ -675,7 +742,6 @@ function VendorTimeline({ application }: { application: Application }) {
                       const owner = activity
                         ? getRole(getOwner(activity, application))
                         : null;
-                      const notes = getNodeNotes(node);
                       return (
                         <li
                           key={node.workflow_node}
@@ -691,7 +757,10 @@ function VendorTimeline({ application }: { application: Application }) {
                           <span className="text-muted-foreground text-xs sm:text-right">
                             {activityStatusLabel(status)}
                           </span>
-                          <NotesList notes={notes} />
+                          <ActivityInputList
+                            node={node}
+                            inputs={activityInputs[node.workflow_node]}
+                          />
                         </li>
                       );
                     })}
