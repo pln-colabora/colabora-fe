@@ -73,6 +73,10 @@ export function mapApplication(data: PermohonanResponse): Application {
         node.stage_number === data.current_stage && Boolean(node.sla_deadline),
     )?.sla_deadline ??
     null;
+  const latestCompletedAt = nodes
+    .map((node) => node.completed_at)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => b.localeCompare(a))[0];
   return {
     id: data.id,
     number: data.no_permohonan,
@@ -90,7 +94,7 @@ export function mapApplication(data: PermohonanResponse): Application {
       : data.jenis_sambungan) as Application["connectionType"],
     unit: data.ulp_unit,
     requestedAt: data.request_date ?? "",
-    updatedAt: "—",
+    updatedAt: latestCompletedAt ?? "—",
     currentAction:
       active.map((node) => nodeActions[node.workflow_node]).find(Boolean) ??
       null,
@@ -160,6 +164,23 @@ export async function getApplication(id: string) {
   const path = `/api/permohonan/${encodeURIComponent(id)}`;
   const { data } = await apiRequest<PermohonanResponse>(path);
   return mapApplication(data);
+}
+
+export async function getApplicationActivity(
+  id: string,
+  workflowNode: string,
+) {
+  const path = `/api/permohonan/${encodeURIComponent(id)}/activities/${encodeURIComponent(workflowNode)}`;
+  const { data } = await apiRequest<Record<string, unknown>>(path);
+  if (
+    data &&
+    typeof data === "object" &&
+    data.payload &&
+    typeof data.payload === "object" &&
+    !Array.isArray(data.payload)
+  )
+    return data.payload as Record<string, unknown>;
+  return data;
 }
 
 export async function getApplicationDocuments(id: string) {
