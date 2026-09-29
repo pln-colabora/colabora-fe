@@ -31,6 +31,7 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 | Logout | POST `/api/auth/logout` | Bearer token |
 | Dashboard / list | GET `/api/permohonan?page=...&per_page=100` | Seluruh halaman diambil untuk total/filter yang konsisten; tidak ada detail per baris |
 | Detail | GET `P` | UUID permohonan |
+| Activity input | GET `P/activities/{workflow_node}` | Input yang tersimpan untuk aktivitas yang sudah selesai |
 | Action 1 / create | POST `/api/permohonan` | `jenis_permohonan`, `jenis_sambungan`, `pelanggan_nama`, `pelanggan_alamat`, `pelanggan_no_hp`; `ulp_unit` hanya PLG TM |
 | Action 2 | POST `P/survei` | `surveyed_at`, `document_ids`, optional `notes` |
 | Action 3 + kebutuhan tiang | POST `P/rab-kko-kkf` | `kebutuhan_tiang`, `document_ids`, optional `notes` |
