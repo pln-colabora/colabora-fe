@@ -22,20 +22,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { registerAccount } from "@/lib/auth";
 import { presentApiError } from "@/lib/error-utils";
-import { roles, type RoleId } from "@/lib/workflow";
-
-const registrationRoleIds = roles
-  .filter(({ id }) => id !== "admin" && id !== "super-user")
-  .map(({ id }) => id) as [RoleId, ...RoleId[]];
 
 const registrationSchema = z
   .object({
@@ -49,9 +37,6 @@ const registrationSchema = z
       .trim()
       .min(1, "Email wajib diisi.")
       .email("Format email tidak valid."),
-    role: z.enum(registrationRoleIds, {
-      error: "Pilih peran yang diajukan.",
-    }),
     telp_number: z
       .string()
       .trim()
@@ -85,7 +70,6 @@ export default function RegistrationPage() {
     defaultValues: {
       name: "",
       email: "",
-      role: "user",
       telp_number: "",
       password: "",
       confirmPassword: "",
@@ -148,9 +132,9 @@ export default function RegistrationPage() {
             Registrasi akun
           </h1>
           <p className="text-muted-foreground mt-2 text-sm leading-6">
-            Isi informasi akun, ajukan peran, dan lampirkan satu dokumen
-            verifikasi. Admin atau Super User akan meninjau pengajuan sebelum
-            akun dapat digunakan.
+            Isi informasi akun dan lampirkan satu dokumen verifikasi. Admin
+            atau Super User akan meninjau pengajuan dan menentukan peran serta
+            unit sebelum akun dapat digunakan.
           </p>
 
           <Form {...form}>
@@ -221,44 +205,6 @@ export default function RegistrationPage() {
                           {...field}
                         />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="role"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>Preferensi peran</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        disabled={busy}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-11 w-full">
-                            <SelectValue placeholder="Pilih peran" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {roles
-                            .filter(
-                              ({ id }) => id !== "admin" && id !== "super-user",
-                            )
-                            .map(({ id, label }) => (
-                              <SelectItem key={id} value={id}>
-                                {label}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Peran final dipilih Admin atau Super User saat
-                        verifikasi. API registrasi saat ini belum menyimpan
-                        pilihan ini.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
