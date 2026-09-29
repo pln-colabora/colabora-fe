@@ -34,3 +34,10 @@ export async function deleteUser(id: string) {
     method: "DELETE",
   });
 }
+
+export async function updateUserUnit(id: string, unit: string) {
+  return apiRequest<Account>(`/api/user/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    data: { unit },
+  });
+}

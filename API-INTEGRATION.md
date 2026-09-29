@@ -24,7 +24,8 @@ Prefix `P` pada tabel berarti `/api/permohonan/{id}` (ID UUID dari backend).
 | Minta reset kata sandi | POST `/api/auth/send-password-reset` | `email`; UI menampilkan pesan netral untuk menjaga privasi akun |
 | Simpan kata sandi baru | POST `/api/auth/reset-password` | `token`, `new_password` (minimal 8 karakter) |
 | Verifikasi akun | POST `/api/auth/verify/{user_id}` | Bearer token Admin/Super User; `user_id` UUID dan body JSON `{ role }` wajib. Role ditetapkan dan akun diaktifkan dalam request yang sama. |
-| Ubah peran akun | PATCH `/api/user/{id}` | Bearer token Admin/Super User; body `{ role }` untuk perubahan role di luar verifikasi |
+| Tetapkan unit akun pending | PATCH `/api/user/{id}` | Bearer token Admin/Super User; body `{ unit }` sebelum verifikasi. Endpoint verifikasi saat ini belum menerima `unit`. |
+| Ubah role/unit akun | PATCH `/api/user/{id}` | Bearer token Admin/Super User; body `{ role }` dan/atau `{ unit }` untuk perubahan di luar verifikasi |
 | Profil / role / unit | GET `/api/user/me` | Bearer token |
 | Refresh token | POST `/api/auth/refresh` | `refresh_token` |
 | Logout | POST `/api/auth/logout` | Bearer token |
