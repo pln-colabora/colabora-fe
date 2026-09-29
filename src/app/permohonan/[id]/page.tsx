@@ -64,7 +64,15 @@ import {
   type Application,
   type RoleId,
   type StageId,
+  type WorkflowNode,
 } from "@/lib/workflow";
+
+// The one work-order activity whose evidence each vendor role may read.
+const vendorWoActionId: Partial<Record<RoleId, ActionId>> = {
+  "vendor-tiang": "6", // WO Vendor Tiang (by Perencanaan)
+  "vendor-konstruksi": "7", // WO Vendor Konstruksi (by Konstruksi UP3)
+  "vendor-sr-app": "8", // WO Vendor APP (by Transaksi Energi)
+};
 
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
@@ -127,6 +135,24 @@ export default function ApplicationDetailPage() {
   const documents = getDocuments(application);
   const history = getHistory(application);
   const ownedSla = getOwnedSla(application, roleId);
+  // Vendors are external to PLN: hide internal panels and keep only their own log.
+  const isVendor = roleId.startsWith("vendor-");
+  // Vendors only see log entries for activities they own.
+  const visibleHistory = isVendor
+    ? history.filter((item) => {
+        const activity = getActivity(item.actionId);
+        return activity ? getOwner(activity, application) === roleId : false;
+      })
+    : history;
+  // Vendors see their own work-order document plus documents they uploaded.
+  const woActionId = vendorWoActionId[roleId];
+  const visibleDocuments = isVendor
+    ? documents.filter(
+        (document) =>
+          (woActionId && document.actionId === woActionId) ||
+          document.uploadedBy === user?.name,
+      )
+    : documents;
 
   return (
     <AppShell active="applications" roleId={roleId} user={user}>
@@ -213,19 +239,20 @@ export default function ApplicationDetailPage() {
         )}
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
-            <WorkflowTimeline application={application} />
+            <WorkflowTimeline application={application} roleId={roleId} />
             <DocumentsSection
               applicationId={application.id}
-              documents={documents}
+              documents={visibleDocuments}
               loading={relatedLoading}
               error={relatedError}
+              isVendor={isVendor}
             />
           </div>
           <aside className="space-y-6">
-            <ApplicationFacts application={application} />
-            <DecisionSummary application={application} />
+            {!isVendor && <ApplicationFacts application={application} />}
+            {!isVendor && <DecisionSummary application={application} />}
             <HistorySection
-              history={history}
+              history={visibleHistory}
               loading={relatedLoading}
               error={relatedError}
             />
@@ -435,7 +462,61 @@ function getActivityNotes(id: ActionId, application: Application): string[] {
   return notes;
 }
 
-function WorkflowTimeline({ application }: { application: Application }) {
+// Map a backend node status onto the timeline's presentation status.
+function nodeProgressStatus(status: WorkflowNode["status"]): ProgressStatus {
+  switch (status) {
+    case "completed":
+      return "done";
+    case "skipped":
+      return "skipped";
+    case "available":
+    case "in_progress":
+      return "current";
+    default:
+      return "future"; // locked
+  }
+}
+
+function getNodeNotes(node: WorkflowNode): string[] {
+  const payload = (node.payload ?? {}) as Record<string, unknown>;
+  const notes: string[] = [];
+  ["notes", "reservation_notes", "tera_notes"].forEach((key) => {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) notes.push(value.trim());
+  });
+  return notes;
+}
+
+function NotesList({ notes }: { notes: string[] }) {
+  return notes.map((note, index) => (
+    <p
+      key={index}
+      className="border-border border-l-primary/60 bg-muted/60 mt-1 rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-relaxed sm:col-span-3"
+    >
+      <span className="text-muted-foreground inline-flex items-center gap-1 font-semibold">
+        <StickyNote className="size-3.5" aria-hidden="true" />
+        Catatan
+      </span>
+      <span className="text-foreground mt-0.5 block whitespace-pre-line">
+        {note}
+      </span>
+    </p>
+  ));
+}
+
+function WorkflowTimeline({
+  application,
+  roleId,
+}: {
+  application: Application;
+  roleId: RoleId;
+}) {
+  // Vendors are external to PLN and see only the nodes the backend returns for
+  // them, so their timeline is driven by workflow_nodes (source of truth),
+  // never the full static activity list.
+  if (roleId.startsWith("vendor-")) {
+    return <VendorTimeline application={application} />;
+  }
   return (
     <section
       aria-labelledby="workflow-title"
@@ -507,23 +588,7 @@ function WorkflowTimeline({ application }: { application: Application }) {
                         <span className="text-muted-foreground text-xs sm:text-right">
                           {activityStatusLabel(status)}
                         </span>
-                        {notes.map((note, index) => (
-                          <p
-                            key={index}
-                            className="border-border border-l-primary/60 bg-muted/60 mt-1 rounded-md border border-l-2 px-2.5 py-1.5 text-xs leading-relaxed sm:col-span-3"
-                          >
-                            <span className="text-muted-foreground inline-flex items-center gap-1 font-semibold">
-                              <StickyNote
-                                className="size-3.5"
-                                aria-hidden="true"
-                              />
-                              Catatan
-                            </span>
-                            <span className="text-foreground mt-0.5 block whitespace-pre-line">
-                              {note}
-                            </span>
-                          </p>
-                        ))}
+                        <NotesList notes={notes} />
                       </li>
                     );
                   })}
@@ -533,6 +598,110 @@ function WorkflowTimeline({ application }: { application: Application }) {
           );
         })}
       </ol>
+    </section>
+  );
+}
+
+// Node-driven timeline for vendors: renders exactly the workflow_nodes returned
+// by the backend, grouped by their stage, using each node's own status.
+function VendorTimeline({ application }: { application: Application }) {
+  const byStage = new Map<StageId, WorkflowNode[]>();
+  for (const node of application.nodes) {
+    const list = byStage.get(node.stage_number) ?? [];
+    list.push(node);
+    byStage.set(node.stage_number, list);
+  }
+  const visibleStages = stages.filter((stage) => byStage.has(stage.id));
+
+  const stageStatusOf = (nodes: WorkflowNode[]): ProgressStatus => {
+    const statuses = nodes.map((node) => nodeProgressStatus(node.status));
+    if (
+      statuses.length &&
+      statuses.every((s) => s === "done" || s === "skipped")
+    )
+      return "done";
+    if (statuses.some((s) => s === "current")) return "current";
+    return "future";
+  };
+
+  return (
+    <section
+      aria-labelledby="workflow-title"
+      className="bg-card rounded-lg p-5 sm:p-6"
+    >
+      <div className="border-b pb-3">
+        <h2 id="workflow-title" className="font-display text-lg font-semibold">
+          Tahapan proses
+        </h2>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Aktivitas yang ditugaskan ke Anda.
+        </p>
+      </div>
+      {visibleStages.length === 0 ? (
+        <p className="text-muted-foreground mt-5 text-sm">
+          Belum ada aktivitas untuk Anda pada permohonan ini.
+        </p>
+      ) : (
+        <ol className="mt-5 space-y-0">
+          {visibleStages.map((stage, index) => {
+            const nodes = byStage.get(stage.id) ?? [];
+            const stageStatus = stageStatusOf(nodes);
+            return (
+              <li
+                key={stage.id}
+                className="relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-6 last:pb-0"
+              >
+                {index < visibleStages.length - 1 ? (
+                  <span
+                    className="bg-border absolute top-7 bottom-0 left-[13px] w-px"
+                    aria-hidden="true"
+                  />
+                ) : null}
+                <StageMarker status={stageStatus} />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-display font-semibold">
+                      {stage.label}
+                    </h3>
+                    <StageStatusLabel status={stageStatus} />
+                  </div>
+                  <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
+                    {nodes.map((node) => {
+                      // Node may not map to a static activity; guard every read.
+                      const activity = getActivity(
+                        nodeActions[node.workflow_node],
+                      );
+                      const status = nodeProgressStatus(node.status);
+                      const owner = activity
+                        ? getRole(getOwner(activity, application))
+                        : null;
+                      const notes = getNodeNotes(node);
+                      return (
+                        <li
+                          key={node.workflow_node}
+                          className="grid gap-1 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_180px_110px] sm:items-center"
+                        >
+                          <span className="flex items-center gap-2 font-medium">
+                            <ActivityStatusIcon status={status} />
+                            {activity?.shortLabel ?? node.workflow_node}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {owner ? `${owner.lane} — ${owner.label}` : "Vendor"}
+                          </span>
+                          <span className="text-muted-foreground text-xs sm:text-right">
+                            {activityStatusLabel(status)}
+                          </span>
+                          <NotesList notes={notes} />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </section>
   );
 }
@@ -693,11 +862,13 @@ function DocumentsSection({
   documents,
   loading,
   error,
+  isVendor = false,
 }: {
   applicationId: string;
   loading: boolean;
   error: unknown;
   documents: ReturnType<typeof getDocuments>;
+  isVendor?: boolean;
 }) {
   const { activeAction, openDocument, downloadDocument } =
     useDocumentActions(applicationId);
@@ -713,7 +884,9 @@ function DocumentsSection({
           Dokumen & Evidence
         </h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Hanya dokumen dari aktivitas yang telah diselesaikan.
+          {isVendor
+            ? "Dokumen work order dan evidence yang Anda unggah."
+            : "Hanya dokumen dari aktivitas yang telah diselesaikan."}
         </p>
       </div>
       {loading ? (

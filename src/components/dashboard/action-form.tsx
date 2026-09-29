@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import dynamic from "next/dynamic";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import type { Coordinate } from "@/components/dashboard/coordinate-picker";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import {
   EvidenceUploader,
@@ -112,6 +115,20 @@ type ActionFormValues = {
   files: File[];
 };
 
+// Leaflet touches window, so load the picker client-side only.
+const CoordinatePicker = dynamic(
+  () =>
+    import("@/components/dashboard/coordinate-picker").then(
+      (module) => module.CoordinatePicker,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-muted h-64 w-full animate-pulse rounded-lg" />
+    ),
+  },
+);
+
 export function ActionForm({
   application,
   action,
@@ -193,6 +210,9 @@ export function ActionForm({
       cancelled = true;
     };
   }, [vendorRole]);
+  // Vendor tiang records where the pole was installed on the pemasangan_tiang node.
+  const needsCoordinate = formNode.replaceAll("-", "_") === "pemasangan_tiang";
+  const [coordinate, setCoordinate] = useState<Coordinate | null>(null);
   const uploads = useRef(new Map<File, string>());
   const [fileStatuses, setFileStatuses] = useState(
     new Map<File, EvidenceFileStatus>(),
@@ -320,6 +340,7 @@ export function ActionForm({
         action,
         data.values,
         data.files.map((file) => uploads.current.get(file)!),
+        needsCoordinate ? coordinate : null,
       );
       toast.success("Aktivitas berhasil disimpan.");
       onSaved(updated);
@@ -403,6 +424,24 @@ export function ActionForm({
             ) : null}
             {notesDef ? renderField(notesDef) : null}
           </div>
+
+          {needsCoordinate ? (
+            <div className="mt-5 min-w-0">
+              <p className="text-sm font-medium">
+                Lokasi pemasangan{" "}
+                <span className="text-muted-foreground font-normal">
+                  (opsional)
+                </span>
+              </p>
+              <div className="mt-2">
+                <CoordinatePicker
+                  value={coordinate}
+                  onChange={setCoordinate}
+                  disabled={busy}
+                />
+              </div>
+            </div>
+          ) : null}
 
           <FormField
             control={form.control}

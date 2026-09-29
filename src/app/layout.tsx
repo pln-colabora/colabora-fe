@@ -53,6 +53,22 @@ const dmSans = localFont({
   display: "swap",
 });
 
+// Secondary/body typeface; --text-family resolves to --font-inter.
+const inter = localFont({
+  src: [
+    { path: "../../fonts/inter/Inter_24pt-Regular.ttf", weight: "400", style: "normal" },
+    { path: "../../fonts/inter/Inter_24pt-Italic.ttf", weight: "400", style: "italic" },
+    { path: "../../fonts/inter/Inter_24pt-Medium.ttf", weight: "500", style: "normal" },
+    { path: "../../fonts/inter/Inter_24pt-MediumItalic.ttf", weight: "500", style: "italic" },
+    { path: "../../fonts/inter/Inter_24pt-SemiBold.ttf", weight: "600", style: "normal" },
+    { path: "../../fonts/inter/Inter_24pt-SemiBoldItalic.ttf", weight: "600", style: "italic" },
+    { path: "../../fonts/inter/Inter_24pt-Bold.ttf", weight: "700", style: "normal" },
+    { path: "../../fonts/inter/Inter_24pt-BoldItalic.ttf", weight: "700", style: "italic" },
+  ],
+  variable: "--font-inter",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "COLABORA",
   description: "COLABORA operational workspace",
@@ -65,7 +81,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" suppressHydrationWarning>
-      <body className={`${dmSans.variable} antialiased`}>
+      <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
