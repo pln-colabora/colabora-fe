@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import Image from "next/image";
 import Link from "next/link";
 
 import {
   CheckCircle2,
+  ExternalLink,
   FilePlus2,
   LoaderCircle,
   Search,
@@ -41,7 +43,11 @@ import { useSession } from "@/hooks/use-session";
 import { useUsers } from "@/hooks/use-users";
 import { getAccountRoles, verifyUserAccount } from "@/lib/auth";
 import { presentApiError } from "@/lib/error-utils";
-import { deleteUser, updateUserUnit } from "@/lib/users";
+import {
+  deleteUser,
+  getAccountDocument,
+  updateUserUnit,
+} from "@/lib/users";
 import { getRole, type RoleId } from "@/lib/workflow";
 
 const ulpUnits = ["ULP Karang Pilang", "ULP Taman", "ULP Menganti"];
@@ -61,6 +67,22 @@ function getUnitOptions(role: RoleId | "") {
   if (ulpRoles.includes(role)) return ulpUnits;
   if (up3Roles.includes(role)) return ["UP3"];
   return [];
+}
+
+function getDocumentType(url: string, mimeType = "") {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType === "application/pdf") return "pdf";
+  try {
+    const pathname = new URL(
+      url,
+      "https://colabora.invalid",
+    ).pathname.toLowerCase();
+    if (/\.(png|jpe?g|gif|webp|avif)$/.test(pathname)) return "image";
+    if (pathname.endsWith(".pdf")) return "pdf";
+  } catch {
+    return "unknown";
+  }
+  return "unknown";
 }
 
 export default function AccountsPage() {
@@ -84,6 +106,13 @@ export default function AccountsPage() {
   const [verificationRole, setVerificationRole] = useState<RoleId | "">("");
   const [verificationUnit, setVerificationUnit] = useState("");
   const [verificationError, setVerificationError] = useState<unknown>(null);
+  const [documentPreview, setDocumentPreview] = useState<{
+    url: string;
+    mimeType: string;
+  } | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentError, setDocumentError] = useState<unknown>(null);
+  const [documentReload, setDocumentReload] = useState(0);
   const managerId = user?.id;
 
   useEffect(() => {
@@ -108,6 +137,44 @@ export default function AccountsPage() {
       active = false;
     };
   }, [allowed, managerId, rolesReload]);
+
+  useEffect(() => {
+    const documentPath = pendingVerification?.account_document_url;
+    if (!documentPath) {
+      setDocumentPreview(null);
+      setDocumentLoading(false);
+      setDocumentError(null);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | undefined;
+    setDocumentPreview(null);
+    setDocumentLoading(true);
+    setDocumentError(null);
+
+    getAccountDocument(documentPath)
+      .then((blob) => {
+        const previewUrl = URL.createObjectURL(blob);
+        if (active) {
+          objectUrl = previewUrl;
+          setDocumentPreview({ url: previewUrl, mimeType: blob.type });
+        } else {
+          URL.revokeObjectURL(previewUrl);
+        }
+      })
+      .catch((requestError: unknown) => {
+        if (active) setDocumentError(requestError);
+      })
+      .finally(() => {
+        if (active) setDocumentLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [pendingVerification?.account_document_url, documentReload]);
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -433,14 +500,99 @@ export default function AccountsPage() {
           }
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>Verifikasi akun</AlertDialogTitle>
             <AlertDialogDescription>
-              Pilih role dan unit untuk {pendingVerification?.name ?? "akun ini"}
-              sebelum akun diaktifkan.
+              Tinjau dokumen pendaftaran, lalu pilih role dan unit untuk{" "}
+              {pendingVerification?.name ?? "akun ini"} sebelum akun diaktifkan.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <section
+            aria-labelledby="verification-document-title"
+            className="space-y-2"
+          >
+            <h3
+              id="verification-document-title"
+              className="text-sm font-medium"
+            >
+              Dokumen pendaftaran
+            </h3>
+            {pendingVerification?.account_document_url ? (
+              <div className="bg-muted/20 overflow-hidden rounded-md border">
+                {documentLoading ? (
+                  <p role="status" className="text-muted-foreground p-4 text-sm">
+                    Memuat dokumen pendaftaran...
+                  </p>
+                ) : documentError ? (
+                  <div className="flex items-center justify-between gap-4 p-4">
+                    <p role="alert" className="text-destructive text-sm">
+                      {presentApiError(
+                        documentError,
+                        "Dokumen pendaftaran gagal dimuat.",
+                      ).message}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setDocumentReload((value) => value + 1)}
+                    >
+                      Coba lagi
+                    </Button>
+                  </div>
+                ) : documentPreview &&
+                  getDocumentType(
+                    pendingVerification.account_document_url,
+                    documentPreview.mimeType,
+                  ) === "image" ? (
+                  <Image
+                    src={documentPreview.url}
+                    alt={`Dokumen pendaftaran ${pendingVerification.name}`}
+                    width={1200}
+                    height={800}
+                    unoptimized
+                    className="mx-auto max-h-[40vh] w-full object-contain"
+                  />
+                ) : documentPreview &&
+                  getDocumentType(
+                    pendingVerification.account_document_url,
+                    documentPreview.mimeType,
+                  ) === "pdf" ? (
+                  <iframe
+                    src={documentPreview.url}
+                    title={`Dokumen pendaftaran ${pendingVerification.name}`}
+                    className="h-[40vh] w-full"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : documentPreview ? (
+                  <p className="text-muted-foreground p-4 text-sm">
+                    Pratinjau tidak tersedia untuk format dokumen ini.
+                  </p>
+                ) : (
+                  <p role="status" className="text-muted-foreground p-4 text-sm">
+                    Menyiapkan pratinjau dokumen...
+                  </p>
+                )}
+                {documentPreview && !documentError ? (
+                  <div className="border-t p-3">
+                    <a
+                      href={documentPreview.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary focus-visible:ring-ring inline-flex min-h-10 items-center gap-2 text-sm font-medium underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none"
+                    >
+                      Buka dokumen di tab baru
+                      <ExternalLink className="size-4" aria-hidden="true" />
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-muted-foreground rounded-md border p-4 text-sm">
+                Dokumen pendaftaran tidak tersedia untuk akun ini.
+              </p>
+            )}
+          </section>
           {verificationError ? (
             <p role="alert" className="text-destructive text-sm">
               {presentApiError(

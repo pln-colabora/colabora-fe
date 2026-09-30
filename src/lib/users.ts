@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api";
+import { apiClient, apiRequest } from "@/lib/api";
 import type { RoleId } from "@/lib/workflow";
 
 export type Account = {
@@ -9,6 +9,7 @@ export type Account = {
   unit?: string;
   telp_number?: string;
   image_url?: string;
+  account_document_url?: string;
   is_verified?: boolean;
 };
 
@@ -40,4 +41,10 @@ export async function updateUserUnit(id: string, unit: string) {
     method: "PATCH",
     data: { unit },
   });
+}
+
+export async function getAccountDocument(path: string) {
+  if (!path.startsWith("/api/"))
+    throw new Error("Path API dokumen akun tidak valid.");
+  return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
 }
