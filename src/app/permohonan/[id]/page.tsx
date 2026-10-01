@@ -24,6 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ActivityExportButton } from "@/components/dashboard/activity-export-button";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
@@ -510,9 +511,13 @@ function formatInputValue(key: string, value: unknown) {
 function ActivityInputList({
   node,
   inputs,
+  application,
+  roleId,
 }: {
   node: WorkflowNode;
   inputs?: Record<string, unknown>;
+  application: Application;
+  roleId: RoleId;
 }) {
   const activity = getActivity(nodeActions[node.workflow_node]);
   if (node.status !== "completed" || !activity || !inputs) return null;
@@ -533,19 +538,35 @@ function ActivityInputList({
       value: formatInputValue(key, value),
     }))
     .filter((entry) => entry.value);
-  if (!entries.length) return null;
+  if (
+    roleId.startsWith("vendor-") &&
+    getOwner(activity, application) !== roleId
+  )
+    return null;
   return (
-    <div className="border-border bg-muted/60 mt-1 space-y-1 rounded-md border px-2.5 py-1.5 text-xs sm:col-span-3">
-      {entries.map((entry) => (
-        <p key={entry.label} className="leading-relaxed">
-          <span className="text-muted-foreground font-semibold">
-            {entry.label}: {" "}
-          </span>
-          <span className="text-foreground whitespace-pre-line">
-            {entry.value}
-          </span>
-        </p>
-      ))}
+    <div className="mt-1 flex items-start gap-2 sm:col-span-3">
+      {entries.length ? (
+        <div className="border-border bg-muted/60 min-w-0 flex-1 space-y-1 rounded-md border px-2.5 py-1.5 text-xs">
+          {entries.map((entry) => (
+            <p key={entry.label} className="leading-relaxed">
+              <span className="text-muted-foreground font-semibold">
+                {entry.label}: {" "}
+              </span>
+              <span className="text-foreground whitespace-pre-line">
+                {entry.value}
+              </span>
+            </p>
+          ))}
+        </div>
+      ) : null}
+      <div className="shrink-0">
+        <ActivityExportButton
+          applicationId={application.id}
+          applicationNumber={application.number}
+          workflowNode={node.workflow_node}
+          compact
+        />
+      </div>
     </div>
   );
 }
@@ -566,6 +587,7 @@ function WorkflowTimeline({
     return (
       <VendorTimeline
         application={application}
+        roleId={roleId}
         activityInputs={activityInputs}
       />
     );
@@ -648,6 +670,8 @@ function WorkflowTimeline({
                             key={node.workflow_node}
                             node={node}
                             inputs={activityInputs[node.workflow_node]}
+                            application={application}
+                            roleId={roleId}
                           />
                         ))}
                       </li>
@@ -667,9 +691,11 @@ function WorkflowTimeline({
 // by the backend, grouped by their stage, using each node's own status.
 function VendorTimeline({
   application,
+  roleId,
   activityInputs,
 }: {
   application: Application;
+  roleId: RoleId;
   activityInputs: Record<string, Record<string, unknown>>;
 }) {
   const byStage = new Map<StageId, WorkflowNode[]>();
@@ -760,6 +786,8 @@ function VendorTimeline({
                           <ActivityInputList
                             node={node}
                             inputs={activityInputs[node.workflow_node]}
+                            application={application}
+                            roleId={roleId}
                           />
                         </li>
                       );

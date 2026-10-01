@@ -311,6 +311,15 @@ export async function getApplicationDocument(
   )}/documents/${encodeURIComponent(documentId)}`;
   return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
 }
+export async function exportApplicationActivity(
+  applicationId: string,
+  workflowNode: string,
+) {
+  const path = `/api/permohonan/${encodeURIComponent(
+    applicationId,
+  )}/activities/${encodeURIComponent(workflowNode)}/export`;
+  return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
+}
 export async function previewApplicationDocument(documentId: string) {
   const path = `/api/documents/${encodeURIComponent(documentId)}/preview`;
   return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;

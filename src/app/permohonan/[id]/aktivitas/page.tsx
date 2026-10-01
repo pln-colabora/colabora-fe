@@ -66,8 +66,17 @@ export default function ActivityPage() {
   const activity = action
     ? getActivity(nodeActions[action.workflow_node])
     : null;
+  const vendorOwnsActivity =
+    !roleId.startsWith("vendor-") ||
+    (activity ? getOwner(activity, application) === roleId : false);
 
-  if (!action || !activity || application.completed || application.rejected) {
+  if (
+    !action ||
+    !activity ||
+    !vendorOwnsActivity ||
+    application.completed ||
+    application.rejected
+  ) {
     return (
       <AppShell active="applications" roleId={roleId} user={user}>
         <div className="bg-card mx-auto max-w-3xl rounded-lg border p-6">

@@ -584,6 +584,26 @@ test("document preview uses the dedicated authenticated preview endpoint", async
   assert.equal(await blob.text(), "preview bytes");
 });
 
+test("activity export uses the authenticated workflow node endpoint", async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(
+      url,
+      "https://api.example.test/api/permohonan/test-id/activities/pemasangan_tiang/export",
+    );
+    assert.equal(init.method, "GET");
+    assert.equal(init.headers.get("Authorization"), "Bearer access-test");
+    return new Response("activity pdf", {
+      headers: { "Content-Type": "application/pdf" },
+    });
+  };
+
+  const blob = await applications.exportApplicationActivity(
+    "test-id",
+    "pemasangan_tiang",
+  );
+  assert.equal(await blob.text(), "activity pdf");
+});
+
 for (const status of [400, 403, 404, 409, 500]) {
   test(
     "HTTP " + status + " surfaces backend error without mutation success",
