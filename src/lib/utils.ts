@@ -25,6 +25,18 @@ export function isValidDateValue(value: string) {
   return !!parseDateValue(value);
 }
 
+export function isDateOnOrAfterToday(value: string) {
+  const date = parseDateValue(value);
+  if (!date) return false;
+  const today = new Date();
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  return date >= todayStart;
+}
+
 export function formatApiDate(
   value: string | null | undefined,
   options: Intl.DateTimeFormatOptions,

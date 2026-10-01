@@ -49,11 +49,11 @@ export function ActivityExportButton({
     <Button
       type="button"
       variant="outline"
-      size={compact ? "sm" : "default"}
-      className={compact ? "min-h-8.5 px-2 text-xs" : "min-h-11"}
+      size={compact ? "icon-sm" : "default"}
+      className={compact ? "size-8" : "min-h-11"}
       disabled={loading}
-      aria-label={`Export ${workflowNode} menjadi PDF`}
-      title="Export form menjadi PDF"
+      aria-label={`Unduh laporan ${workflowNode}`}
+      title="Unduh laporan aktivitas"
       onClick={() => void exportPdf()}
     >
       {loading ? (
@@ -61,7 +61,7 @@ export function ActivityExportButton({
       ) : (
         <Download aria-hidden="true" />
       )}
-      Export PDF
+      {!compact && "Unduh Laporan"}
     </Button>
   );
 }

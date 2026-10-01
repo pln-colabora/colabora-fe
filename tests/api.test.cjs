@@ -604,6 +604,33 @@ test("activity export uses the authenticated workflow node endpoint", async () =
   assert.equal(await blob.text(), "activity pdf");
 });
 
+for (const [workflowNode, endpoint] of [
+  ["wo_tiang", "tiang"],
+  ["wo_konstruksi", "konstruksi"],
+]) {
+  test("WO activity export uses the dedicated POST endpoint: " + workflowNode, async () => {
+    global.fetch = async (url, init) => {
+      assert.equal(
+        url,
+        "https://api.example.test/api/permohonan/test-id/wo-vendor/" +
+          endpoint +
+          "/export",
+      );
+      assert.equal(init.method, "POST");
+      assert.equal(init.headers.get("Authorization"), "Bearer access-test");
+      return new Response("wo activity pdf", {
+        headers: { "Content-Type": "application/pdf" },
+      });
+    };
+
+    const blob = await applications.exportApplicationActivity(
+      "test-id",
+      workflowNode,
+    );
+    assert.equal(await blob.text(), "wo activity pdf");
+  });
+}
+
 for (const status of [400, 403, 404, 409, 500]) {
   test(
     "HTTP " + status + " surfaces backend error without mutation success",

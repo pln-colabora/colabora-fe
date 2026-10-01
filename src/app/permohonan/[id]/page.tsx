@@ -13,6 +13,7 @@ import {
   ChevronRight,
   CircleCheck,
   Circle,
+  Copy,
   Clock3,
   Download,
   ExternalLink,
@@ -488,6 +489,21 @@ function formatLocationCoordinates(value: unknown) {
   return `${latitude}, ${longitude}`;
 }
 
+function getLocationCoordinates(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const coordinates = value as Record<string, unknown>;
+  const latitude = coordinates.latitude;
+  const longitude = coordinates.longitude;
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  )
+    return null;
+  return { latitude, longitude };
+}
+
 function formatInputLabel(key: string) {
   const labels: Record<string, string> = {
     reservation_notes: "Catatan reservasi",
@@ -520,7 +536,8 @@ function ActivityInputList({
   roleId: RoleId;
 }) {
   const activity = getActivity(nodeActions[node.workflow_node]);
-  if (node.status !== "completed" || !activity || !inputs) return null;
+  if (node.status !== "completed" || !activity) return null;
+  const resolvedInputs = { ...node.payload, ...inputs };
   const knownLabels = new Map(
     activity.fields.map((field) => [field.name, field.label]),
   );
@@ -531,42 +548,120 @@ function ActivityInputList({
     "completed_at",
     "completed_by",
   ]);
-  const entries = Object.entries(inputs)
+  const entries = Object.entries(resolvedInputs)
     .filter(([key]) => !excludedKeys.has(key))
     .map(([key, value]) => ({
+      key,
       label: knownLabels.get(key) ?? formatInputLabel(key),
       value: formatInputValue(key, value),
+      coordinates: key === "location_coordinates" ? getLocationCoordinates(value) : null,
     }))
     .filter((entry) => entry.value);
-  if (
+  const ownsActivity = getOwner(activity, application) === roleId;
+  const vendorCanReadCoordinates =
     roleId.startsWith("vendor-") &&
-    getOwner(activity, application) !== roleId
-  )
-    return null;
+    entryIsVendorWorkOrder(activity.id, roleId);
+  const visibleEntries = roleId.startsWith("vendor-") && !ownsActivity
+    ? entries.filter(
+        (entry) => entry.key === "location_coordinates" && vendorCanReadCoordinates,
+      )
+    : entries;
+  if (!visibleEntries.length && !ownsActivity) return null;
   return (
-    <div className="mt-1 flex items-start gap-2 sm:col-span-3">
-      {entries.length ? (
-        <div className="border-border bg-muted/60 min-w-0 flex-1 space-y-1 rounded-md border px-2.5 py-1.5 text-xs">
-          {entries.map((entry) => (
-            <p key={entry.label} className="leading-relaxed">
-              <span className="text-muted-foreground font-semibold">
-                {entry.label}: {" "}
-              </span>
-              <span className="text-foreground whitespace-pre-line">
-                {entry.value}
-              </span>
-            </p>
+    <div className="mt-1 sm:col-span-3">
+      {visibleEntries.length ? (
+        <div className="border-border bg-muted/60 min-w-0 space-y-1 rounded-md border px-2.5 py-2.5 text-xs">
+          {visibleEntries.map((entry) => (
+            entry.coordinates ? (
+              <CoordinateDetails
+                key={entry.key}
+                latitude={entry.coordinates.latitude}
+                longitude={entry.coordinates.longitude}
+              />
+            ) : (
+              <p key={entry.key} className="leading-relaxed">
+                <span className="text-muted-foreground font-semibold">
+                  {entry.label}: {" "}
+                </span>
+                <span className="text-foreground whitespace-pre-line">
+                  {entry.value}
+                </span>
+              </p>
+            )
           ))}
         </div>
       ) : null}
-      <div className="shrink-0">
-        <ActivityExportButton
-          applicationId={application.id}
-          applicationNumber={application.number}
-          workflowNode={node.workflow_node}
-          compact
-        />
+    </div>
+  );
+}
+
+function entryIsVendorWorkOrder(activityId: ActionId, roleId: RoleId) {
+  return vendorWoActionId[roleId] === activityId;
+}
+
+function CoordinateDetails({
+  latitude,
+  longitude,
+}: {
+  latitude: number;
+  longitude: number;
+}) {
+  const [copied, setCopied] = useState(false);
+  const coordinates = `${latitude}, ${longitude}`;
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordinates)}`;
+  const embedUrl = `https://www.google.com/maps?q=${encodeURIComponent(coordinates)}&output=embed`;
+
+  async function copyCoordinates() {
+    try {
+      await navigator.clipboard.writeText(coordinates);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1_500);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted-foreground font-semibold">
+          Koordinat pemasangan:
+        </span>
+        <code className="text-foreground rounded bg-background px-1.5 py-0.5 font-mono">
+          {coordinates}
+        </code>
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => void copyCoordinates()}
+          >
+            <Copy aria-hidden="true" />
+            {copied ? "Tersalin" : "Salin koordinat"}
+          </Button>
+          <Button
+            asChild
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+          >
+            <a href={googleMapsUrl} target="_blank" rel="noreferrer">
+              <ExternalLink aria-hidden="true" />
+              Buka Google Maps
+            </a>
+          </Button>
+        </div>
       </div>
+      <iframe
+        title={`Peta koordinat ${coordinates}`}
+        src={embedUrl}
+        loading="lazy"
+        className="h-48 w-full rounded-md border"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
     </div>
   );
 }
@@ -643,37 +738,56 @@ function WorkflowTimeline({
                   </div>
                   <StageStatusLabel status={stageStatus} />
                 </div>
-                <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
+                <ul className="mt-3 space-y-2">
                   {stageActivities.map((activity) => {
                     const status = getActivityStatus(activity.id, application);
                     const owner = getRole(getOwner(activity, application));
                     const nodes = application.nodes.filter(
                       (node) => nodeActions[node.workflow_node] === activity.id,
                     );
+                    const completedNode = nodes.find(
+                      (node) => node.status === "completed",
+                    );
+                    const detailNode = completedNode ?? nodes[0];
+                    const combinedInputs = Object.assign(
+                      {},
+                      ...nodes.map((node) => activityInputs[node.workflow_node]),
+                    );
                     return (
                       <li
                         key={activity.id}
-                        className="grid gap-1 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_180px_110px] sm:items-center"
+                        className="rounded-md border bg-background px-2.5 py-2 text-sm"
                       >
-                        <span className="flex items-center gap-2 font-medium">
-                          <ActivityStatusIcon status={status} />
-                          {activity.shortLabel}
-                        </span>
-                        <span className="text-muted-foreground text-xs">
-                          {owner.lane} — {owner.label}
-                        </span>
-                        <span className="text-muted-foreground text-xs sm:text-right">
-                          {activityStatusLabel(status)}
-                        </span>
-                        {nodes.map((node) => (
-                          <ActivityInputList
-                            key={node.workflow_node}
-                            node={node}
-                            inputs={activityInputs[node.workflow_node]}
-                            application={application}
-                            roleId={roleId}
-                          />
-                        ))}
+                        <div className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_320px_140px] sm:items-center">
+                          <span className="flex items-center gap-2 font-medium w-full">
+                            <ActivityStatusIcon status={status} />
+                            {activity.shortLabel}
+                          </span>
+                          <span className="text-muted-foreground min-w-0 text-xs sm:text-left">
+                            {owner.lane} — {owner.label}
+                          </span>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-muted-foreground text-xs">
+                              {activityStatusLabel(status)}
+                            </span>
+                            {completedNode ? (
+                              <ActivityExportButton
+                                applicationId={application.id}
+                                applicationNumber={application.number}
+                                workflowNode={completedNode.workflow_node}
+                                compact
+                              />
+                            ) : null}
+                          </div>
+                          {detailNode ? (
+                            <ActivityInputList
+                              node={detailNode}
+                              inputs={combinedInputs}
+                              application={application}
+                              roleId={roleId}
+                            />
+                          ) : null}
+                        </div>
                       </li>
                     );
                   })}
@@ -758,7 +872,7 @@ function VendorTimeline({
                     </h3>
                     <StageStatusLabel status={stageStatus} />
                   </div>
-                  <ul className="bg-muted/25 mt-3 divide-y rounded-md border">
+                  <ul className="mt-3 space-y-1">
                     {nodes.map((node) => {
                       // Node may not map to a static activity; guard every read.
                       const activity = getActivity(
@@ -771,24 +885,39 @@ function VendorTimeline({
                       return (
                         <li
                           key={node.workflow_node}
-                          className="grid gap-1 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_180px_110px] sm:items-center"
+                          className="w-full"
                         >
-                          <span className="flex items-center gap-2 font-medium">
-                            <ActivityStatusIcon status={status} />
-                            {activity?.shortLabel ?? node.workflow_node}
-                          </span>
-                          <span className="text-muted-foreground text-xs">
-                            {owner ? `${owner.lane} — ${owner.label}` : "Vendor"}
-                          </span>
-                          <span className="text-muted-foreground text-xs sm:text-right">
-                            {activityStatusLabel(status)}
-                          </span>
-                          <ActivityInputList
-                            node={node}
-                            inputs={activityInputs[node.workflow_node]}
-                            application={application}
-                            roleId={roleId}
-                          />
+                          <div className="grid w-full min-w-0 gap-x-4 gap-y-2 rounded-md border bg-background px-2.5 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_320px_140px] sm:items-center">
+                            <span className="flex items-center gap-2 font-medium">
+                              <ActivityStatusIcon status={status} />
+                              {activity?.shortLabel ?? node.workflow_node}
+                            </span>
+                            <span className="text-muted-foreground min-w-0 text-xs sm:text-left">
+                              {owner ? `${owner.lane} — ${owner.label}` : "Vendor"}
+                            </span>
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-muted-foreground text-xs">
+                                {activityStatusLabel(status)}
+                              </span>
+                              {node.status === "completed" &&
+                              activity &&
+                              (!roleId.startsWith("vendor-") ||
+                                getOwner(activity, application) === roleId) ? (
+                                <ActivityExportButton
+                                  applicationId={application.id}
+                                  applicationNumber={application.number}
+                                  workflowNode={node.workflow_node}
+                                  compact
+                                />
+                              ) : null}
+                            </div>
+                            <ActivityInputList
+                              node={node}
+                              inputs={activityInputs[node.workflow_node]}
+                              application={application}
+                              roleId={roleId}
+                            />
+                          </div>
                         </li>
                       );
                     })}
@@ -909,7 +1038,7 @@ function StageStatusLabel({ status }: { status: ProgressStatus }) {
           : status === "rejected"
             ? "Dikembalikan"
             : status === "skipped"
-              ? "Dilewati oleh keputusan"
+              ? "Dilewati"
               : "Belum dimulai"}
     </span>
   );
@@ -948,7 +1077,7 @@ function activityStatusLabel(status: ProgressStatus) {
     : status === "current"
       ? "Perlu tindakan"
       : status === "skipped"
-        ? "Dilewati oleh keputusan"
+        ? "Dilewati"
         : status === "rejected"
           ? "Dikembalikan"
           : "Belum dimulai";

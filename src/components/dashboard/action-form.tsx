@@ -44,7 +44,7 @@ import {
   uploadEvidence,
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
-import { cn, isValidDateValue } from "@/lib/utils";
+import { cn, isDateOnOrAfterToday, isValidDateValue } from "@/lib/utils";
 import {
   getActivity,
   getRole,
@@ -73,6 +73,11 @@ function createActionSchema(fields: FieldDefinition[]) {
         schema = schema.refine(
           (value) => !value || isValidDateValue(value),
           "Format tanggal tidak valid.",
+        );
+      if (field.name === "estimasi_tanggal_selesai")
+        schema = schema.refine(
+          (value) => !value || isDateOnOrAfterToday(value),
+          "Tanggal selesai harus hari ini atau setelahnya.",
         );
       if (field.type === "number")
         schema = schema.refine(
@@ -210,15 +215,17 @@ export function ActionForm({
       cancelled = true;
     };
   }, [vendorRole]);
-  // Vendor tiang records where the pole was installed on the pemasangan_tiang node.
-  const needsCoordinate = formNode.replaceAll("-", "_") === "pemasangan_tiang";
+  const normalizedFormNode = formNode.replaceAll("-", "_");
+  const needsCoordinate = ["wo_tiang", "wo_konstruksi"].includes(
+    normalizedFormNode,
+  );
   const supportsCamera = [
     "pemasangan_tiang",
     "pelaksanaan_konstruksi",
     "pdkb_documentation",
     "energize_jaringan",
     "pemasangan_sr_app",
-  ].includes(formNode.replaceAll("-", "_"));
+  ].includes(normalizedFormNode);
   const [coordinate, setCoordinate] = useState<Coordinate | null>(null);
   const [coordinateError, setCoordinateError] = useState(false);
   const uploads = useRef(new Map<File, string>());
@@ -296,7 +303,19 @@ export function ActionForm({
             </Select>
           ) : definition.type === "date" ? (
             <FormControl>
-              <DatePicker {...field} disabled={busy} />
+              <DatePicker
+                {...field}
+                disabled={busy}
+                minDate={
+                  definition.name === "estimasi_tanggal_selesai"
+                    ? new Date(
+                        new Date().getFullYear(),
+                        new Date().getMonth(),
+                        new Date().getDate(),
+                      )
+                    : undefined
+                }
+              />
             </FormControl>
           ) : (
             <FormControl>
@@ -441,7 +460,7 @@ export function ActionForm({
           </div>
 
           {needsCoordinate ? (
-            <div className="min-w-0">
+            <div className="min-w-0 mt-5">
               <p className="text-sm font-medium">
                 Lokasi pemasangan
               </p>

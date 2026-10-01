@@ -315,6 +315,16 @@ export async function exportApplicationActivity(
   applicationId: string,
   workflowNode: string,
 ) {
+  const normalizedNode = workflowNode.replaceAll("-", "_");
+  if (normalizedNode === "wo_tiang" || normalizedNode === "wo_konstruksi") {
+    const vendorPath = normalizedNode === "wo_tiang" ? "tiang" : "konstruksi";
+    const path = `/api/permohonan/${encodeURIComponent(
+      applicationId,
+    )}/wo-vendor/${vendorPath}/export`;
+    return (
+      await apiClient.post<Blob>(path, undefined, { responseType: "blob" })
+    ).data;
+  }
   const path = `/api/permohonan/${encodeURIComponent(
     applicationId,
   )}/activities/${encodeURIComponent(workflowNode)}/export`;
