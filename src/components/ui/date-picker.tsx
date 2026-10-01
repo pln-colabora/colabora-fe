@@ -9,6 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
@@ -20,6 +21,7 @@ type DatePickerProps = Omit<
 > & {
   value?: string;
   onChange: (value: string) => void;
+  minDate?: Date;
 };
 
 function toDateValue(date: Date) {
@@ -53,7 +55,7 @@ function normalizeManualDate(value: string) {
 
 const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
   function DatePicker(
-    { value, onChange, disabled, className, ...props },
+    { value, onChange, disabled, className, minDate, ...props },
     ref,
   ) {
     const [open, setOpen] = React.useState(false);
@@ -61,10 +63,11 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
 
     return (
       <Popover open={open} onOpenChange={setOpen}>
-        <div className="relative">
+        <PopoverAnchor asChild>
+          <div className="relative h-9 w-full">
           <span
             aria-hidden="true"
-            className="text-muted-foreground pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center text-base"
+            className="text-muted-foreground pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center text-sm leading-none"
           >
             <span className="text-foreground">{formatInputValue(value)}</span>
             {"dd/mm/yyyy".slice(formatInputValue(value).length)}
@@ -81,7 +84,7 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
             disabled={disabled}
             placeholder=""
             className={cn(
-              "bg-background h-11 pr-12 text-transparent caret-foreground placeholder:text-transparent focus-visible:border-input focus-visible:ring-0",
+              "bg-background h-9 w-full pr-12 text-transparent caret-foreground placeholder:text-transparent focus-visible:border-input focus-visible:ring-0",
               className,
             )}
           />
@@ -97,17 +100,24 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
               <CalendarIcon className="size-4" aria-hidden="true" />
             </Button>
           </PopoverTrigger>
-        </div>
-        <PopoverContent align="start" className="w-auto p-0">
+          </div>
+        </PopoverAnchor>
+        <PopoverContent
+          side="bottom"
+          align="start"
+          className="w-auto max-w-[calc(100vw-2rem)] p-0"
+        >
           <Calendar
             mode="single"
             selected={selectedDate}
             defaultMonth={selectedDate ?? new Date()}
+            disabled={minDate ? { before: minDate } : undefined}
             onSelect={(date) => {
               if (!date) return;
               onChange(toDateValue(date));
               setOpen(false);
             }}
+            className="mx-auto w-fit max-w-full"
           />
         </PopoverContent>
       </Popover>
