@@ -404,60 +404,62 @@ export function ActionForm({
         className={
           embedded
             ? "min-w-0"
-            : "mt-5 min-w-0"
+            : "mt-3 min-w-0"
         }
         noValidate
       >
         <fieldset className="min-w-0" disabled={busy}>
-          <div className="grid gap-4 md:grid-cols-2">
-            {beforeNotes.map(renderField)}
-            {vendorRole ? (
-              <FormField
-                control={form.control}
-                name="values.vendor_id"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>{vendorLabel}</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={busy || vendorLoading}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="bg-background h-11 w-full">
-                          <SelectValue
-                            placeholder={
-                              vendorLoading
-                                ? "Memuat vendor..."
-                                : `Pilih ${vendorLabel.toLowerCase()}`
-                            }
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {vendors.map((vendor) => (
-                          <SelectItem key={vendor.id} value={vendor.id}>
-                            {vendor.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {!vendorLoading && !vendorError && !vendors.length && (
-                      <p className="text-muted-foreground mt-2 text-sm">
-                        Belum ada akun {vendorLabel.toLowerCase()}.
-                      </p>
-                    )}
-                    {Boolean(vendorError) && (
-                      <p className="text-destructive mt-2 text-sm">
-                        Daftar vendor gagal dimuat.
-                      </p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            ) : null}
-          </div>
+          {(beforeNotes.length > 0 || !!vendorRole) && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {beforeNotes.map(renderField)}
+              {vendorRole ? (
+                <FormField
+                  control={form.control}
+                  name="values.vendor_id"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>{vendorLabel}</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={busy || vendorLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background h-11 w-full">
+                            <SelectValue
+                              placeholder={
+                                vendorLoading
+                                  ? "Memuat vendor..."
+                                  : `Pilih ${vendorLabel.toLowerCase()}`
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {vendors.map((vendor) => (
+                            <SelectItem key={vendor.id} value={vendor.id}>
+                              {vendor.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!vendorLoading && !vendorError && !vendors.length && (
+                        <p className="text-muted-foreground mt-2 text-sm">
+                          Belum ada akun {vendorLabel.toLowerCase()}.
+                        </p>
+                      )}
+                      {Boolean(vendorError) && (
+                        <p className="text-destructive mt-2 text-sm">
+                          Daftar vendor gagal dimuat.
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+            </div>
+          )}
 
           {needsCoordinate ? (
             <div className="min-w-0 mt-5">
@@ -486,7 +488,7 @@ export function ActionForm({
             control={form.control}
             name="files"
             render={({ field }) => (
-              <FormItem className="mt-5 min-w-0">
+              <FormItem className="mt-3 min-w-0">
                 <FormLabel>Evidence aktivitas</FormLabel>
                 <FormControl>
                   <EvidenceUploader

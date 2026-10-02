@@ -29,6 +29,7 @@ import {
   canCreatePermohonan,
 } from "@/components/dashboard/app-shell";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
+import { ExportButtons } from "@/components/dashboard/export-buttons";
 import { DashboardSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import {
@@ -231,6 +232,19 @@ function DashboardContent() {
           .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
           .slice(0, 5)
       : filteredApplications;
+  // Scope line printed on the PDF so the file states what it contains.
+  const exportScope = [
+    view === "mine"
+      ? roleId === "super-user"
+        ? "Dalam pemantauan"
+        : "Tugas saya"
+      : "Semua permohonan",
+    stageFilter
+      ? `Tahap: ${stages.find((item) => String(item.id) === stageFilter)?.shortLabel ?? stageFilter}`
+      : null,
+    statusFilter ? `Status: ${statusFilter}` : null,
+    searchQuery.trim() ? `Pencarian: "${searchQuery.trim()}"` : null,
+  ].filter((item): item is string => item !== null);
   const completedCount = roleScopedApplications.filter(
     (item) => getApplicationStatus(item, roleId) === "Selesai",
   ).length;
@@ -692,6 +706,11 @@ function DashboardContent() {
                     </Button>
                   )}
                 </div>
+                <ExportButtons
+                  applications={visibleApplications}
+                  roleId={roleId}
+                  scope={exportScope}
+                />
               </div>
             )}
           </div>

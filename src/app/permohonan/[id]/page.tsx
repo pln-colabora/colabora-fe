@@ -566,31 +566,29 @@ function ActivityInputList({
         (entry) => entry.key === "location_coordinates" && vendorCanReadCoordinates,
       )
     : entries;
-  if (!visibleEntries.length && !ownsActivity) return null;
+  if (!visibleEntries.length) return null;
   return (
     <div className="mt-1 sm:col-span-3">
-      {visibleEntries.length ? (
-        <div className="border-border bg-muted/60 min-w-0 space-y-1 rounded-md border px-2.5 py-2.5 text-xs">
-          {visibleEntries.map((entry) => (
-            entry.coordinates ? (
-              <CoordinateDetails
-                key={entry.key}
-                latitude={entry.coordinates.latitude}
-                longitude={entry.coordinates.longitude}
-              />
-            ) : (
-              <p key={entry.key} className="leading-relaxed">
-                <span className="text-muted-foreground font-semibold">
-                  {entry.label}: {" "}
-                </span>
-                <span className="text-foreground whitespace-pre-line">
-                  {entry.value}
-                </span>
-              </p>
-            )
-          ))}
-        </div>
-      ) : null}
+      <div className="border-border bg-muted/60 min-w-0 space-y-1 rounded-md border px-2.5 py-2.5 text-xs">
+        {visibleEntries.map((entry) => (
+          entry.coordinates ? (
+            <CoordinateDetails
+              key={entry.key}
+              latitude={entry.coordinates.latitude}
+              longitude={entry.coordinates.longitude}
+            />
+          ) : (
+            <p key={entry.key} className="leading-relaxed">
+              <span className="text-muted-foreground font-semibold">
+                {entry.label}: {" "}
+              </span>
+              <span className="text-foreground whitespace-pre-line">
+                {entry.value}
+              </span>
+            </p>
+          )
+        ))}
+      </div>
     </div>
   );
 }
@@ -758,8 +756,8 @@ function WorkflowTimeline({
                         key={activity.id}
                         className="rounded-md border bg-background px-2.5 py-2 text-sm"
                       >
-                        <div className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_320px_140px] sm:items-center">
-                          <span className="flex items-center gap-2 font-medium w-full">
+                        <div className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(180px,220px)_auto] sm:items-center">
+                          <span className="flex w-full items-center gap-2 font-medium">
                             <ActivityStatusIcon status={status} />
                             {activity.shortLabel}
                           </span>
@@ -872,7 +870,7 @@ function VendorTimeline({
                     </h3>
                     <StageStatusLabel status={stageStatus} />
                   </div>
-                  <ul className="mt-3 space-y-1">
+                  <ul className="mt-3 space-y-2">
                     {nodes.map((node) => {
                       // Node may not map to a static activity; guard every read.
                       const activity = getActivity(

@@ -133,14 +133,14 @@ export function EvidenceUploader({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-3">
+    <div className="w-full min-w-0 max-w-full space-y-2">
       <div
         {...controlProps}
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-disabled={disabled}
         className={cn(
-          "border-border bg-background flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-5 py-6 text-center transition-colors",
+          "border-border bg-background flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-4 py-5 text-center transition-colors sm:min-h-36",
           "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
           dragging && "border-primary bg-primary/5",
           disabled && "cursor-not-allowed opacity-60",
@@ -182,7 +182,7 @@ export function EvidenceUploader({
         <Button
           type="button"
           variant="outline"
-          className="mt-4"
+          className="mt-3"
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
