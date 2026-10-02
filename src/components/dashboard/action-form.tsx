@@ -44,7 +44,12 @@ import {
   uploadEvidence,
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
-import { cn, isDateOnOrAfterToday, isValidDateValue } from "@/lib/utils";
+import {
+  cn,
+  isDateOnOrAfterToday,
+  isValidDateValue,
+  startOfToday,
+} from "@/lib/utils";
 import {
   getActivity,
   getRole,
@@ -70,15 +75,18 @@ function createActionSchema(fields: FieldDefinition[]) {
           `${field.label} maksimal ${field.maxLength} karakter.`,
         );
       if (field.type === "date")
-        schema = schema.refine(
-          (value) => !value || isValidDateValue(value),
-          "Format tanggal tidak valid.",
-        );
-      if (field.name === "estimasi_tanggal_selesai")
-        schema = schema.refine(
-          (value) => !value || isDateOnOrAfterToday(value),
-          "Tanggal selesai harus hari ini atau setelahnya.",
-        );
+        schema = schema
+          .refine(
+            (value) => !value || isValidDateValue(value),
+            "Format tanggal tidak valid.",
+          )
+          // The calendar disables past days, but the field can also be typed by
+          // hand, so the rule is enforced here too.
+          .refine(
+            (value) =>
+              !value || !isValidDateValue(value) || isDateOnOrAfterToday(value),
+            `${field.label} harus hari ini atau setelahnya.`,
+          );
       if (field.type === "number")
         schema = schema.refine(
           (value) => !value || Number.isFinite(Number(value)),
@@ -262,6 +270,7 @@ export function ActionForm({
         <FormItem
           className={cn(
             definition.type === "textarea" && "md:col-span-2",
+            definition.type === "date" && "md:col-span-2",
             definition.name === "notes" && "mt-5",
           )}
         >
@@ -306,15 +315,7 @@ export function ActionForm({
               <DatePicker
                 {...field}
                 disabled={busy}
-                minDate={
-                  definition.name === "estimasi_tanggal_selesai"
-                    ? new Date(
-                        new Date().getFullYear(),
-                        new Date().getMonth(),
-                        new Date().getDate(),
-                      )
-                    : undefined
-                }
+                minDate={startOfToday()}
               />
             </FormControl>
           ) : (

@@ -25,16 +25,16 @@ export function isValidDateValue(value: string) {
   return !!parseDateValue(value);
 }
 
+// Local midnight of the current day; the earliest date a user may pick.
+export function startOfToday() {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
 export function isDateOnOrAfterToday(value: string) {
   const date = parseDateValue(value);
   if (!date) return false;
-  const today = new Date();
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-  return date >= todayStart;
+  return date >= startOfToday();
 }
 
 export function formatApiDate(

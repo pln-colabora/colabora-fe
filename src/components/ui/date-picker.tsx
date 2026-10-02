@@ -55,16 +55,20 @@ function normalizeManualDate(value: string) {
 
 const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
   function DatePicker(
-    { value, onChange, disabled, className, minDate, ...props },
+    { value, onChange, disabled, className, minDate, onClick, ...props },
     ref,
   ) {
     const [open, setOpen] = React.useState(false);
+    const anchorRef = React.useRef<HTMLDivElement>(null);
+    // The field stays editable by hand, so when it opens the calendar the focus
+    // must remain in the input instead of jumping into the popover.
+    const openedFromInput = React.useRef(false);
     const selectedDate = parseDateValue(value);
 
     return (
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverAnchor asChild>
-          <div className="relative h-9 w-full">
+          <div ref={anchorRef} className="relative h-9 w-full">
           <span
             aria-hidden="true"
             className="text-muted-foreground pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center text-sm leading-none"
@@ -83,6 +87,16 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
             }
             disabled={disabled}
             placeholder=""
+            aria-haspopup="dialog"
+            onClick={(event) => {
+              onClick?.(event);
+              if (disabled) return;
+              // Only a closed -> open transition consumes the flag (via
+              // onOpenAutoFocus); setting it while open would leak into the
+              // next open from the icon.
+              if (!open) openedFromInput.current = true;
+              setOpen(true);
+            }}
             className={cn(
               "bg-background h-9 w-full pr-12 text-transparent caret-foreground placeholder:text-transparent focus-visible:border-input focus-visible:ring-0",
               className,
@@ -106,6 +120,18 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
           side="bottom"
           align="start"
           className="w-auto max-w-[calc(100vw-2rem)] p-0"
+          onOpenAutoFocus={(event) => {
+            // Opened from the icon: let focus move into the calendar so keyboard
+            // users can reach the days. Opened from the field: keep typing.
+            if (openedFromInput.current) event.preventDefault();
+            openedFromInput.current = false;
+          }}
+          onInteractOutside={(event) => {
+            // The field is the anchor, not the trigger; clicking it must not
+            // count as a click outside (it would close and reopen the popover).
+            if (anchorRef.current?.contains(event.target as Node))
+              event.preventDefault();
+          }}
         >
           <Calendar
             mode="single"

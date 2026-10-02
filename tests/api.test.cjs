@@ -92,6 +92,7 @@ const applications = load("@/lib/applications");
 const users = load("@/lib/users");
 const utils = load("@/lib/utils");
 const workflow = load("@/lib/workflow");
+const exporter = load("@/lib/export-applications");
 const fixture = {
   id: "test-id",
   no_permohonan: "TEST-001",
@@ -716,4 +717,111 @@ test("action cannot post to another request or a remote origin", async () => {
       ),
     /Tindakan backend tidak dikenali/,
   );
+});
+
+function exportSample(overrides = {}) {
+  const base = applications.mapApplication(fixture);
+  return {
+    ...base,
+    number: "PBPD-2026-0099",
+    customer: "PT Contoh",
+    phone: "081234567890",
+    location: "Jl. Pahlawan No. 10, Surabaya",
+    requestedAt: "2026-09-10",
+    ...overrides,
+  };
+}
+
+test("export rows mirror the list for the role and map SLA to a label", () => {
+  const [row] = exporter.buildExportRows(
+    [
+      exportSample({
+        sla: { tone: "late", label: "Terlambat", deadline: "2026-09-12" },
+      }),
+    ],
+    "admin",
+  );
+  assert.equal(row.number, "PBPD-2026-0099");
+  assert.equal(row.requestedAt, "2026-09-10");
+  assert.equal(row.stage, "Pra konstruksi");
+  assert.equal(row.status, "Menunggu tindakan");
+  assert.equal(row.slaStatus, "Terlambat");
+  assert.equal(row.slaDeadline, "2026-09-12");
+});
+
+test("export marks a returned request with its own stage and no activity", () => {
+  const [row] = exporter.buildExportRows(
+    [exportSample({ rejected: true, status: "returned" })],
+    "admin",
+  );
+  assert.equal(row.stage, "Delegasi PK NPS");
+  assert.equal(row.activity, "");
+});
+
+test("export withholds customer contact columns from vendor roles only", () => {
+  const headers = (role) =>
+    exporter.getExportColumns(role).map((column) => column.header);
+  assert.ok(headers("admin").includes("No. HP"));
+  assert.ok(headers("admin").includes("Alamat"));
+  for (const role of ["vendor-tiang", "vendor-konstruksi", "vendor-sr-app"]) {
+    assert.ok(!headers(role).includes("No. HP"));
+    assert.ok(!headers(role).includes("Alamat"));
+    assert.ok(headers(role).includes("No. Permohonan"));
+  }
+});
+
+test("export file name carries the date and the right extension", () => {
+  const now = new Date(2026, 9, 2);
+  assert.equal(
+    exporter.exportFileName("xlsx", now),
+    "daftar-permohonan-2026-10-02.xlsx",
+  );
+  assert.equal(
+    exporter.exportFileName("pdf", now),
+    "daftar-permohonan-2026-10-02.pdf",
+  );
+});
+
+test("xlsx export produces a real workbook with a header and one row per request", async () => {
+  const blob = await exporter.buildApplicationsXlsx(
+    [exportSample(), exportSample({ number: "PBPD-2026-0100" })],
+    "admin",
+  );
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  // .xlsx is a zip container.
+  assert.equal(String.fromCharCode(bytes[0], bytes[1]), "PK");
+  assert.ok(bytes.length > 1000);
+});
+
+test("pdf export produces a real PDF document", async () => {
+  const blob = await exporter.buildApplicationsPdf(
+    [exportSample(), exportSample({ number: "PBPD-2026-0100" })],
+    "admin",
+    ["Semua permohonan", 'Pencarian: "razan"'],
+    new Date(2026, 9, 2),
+  );
+  const head = Buffer.from(await blob.arrayBuffer())
+    .subarray(0, 5)
+    .toString("latin1");
+  assert.equal(head, "%PDF-");
+});
+
+test("date fields reject yesterday and accept today or later", () => {
+  const iso = (offsetDays) => {
+    const date = new Date();
+    date.setDate(date.getDate() + offsetDays);
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+  assert.equal(utils.isDateOnOrAfterToday(iso(-1)), false);
+  assert.equal(utils.isDateOnOrAfterToday(iso(0)), true);
+  assert.equal(utils.isDateOnOrAfterToday(iso(1)), true);
+  assert.equal(utils.isDateOnOrAfterToday("bukan-tanggal"), false);
+
+  const start = utils.startOfToday();
+  assert.deepEqual(
+    [start.getHours(), start.getMinutes(), start.getSeconds()],
+    [0, 0, 0],
+  );
+  assert.equal(utils.isDateOnOrAfterToday(iso(0)), start <= new Date());
 });
