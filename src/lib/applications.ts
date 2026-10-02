@@ -27,9 +27,22 @@ type PermohonanResponse = {
   // The list endpoint exposes an aggregate SLA in addition to per-node data.
   sla_deadline?: string | null;
   sla_status?: "none" | "on_time" | "due_soon" | "overdue";
+  // Create inputs. The API returns them at the top level (null on records made
+  // before they were captured) although the published schema omits them; the
+  // permohonan node payload is kept as a fallback.
+  tarif?: string | null;
+  daya_baru?: number | null;
+  daya_lama?: number | null;
   workflow_nodes: WorkflowNode[];
   available_actions: AvailableAction[];
 };
+
+function toPositiveNumber(value: unknown) {
+  const number = typeof value === "string" ? Number(value) : value;
+  return typeof number === "number" && Number.isFinite(number) && number > 0
+    ? number
+    : undefined;
+}
 type DocumentResponse = {
   id: string;
   original_filename: string;
@@ -77,6 +90,9 @@ export function mapApplication(data: PermohonanResponse): Application {
     .map((node) => node.completed_at)
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => b.localeCompare(a))[0];
+  const createInputs =
+    nodes.find((node) => node.workflow_node === "permohonan")?.payload ?? {};
+  const tarifValue = data.tarif ?? createInputs.tarif;
   return {
     id: data.id,
     number: data.no_permohonan,
@@ -93,6 +109,10 @@ export function mapApplication(data: PermohonanResponse): Application {
       ? "JTM / Gardu"
       : data.jenis_sambungan) as Application["connectionType"],
     unit: data.ulp_unit,
+    tarif:
+      typeof tarifValue === "string" && tarifValue ? tarifValue : undefined,
+    dayaBaru: toPositiveNumber(data.daya_baru ?? createInputs.daya_baru),
+    dayaLama: toPositiveNumber(data.daya_lama ?? createInputs.daya_lama),
     requestedAt: data.request_date ?? "",
     updatedAt: latestCompletedAt ?? "—",
     currentAction:

@@ -45,6 +45,7 @@ import { useSession } from "@/hooks/use-session";
 import { getDashboardReturnPath } from "@/lib/navigation";
 import {
   formatApiDate,
+  formatDaya,
   formatFileSize,
   formatSlaRemaining,
   getSlaDaysRemaining,
@@ -61,6 +62,7 @@ import {
   getOwner,
   getRole,
   stages,
+  tarifLabels,
   type ActionId,
   type Application,
   type RoleId,
@@ -1199,11 +1201,25 @@ function DocumentsSection({
 }
 
 function ApplicationFacts({ application }: { application: Application }) {
-  const facts = [
+  const isPowerChange = application.requestType === "Perubahan daya";
+  // Rows are omitted (not shown as "—") for records created before tarif/daya
+  // were captured.
+  const power: Array<[string, string]> = [];
+  if (application.tarif)
+    power.push(["Tarif", tarifLabels[application.tarif] ?? application.tarif]);
+  if (isPowerChange && application.dayaLama)
+    power.push(["Daya lama", formatDaya(application.dayaLama)]);
+  if (application.dayaBaru)
+    power.push([
+      isPowerChange ? "Daya baru" : "Permohonan daya",
+      formatDaya(application.dayaBaru),
+    ]);
+  const facts: Array<[string, string]> = [
     ["Nomor permohonan", application.number],
     ["No. HP / telepon", application.phone],
     ["Jenis permohonan", application.requestType],
     ["Jenis sambungan", application.connectionType],
+    ...power,
     ["Unit / ULP", application.unit],
     ["Lokasi", application.location],
     ["Tanggal permohonan", formatDate(application.requestedAt)],

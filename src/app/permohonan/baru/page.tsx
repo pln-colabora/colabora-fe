@@ -46,7 +46,7 @@ import {
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
-import { getRole, type RoleId } from "@/lib/workflow";
+import { getRole, tarifLabels, type RoleId } from "@/lib/workflow";
 
 const jenisByRole: Partial<Record<RoleId, string[]>> = {
   "pelayanan-pelanggan": ["JTR", "JTM / Gardu"],
@@ -56,21 +56,8 @@ const jenisByRole: Partial<Record<RoleId, string[]>> = {
 const requestTypes = ["Pasang baru", "Perubahan daya"] as const;
 const units = ["ULP Taman", "ULP Menganti", "ULP Karang Pilang"] as const;
 
-// Human-readable labels for the backend tarif enum, in presentation order.
-const tarifOrder = [
-  "rumah_tangga",
-  "sosial",
-  "bisnis",
-  "industri",
-  "pemerintah",
-] as const;
-const tarifLabels: Record<string, string> = {
-  rumah_tangga: "Rumah Tangga",
-  sosial: "Sosial",
-  bisnis: "Bisnis",
-  industri: "Industri",
-  pemerintah: "Pemerintah",
-};
+// Tarif options follow the order of the shared label map.
+const tarifOrder = Object.keys(tarifLabels);
 
 // Form uses display names; the tarif endpoint and create payload use the API name.
 const toApiJenis = (connectionType: string) =>

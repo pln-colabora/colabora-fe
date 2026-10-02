@@ -825,3 +825,97 @@ test("date fields reject yesterday and accept today or later", () => {
   );
   assert.equal(utils.isDateOnOrAfterToday(iso(0)), start <= new Date());
 });
+
+test("tarif and daya are read from the top level when the backend sends them", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    jenis_permohonan: "Perubahan Daya (PD)",
+    tarif: "bisnis",
+    daya_baru: 555000,
+    daya_lama: 197000,
+  });
+  assert.equal(mapped.tarif, "bisnis");
+  assert.equal(mapped.dayaBaru, 555000);
+  assert.equal(mapped.dayaLama, 197000);
+});
+
+test("tarif and daya fall back to the permohonan node payload", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    workflow_nodes: [
+      {
+        workflow_node: "permohonan",
+        stage_number: 1,
+        status: "completed",
+        payload: { tarif: "rumah_tangga", daya_baru: "2200" },
+      },
+      ...fixture.workflow_nodes,
+    ],
+  });
+  assert.equal(mapped.tarif, "rumah_tangga");
+  // Numeric strings are accepted; a missing daya_lama stays undefined.
+  assert.equal(mapped.dayaBaru, 2200);
+  assert.equal(mapped.dayaLama, undefined);
+});
+
+test("records without tarif or daya map to undefined, never zero or a placeholder", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    daya_baru: 0,
+    daya_lama: null,
+  });
+  assert.equal(mapped.tarif, undefined);
+  assert.equal(mapped.dayaBaru, undefined);
+  assert.equal(mapped.dayaLama, undefined);
+});
+
+test("daya and tarif are formatted for display", () => {
+  assert.equal(utils.formatDaya(555000), "555.000 VA");
+  assert.equal(utils.formatDaya(450), "450 VA");
+  assert.equal(workflow.tarifLabels.rumah_tangga, "Rumah Tangga");
+  assert.deepEqual(Object.keys(workflow.tarifLabels), [
+    "rumah_tangga",
+    "sosial",
+    "bisnis",
+    "industri",
+    "pemerintah",
+  ]);
+});
+
+test("export carries tarif and daya as labels and digits, empty for old records", () => {
+  const [pd, old] = exporter.buildExportRows(
+    [
+      exportSample({
+        requestType: "Perubahan daya",
+        tarif: "sosial",
+        dayaLama: 900,
+        dayaBaru: 1300,
+      }),
+      exportSample({ tarif: undefined, dayaLama: undefined, dayaBaru: undefined }),
+    ],
+    "admin",
+  );
+  assert.equal(pd.tarif, "Sosial");
+  assert.equal(pd.dayaLama, "900");
+  assert.equal(pd.dayaBaru, "1300");
+  assert.equal(old.tarif, "");
+  assert.equal(old.dayaLama, "");
+  assert.equal(old.dayaBaru, "");
+});
+
+test("tarif and daya are internal-only: shown to staff, withheld from vendors, kept in the PDF", () => {
+  const headers = (role) =>
+    exporter.getExportColumns(role).map((column) => column.header);
+  for (const header of ["Tarif", "Daya Lama (VA)", "Daya Baru (VA)"]) {
+    assert.ok(headers("admin").includes(header), `admin has ${header}`);
+    for (const role of ["vendor-tiang", "vendor-konstruksi", "vendor-sr-app"])
+      assert.ok(!headers(role).includes(header), `${role} lacks ${header}`);
+  }
+  // Contact columns are Excel-only; tarif/daya are not.
+  const byHeader = Object.fromEntries(
+    exporter.getExportColumns("admin").map((column) => [column.header, column]),
+  );
+  assert.equal(byHeader["No. HP"].excelOnly, true);
+  assert.equal(byHeader["Tarif"].excelOnly, undefined);
+  assert.equal(byHeader["Daya Baru (VA)"].number, true);
+});

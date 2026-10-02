@@ -5,6 +5,7 @@ import {
   getCurrentStage,
   getOwnedSla,
   stages,
+  tarifLabels,
   type Application,
   type RoleId,
 } from "@/lib/workflow";
@@ -16,6 +17,10 @@ export type ExportRow = {
   location: string;
   requestType: string;
   connectionType: string;
+  tarif: string;
+  /** Power in VA as digits, or "" when the record has none. */
+  dayaLama: string;
+  dayaBaru: string;
   unit: string;
   requestedAt: string;
   stage: string;
@@ -32,22 +37,53 @@ export type ExportColumn = {
   value: (row: ExportRow) => string;
   /** Value is an ISO date; written as a real date cell in Excel. */
   date?: boolean;
-  /** Customer contact data; withheld from vendor roles. */
-  sensitive?: boolean;
+  /** Value is digits; written as a real number cell in Excel. */
+  number?: boolean;
+  /** Customer/commercial data; withheld from vendor roles. */
+  internalOnly?: boolean;
+  /** Left out of the PDF to keep the table readable; Excel keeps it. */
+  excelOnly?: boolean;
 };
 
 const columns: ExportColumn[] = [
   { header: "No. Permohonan", width: 20, value: (row) => row.number },
   { header: "Pelanggan", width: 30, value: (row) => row.customer },
-  { header: "No. HP", width: 16, value: (row) => row.phone, sensitive: true },
+  {
+    header: "No. HP",
+    width: 16,
+    value: (row) => row.phone,
+    internalOnly: true,
+    excelOnly: true,
+  },
   {
     header: "Alamat",
     width: 40,
     value: (row) => row.location,
-    sensitive: true,
+    internalOnly: true,
+    excelOnly: true,
   },
   { header: "Jenis Permohonan", width: 18, value: (row) => row.requestType },
   { header: "Jenis Sambungan", width: 18, value: (row) => row.connectionType },
+  {
+    header: "Tarif",
+    width: 16,
+    value: (row) => row.tarif,
+    internalOnly: true,
+  },
+  {
+    header: "Daya Lama (VA)",
+    width: 16,
+    value: (row) => row.dayaLama,
+    number: true,
+    internalOnly: true,
+  },
+  {
+    header: "Daya Baru (VA)",
+    width: 16,
+    value: (row) => row.dayaBaru,
+    number: true,
+    internalOnly: true,
+  },
   { header: "Unit / ULP", width: 20, value: (row) => row.unit },
   {
     header: "Tanggal Permohonan",
@@ -67,11 +103,11 @@ const columns: ExportColumn[] = [
   },
 ];
 
-// Vendors are external to PLN; the detail page already hides customer contact
-// data from them, so the export must not reintroduce it.
+// Vendors are external to PLN; the detail page already hides the customer
+// information panel from them, so the export must not reintroduce it.
 export function getExportColumns(roleId: RoleId): ExportColumn[] {
   const isVendor = roleId.startsWith("vendor-");
-  return columns.filter((column) => !(isVendor && column.sensitive));
+  return columns.filter((column) => !(isVendor && column.internalOnly));
 }
 
 function slaStatusLabel(sla: { tone: string; deadline: string | null }) {
@@ -99,6 +135,11 @@ export function buildExportRows(
       location: application.location,
       requestType: application.requestType,
       connectionType: application.connectionType,
+      tarif: application.tarif
+        ? (tarifLabels[application.tarif] ?? application.tarif)
+        : "",
+      dayaLama: application.dayaLama ? String(application.dayaLama) : "",
+      dayaBaru: application.dayaBaru ? String(application.dayaBaru) : "",
       unit: application.unit,
       requestedAt: application.requestedAt.slice(0, 10),
       stage: application.rejected
@@ -142,6 +183,8 @@ export async function buildApplicationsXlsx(
       cell: (row: ExportRow) => {
         const text = column.value(row);
         if (!text) return null;
+        if (column.number)
+          return { value: Number(text), type: Number, format: "#,##0" };
         if (!column.date) return { value: text };
         const date = toUtcDate(text);
         return date
@@ -165,10 +208,17 @@ export async function buildApplicationsPdf(
   const rows = buildExportRows(applications, roleId);
   // PDF is a readable list; customer contact columns stay in the Excel file.
   const pdfColumns = getExportColumns(roleId).filter(
-    (column) => !column.sensitive,
+    (column) => !column.excelOnly,
   );
   const dateText = (iso: string) =>
     iso ? formatApiDate(iso, { day: "numeric", month: "short", year: "numeric" }) : "-";
+  const cellText = (column: ExportColumn, row: ExportRow) => {
+    const text = column.value(row);
+    if (!text) return "-";
+    if (column.date) return dateText(text);
+    if (column.number) return Number(text).toLocaleString("id-ID");
+    return text;
+  };
 
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const margin = 10;
@@ -187,12 +237,7 @@ export async function buildApplicationsPdf(
     startY: scope.length ? 29 : 24,
     margin: { left: margin, right: margin, bottom: 12 },
     head: [pdfColumns.map((column) => column.header)],
-    body: rows.map((row) =>
-      pdfColumns.map((column) => {
-        const text = column.value(row);
-        return column.date ? dateText(text) : text || "-";
-      }),
-    ),
+    body: rows.map((row) => pdfColumns.map((column) => cellText(column, row))),
     styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak" },
     headStyles: { fillColor: [0, 111, 133], textColor: 255 },
     alternateRowStyles: { fillColor: [237, 243, 245] },

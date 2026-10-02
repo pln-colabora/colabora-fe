@@ -81,6 +81,11 @@ export function formatSlaRemaining(daysRemaining: number | null) {
   return `Tersisa ${daysRemaining} hari`;
 }
 
+// Power is stored in VA; group digits the Indonesian way (e.g. "555.000 VA").
+export function formatDaya(va: number) {
+  return `${va.toLocaleString("id-ID")} VA`;
+}
+
 export function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

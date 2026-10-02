@@ -42,6 +42,15 @@ export type ConnectionType =
   | "PLG TM <5 GWNG"
   | "PLG TM >5 GWNG";
 
+// Display names for the backend tarif enum, in presentation order.
+export const tarifLabels: Record<string, string> = {
+  rumah_tangga: "Rumah Tangga",
+  sosial: "Sosial",
+  bisnis: "Bisnis",
+  industri: "Industri",
+  pemerintah: "Pemerintah",
+};
+
 export type WorkflowDecisions = {
   needsPole?: boolean;
   needsPdkb?: boolean;
@@ -55,6 +64,12 @@ export type ApplicationSummary = {
   connectionType: ConnectionType;
   unit: string;
   location: string;
+  /** Tarif key as stored by the backend (e.g. "rumah_tangga"); absent on older records. */
+  tarif?: string;
+  /** Requested / new power in VA. */
+  dayaBaru?: number;
+  /** Previous power in VA; only for Perubahan daya. */
+  dayaLama?: number;
   requestedAt: string;
   currentAction: ActionId | null;
   decisions: WorkflowDecisions;
