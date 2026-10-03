@@ -51,6 +51,7 @@ type DocumentResponse = {
   size_bytes: number;
   workflow_nodes: string[];
   uploaded_by_name?: string;
+  source?: string;
 };
 type ActivityLog = {
   id: string;
@@ -215,6 +216,7 @@ export async function getApplicationDocuments(id: string) {
     mimeType: document.mime_type,
     sizeBytes: document.size_bytes,
     uploadedBy: document.uploaded_by_name,
+    source: document.source,
   }));
 }
 export async function getApplicationHistory(id: string) {
@@ -322,13 +324,10 @@ export async function uploadEvidence(
   ).data;
 }
 
-export async function getApplicationDocument(
-  applicationId: string,
-  documentId: string,
-) {
-  const path = `/api/permohonan/${encodeURIComponent(
-    applicationId,
-  )}/documents/${encodeURIComponent(documentId)}`;
+// Streams the file as an attachment. The backend resolves the permohonan from
+// the document itself, so only the document id is needed.
+export async function downloadApplicationDocument(documentId: string) {
+  const path = `/api/documents/${encodeURIComponent(documentId)}/download`;
   return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
 }
 export async function exportApplicationActivity(
@@ -336,8 +335,14 @@ export async function exportApplicationActivity(
   workflowNode: string,
 ) {
   const normalizedNode = workflowNode.replaceAll("-", "_");
-  if (normalizedNode === "wo_tiang" || normalizedNode === "wo_konstruksi") {
-    const vendorPath = normalizedNode === "wo_tiang" ? "tiang" : "konstruksi";
+  // Each work order has its own PDF endpoint (POST: generates once, then serves).
+  const vendorPath = (
+    { wo_tiang: "tiang", wo_konstruksi: "konstruksi", wo_app: "app" } as Record<
+      string,
+      string
+    >
+  )[normalizedNode];
+  if (vendorPath) {
     const path = `/api/permohonan/${encodeURIComponent(
       applicationId,
     )}/wo-vendor/${vendorPath}/export`;

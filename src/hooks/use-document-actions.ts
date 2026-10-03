@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import {
-  getApplicationDocument,
+  downloadApplicationDocument,
   previewApplicationDocument,
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
@@ -16,7 +16,7 @@ type DocumentAction = {
   type: "open" | "download";
 };
 
-export function useDocumentActions(applicationId: string) {
+export function useDocumentActions() {
   const [activeAction, setActiveAction] = useState<DocumentAction>();
 
   async function openDocument(document: DocumentItem) {
@@ -46,20 +46,21 @@ export function useDocumentActions(applicationId: string) {
     }
   }
 
-  async function downloadDocument(document: DocumentItem) {
+  // `label` names the file in the toasts ("Evidence" by default, "File WO", ...).
+  async function downloadDocument(document: DocumentItem, label = "Evidence") {
     setActiveAction({ documentId: document.id, type: "download" });
     try {
-      const blob = await getApplicationDocument(applicationId, document.id);
+      const blob = await downloadApplicationDocument(document.id);
       const objectUrl = URL.createObjectURL(blob);
       const link = window.document.createElement("a");
       link.href = objectUrl;
       link.download = document.name;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
-      toast.success("Evidence mulai diunduh.");
+      toast.success(`${label} mulai diunduh.`);
     } catch (error) {
       toast.error(
-        presentApiError(error, "Evidence gagal diunduh.").message,
+        presentApiError(error, `${label} gagal diunduh.`).message,
       );
     } finally {
       setActiveAction(undefined);

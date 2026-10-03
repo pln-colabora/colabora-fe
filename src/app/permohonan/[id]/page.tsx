@@ -30,6 +30,7 @@ import { AppShell } from "@/components/dashboard/app-shell";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { WorkOrderButton } from "@/components/dashboard/work-order-button";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -52,6 +53,8 @@ import {
 } from "@/lib/utils";
 import {
   activities,
+  canExportActivity,
+  canGenerateWorkOrder,
   nodeActions,
   getActivity,
   getApplicationStatus,
@@ -61,21 +64,18 @@ import {
   getOwnedSla,
   getOwner,
   getRole,
+  getWorkOrderFile,
+  isWorkOrderActivity,
   stages,
   tarifLabels,
+  vendorWoActionId,
   type ActionId,
   type Application,
+  type DocumentItem,
   type RoleId,
   type StageId,
   type WorkflowNode,
 } from "@/lib/workflow";
-
-// The one work-order activity whose evidence each vendor role may read.
-const vendorWoActionId: Partial<Record<RoleId, ActionId>> = {
-  "vendor-tiang": "6", // WO Vendor Tiang (by Perencanaan)
-  "vendor-konstruksi": "7", // WO Vendor Konstruksi (by Konstruksi UP3)
-  "vendor-sr-app": "8", // WO Vendor APP (by Transaksi Energi)
-};
 
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
@@ -238,9 +238,9 @@ export default function ApplicationDetailPage() {
               application={application}
               roleId={roleId}
               activityInputs={activityInputs}
+              documents={visibleDocuments}
             />
             <DocumentsSection
-              applicationId={application.id}
               documents={visibleDocuments}
               loading={relatedLoading}
               error={relatedError}
@@ -666,14 +666,53 @@ function CoordinateDetails({
   );
 }
 
+// The download button of a timeline row. A work-order row downloads the WO PDF
+// (generate for the owning team, download the generated file for everyone else);
+// every other row exports its activity report.
+function TimelineExportButton({
+  application,
+  roleId,
+  node,
+  documents,
+}: {
+  application: Application;
+  roleId: RoleId;
+  node: WorkflowNode;
+  documents: DocumentItem[];
+}) {
+  if (!canExportActivity(roleId, application, node)) return null;
+  const activityId = nodeActions[node.workflow_node];
+  if (!isWorkOrderActivity(activityId)) {
+    return (
+      <ActivityExportButton
+        applicationId={application.id}
+        applicationNumber={application.number}
+        workflowNode={node.workflow_node}
+        compact
+      />
+    );
+  }
+  return (
+    <WorkOrderButton
+      applicationId={application.id}
+      applicationNumber={application.number}
+      workflowNode={node.workflow_node}
+      canGenerate={canGenerateWorkOrder(roleId, application, activityId)}
+      file={getWorkOrderFile(documents, activityId)}
+    />
+  );
+}
+
 function WorkflowTimeline({
   application,
   roleId,
   activityInputs,
+  documents,
 }: {
   application: Application;
   roleId: RoleId;
   activityInputs: Record<string, Record<string, unknown>>;
+  documents: DocumentItem[];
 }) {
   // Vendors are external to PLN and see only the nodes the backend returns for
   // them, so their timeline is driven by workflow_nodes (source of truth),
@@ -684,6 +723,7 @@ function WorkflowTimeline({
         application={application}
         roleId={roleId}
         activityInputs={activityInputs}
+        documents={documents}
       />
     );
   }
@@ -771,11 +811,11 @@ function WorkflowTimeline({
                               {activityStatusLabel(status)}
                             </span>
                             {completedNode ? (
-                              <ActivityExportButton
-                                applicationId={application.id}
-                                applicationNumber={application.number}
-                                workflowNode={completedNode.workflow_node}
-                                compact
+                              <TimelineExportButton
+                                application={application}
+                                roleId={roleId}
+                                node={completedNode}
+                                documents={documents}
                               />
                             ) : null}
                           </div>
@@ -807,10 +847,12 @@ function VendorTimeline({
   application,
   roleId,
   activityInputs,
+  documents,
 }: {
   application: Application;
   roleId: RoleId;
   activityInputs: Record<string, Record<string, unknown>>;
+  documents: DocumentItem[];
 }) {
   const byStage = new Map<StageId, WorkflowNode[]>();
   for (const node of application.nodes) {
@@ -899,17 +941,12 @@ function VendorTimeline({
                               <span className="text-muted-foreground text-xs">
                                 {activityStatusLabel(status)}
                               </span>
-                              {node.status === "completed" &&
-                              activity &&
-                              (!roleId.startsWith("vendor-") ||
-                                getOwner(activity, application) === roleId) ? (
-                                <ActivityExportButton
-                                  applicationId={application.id}
-                                  applicationNumber={application.number}
-                                  workflowNode={node.workflow_node}
-                                  compact
-                                />
-                              ) : null}
+                              <TimelineExportButton
+                                application={application}
+                                roleId={roleId}
+                                node={node}
+                                documents={documents}
+                              />
                             </div>
                             <ActivityInputList
                               node={node}
@@ -1084,20 +1121,18 @@ function activityStatusLabel(status: ProgressStatus) {
 }
 
 function DocumentsSection({
-  applicationId,
   documents,
   loading,
   error,
   isVendor = false,
 }: {
-  applicationId: string;
   loading: boolean;
   error: unknown;
   documents: ReturnType<typeof getDocuments>;
   isVendor?: boolean;
 }) {
   const { activeAction, openDocument, downloadDocument } =
-    useDocumentActions(applicationId);
+    useDocumentActions();
 
   return (
     <section

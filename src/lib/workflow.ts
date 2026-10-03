@@ -99,6 +99,8 @@ export type DocumentItem = {
   mimeType: string;
   sizeBytes: number;
   uploadedBy?: string;
+  /** "uploaded" | "generated" | ... — a generated file is produced by the system. */
+  source?: string;
 };
 
 export type WorkflowNode = {
@@ -575,6 +577,82 @@ export function getOwner(
   return typeof activity.owner === "function"
     ? activity.owner(application)
     : activity.owner;
+}
+
+// The one work-order activity issued to each vendor role by an internal team.
+export const vendorWoActionId: Partial<Record<RoleId, ActionId>> = {
+  "vendor-tiang": "6", // WO Vendor Tiang (by Perencanaan)
+  "vendor-konstruksi": "7", // WO Vendor Konstruksi (by Konstruksi UP3)
+  "vendor-sr-app": "8", // WO Vendor APP (by Transaksi Energi)
+};
+
+// Whether a work-order activity is issued to this vendor role. WO APP goes to
+// whoever installs the SR/APP for the connection type (vendor SR/APP on
+// JTR/JTM, vendor konstruksi on PLG TM); the other work orders have a fixed vendor.
+function isWorkOrderFor(
+  roleId: RoleId,
+  application: Application,
+  activityId: ActionId,
+) {
+  if (activityId === "8") {
+    const installation = getActivity("14");
+    return !!installation && getOwner(installation, application) === roleId;
+  }
+  return vendorWoActionId[roleId] === activityId;
+}
+
+// Whether the "Unduh laporan" (PDF export) button is offered for a node. Internal
+// roles may download every completed activity. A vendor gets the work order
+// issued to it plus the activities it performs itself.
+export function canExportActivity(
+  roleId: RoleId,
+  application: Application,
+  node: WorkflowNode,
+) {
+  if (node.status !== "completed") return false;
+  if (!roleId.startsWith("vendor-")) return true;
+  const activity = getActivity(nodeActions[node.workflow_node]);
+  if (!activity) return false;
+  return (
+    getOwner(activity, application) === roleId ||
+    isWorkOrderFor(roleId, application, activity.id)
+  );
+}
+
+// WO Vendor Tiang / Konstruksi / APP.
+const workOrderActionIds: ActionId[] = ["6", "7", "8"];
+export function isWorkOrderActivity(activityId: ActionId | undefined) {
+  return !!activityId && workOrderActionIds.includes(activityId);
+}
+
+// Only the team that owns the work-order activity can generate its PDF (POST,
+// owner-only). Everyone else downloads the file that was already generated.
+export function canGenerateWorkOrder(
+  roleId: RoleId,
+  application: Application,
+  activityId: ActionId,
+) {
+  const activity = getActivity(activityId);
+  return (
+    isWorkOrderActivity(activityId) &&
+    !!activity &&
+    getOwner(activity, application) === roleId
+  );
+}
+
+// The generated work-order PDF attached to a WO activity, from the document list
+// the API returns (already limited to what the caller may read). Evidence that
+// was uploaded by hand on the same node is not the work order. Newest wins.
+export function getWorkOrderFile(
+  documents: DocumentItem[],
+  activityId: ActionId,
+) {
+  return documents
+    .filter(
+      (document) =>
+        document.actionId === activityId && document.source === "generated",
+    )
+    .sort((a, b) => b.addedAt.localeCompare(a.addedAt))[0];
 }
 
 export function getOwnedSla(application: Application, roleId: RoleId) {

@@ -550,22 +550,21 @@ test("history title is derived from workflow_node instead of action", async () =
   assert.notEqual(first.title, "legacy_action_value");
 });
 
-test("document content uses the authenticated permohonan endpoint", async () => {
+test("document download uses the dedicated authenticated download endpoint", async () => {
   global.fetch = async (url, init) => {
+    // The old /permohonan/{id}/documents/{doc_id} route is gone from the spec.
     assert.equal(
       url,
-      "https://api.example.test/api/permohonan/test-id/documents/document-id",
+      "https://api.example.test/api/documents/document-id/download",
     );
+    assert.equal(init.method, "GET");
     assert.equal(init.headers.get("Authorization"), "Bearer access-test");
     return new Response("document bytes", {
       headers: { "Content-Type": "application/pdf" },
     });
   };
 
-  const blob = await applications.getApplicationDocument(
-    "test-id",
-    "document-id",
-  );
+  const blob = await applications.downloadApplicationDocument("document-id");
   assert.equal(await blob.text(), "document bytes");
 });
 
@@ -608,6 +607,7 @@ test("activity export uses the authenticated workflow node endpoint", async () =
 for (const [workflowNode, endpoint] of [
   ["wo_tiang", "tiang"],
   ["wo_konstruksi", "konstruksi"],
+  ["wo_app", "app"],
 ]) {
   test("WO activity export uses the dedicated POST endpoint: " + workflowNode, async () => {
     global.fetch = async (url, init) => {
@@ -918,4 +918,167 @@ test("tarif and daya are internal-only: shown to staff, withheld from vendors, k
   assert.equal(byHeader["No. HP"].excelOnly, true);
   assert.equal(byHeader["Tarif"].excelOnly, undefined);
   assert.equal(byHeader["Daya Baru (VA)"].number, true);
+});
+
+function exportNode(workflow_node, status = "completed") {
+  return { workflow_node, stage_number: 4, status, payload: {} };
+}
+
+test("internal roles can download every completed activity, and only completed ones", () => {
+  const app = applications.mapApplication(fixture);
+  for (const role of ["admin", "konstruksi", "perencanaan", "nps", "super-user"]) {
+    for (const node of ["survei", "wo_tiang", "wo_konstruksi", "wo_app", "reservasi_material", "pelaksanaan_konstruksi"])
+      assert.equal(
+        workflow.canExportActivity(role, app, exportNode(node)),
+        true,
+        `${role} should download ${node}`,
+      );
+    assert.equal(
+      workflow.canExportActivity(role, app, exportNode("wo_tiang", "available")),
+      false,
+    );
+  }
+});
+
+test("each vendor downloads only its own work order and the activities it performs", () => {
+  const app = applications.mapApplication(fixture); // JTM / Gardu
+  const can = (role, node) =>
+    workflow.canExportActivity(role, app, exportNode(node));
+
+  // The work order issued to that vendor — but never another vendor's.
+  assert.equal(can("vendor-konstruksi", "wo_konstruksi"), true);
+  assert.equal(can("vendor-konstruksi", "wo_tiang"), false);
+  assert.equal(can("vendor-konstruksi", "wo_app"), false);
+  assert.equal(can("vendor-tiang", "wo_tiang"), true);
+  assert.equal(can("vendor-tiang", "wo_konstruksi"), false);
+  assert.equal(can("vendor-sr-app", "wo_app"), true);
+  assert.equal(can("vendor-sr-app", "wo_konstruksi"), false);
+
+  // Activities the vendor performs itself.
+  assert.equal(can("vendor-konstruksi", "reservasi_material"), true);
+  assert.equal(can("vendor-konstruksi", "pelaksanaan_konstruksi"), true);
+  assert.equal(can("vendor-tiang", "pemasangan_tiang"), true);
+
+  // Internal activities and unknown nodes stay off-limits to vendors.
+  assert.equal(can("vendor-konstruksi", "survei"), false);
+  assert.equal(can("vendor-konstruksi", "wo_pdkb"), false);
+  assert.equal(can("vendor-konstruksi", "node_tidak_dikenal"), false);
+
+  // Not completed yet -> no report, even for its own work order.
+  assert.equal(
+    workflow.canExportActivity("vendor-konstruksi", app, exportNode("wo_konstruksi", "available")),
+    false,
+  );
+});
+
+test("SR/APP installation belongs to vendor SR/APP on JTR/JTM but to vendor konstruksi on PLG TM", () => {
+  const jtm = applications.mapApplication(fixture);
+  const plgTm = { ...jtm, connectionType: "PLG TM <5 GWNG" };
+  const node = exportNode("pemasangan_sr_app");
+  assert.equal(workflow.canExportActivity("vendor-sr-app", jtm, node), true);
+  assert.equal(workflow.canExportActivity("vendor-konstruksi", jtm, node), false);
+  assert.equal(workflow.canExportActivity("vendor-konstruksi", plgTm, node), true);
+  assert.equal(workflow.canExportActivity("vendor-sr-app", plgTm, node), false);
+});
+
+test("WO APP is downloaded by the vendor that installs the SR/APP for the connection type", () => {
+  const jtm = applications.mapApplication(fixture); // JTM / Gardu
+  const plgTm = { ...jtm, connectionType: "PLG TM <5 GWNG" };
+  const woApp = exportNode("wo_app");
+
+  assert.equal(workflow.canExportActivity("vendor-sr-app", jtm, woApp), true);
+  assert.equal(workflow.canExportActivity("vendor-konstruksi", jtm, woApp), false);
+  // PLG TM: vendor konstruksi takes over SR/APP, so the WO APP is theirs.
+  assert.equal(workflow.canExportActivity("vendor-konstruksi", plgTm, woApp), true);
+  assert.equal(workflow.canExportActivity("vendor-sr-app", plgTm, woApp), false);
+  // The fixed work orders do not depend on the connection type.
+  assert.equal(workflow.canExportActivity("vendor-konstruksi", plgTm, exportNode("wo_konstruksi")), true);
+  assert.equal(workflow.canExportActivity("vendor-tiang", plgTm, exportNode("wo_tiang")), true);
+});
+
+test("only the owning team generates a work order; every other role downloads it", () => {
+  const app = applications.mapApplication(fixture);
+  const generates = (role, activityId) =>
+    workflow.canGenerateWorkOrder(role, app, activityId);
+
+  // Owners: Perencanaan (WO tiang), Konstruksi (WO konstruksi), Transaksi Energi (WO APP).
+  assert.equal(generates("perencanaan", "6"), true);
+  assert.equal(generates("konstruksi", "7"), true);
+  assert.equal(generates("transaksi-energi", "8"), true);
+
+  // Not the owner of that specific WO.
+  assert.equal(generates("konstruksi", "6"), false);
+  assert.equal(generates("perencanaan", "7"), false);
+  for (const role of ["admin", "nps", "teknik", "jaringan", "super-user", "vendor-tiang", "vendor-konstruksi", "vendor-sr-app"])
+    for (const id of ["6", "7", "8"])
+      assert.equal(generates(role, id), false, `${role} must not generate WO ${id}`);
+
+  // A non-WO activity is never a work order, even for its own owner.
+  assert.equal(workflow.isWorkOrderActivity("12"), false);
+  assert.equal(generates("vendor-konstruksi", "12"), false);
+  assert.equal(workflow.isWorkOrderActivity(undefined), false);
+  assert.deepEqual(["6", "7", "8"].map(workflow.isWorkOrderActivity), [true, true, true]);
+});
+
+test("the WO file is the newest generated PDF on the WO node, never hand-uploaded evidence", () => {
+  const doc = (id, node, source, addedAt) => ({
+    id,
+    name: `${id}.pdf`,
+    actionId: workflow.nodeActions[node],
+    addedAt,
+    mimeType: "application/pdf",
+    sizeBytes: 1,
+    source,
+  });
+  const documents = [
+    doc("bukti-upload", "wo_konstruksi", "uploaded", "2026-10-04"),
+    doc("wo-lama", "wo_konstruksi", "generated", "2026-10-01"),
+    doc("wo-baru", "wo_konstruksi", "generated", "2026-10-03"),
+    doc("wo-tiang", "wo_tiang", "generated", "2026-10-02"),
+    doc("survei-doc", "survei", "generated", "2026-10-05"),
+  ];
+  assert.equal(workflow.getWorkOrderFile(documents, "7").id, "wo-baru");
+  assert.equal(workflow.getWorkOrderFile(documents, "6").id, "wo-tiang");
+  // No generated file yet for WO APP -> nothing to download.
+  assert.equal(workflow.getWorkOrderFile(documents, "8"), undefined);
+  // Only an uploaded file on the node is not a work order.
+  assert.equal(
+    workflow.getWorkOrderFile([doc("x", "wo_app", "uploaded", "2026-10-01")], "8"),
+    undefined,
+  );
+  // Selecting must not reorder the caller's list.
+  assert.deepEqual(documents.map((item) => item.id), [
+    "bukti-upload", "wo-lama", "wo-baru", "wo-tiang", "survei-doc",
+  ]);
+});
+
+test("document list keeps the source so a generated WO can be told from evidence", async () => {
+  global.fetch = async () =>
+    json({
+      status: true,
+      data: [
+        {
+          id: "d1",
+          original_filename: "wo-konstruksi.pdf",
+          created_at: "2026-10-03T01:00:00Z",
+          mime_type: "application/pdf",
+          size_bytes: 10,
+          workflow_nodes: ["wo_konstruksi"],
+          uploaded_by_name: "konstruksi.up",
+          source: "generated",
+        },
+        {
+          id: "d2",
+          original_filename: "foto.jpg",
+          created_at: "2026-10-03T02:00:00Z",
+          mime_type: "image/jpeg",
+          size_bytes: 20,
+          workflow_nodes: ["wo_konstruksi"],
+          source: "uploaded",
+        },
+      ],
+    });
+  const mapped = await applications.getApplicationDocuments("test-id");
+  assert.deepEqual(mapped.map((item) => item.source), ["generated", "uploaded"]);
+  assert.equal(workflow.getWorkOrderFile(mapped, "7").id, "d1");
 });
