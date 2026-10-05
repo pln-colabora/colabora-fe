@@ -39,6 +39,7 @@ import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import {
   assignVendor,
+  generateWorkOrderFile,
   getVendorAccounts,
   submitAction,
   uploadEvidence,
@@ -53,6 +54,7 @@ import {
 import {
   getActivity,
   getRole,
+  isWorkOrderActivity,
   nodeActions,
   type Application,
   type AvailableAction,
@@ -378,7 +380,21 @@ export function ActionForm({
         data.files.map((file) => uploads.current.get(file)!),
         needsCoordinate ? coordinate : null,
       );
+      // A work order gets its PDF generated now (the node is complete and the
+      // vendor assigned), so other roles can download it without waiting for
+      // the owner to export it. Awaited so the document list reloaded by
+      // onSaved already contains the file.
       toast.success("Aktivitas berhasil disimpan.");
+      if (isWorkOrderActivity(activity?.id)) {
+        const generated = await generateWorkOrderFile(
+          application.id,
+          action.workflow_node,
+        );
+        if (!generated.ok)
+          toast.warning(
+            "File WO belum berhasil dibuat. Klik tombol unduh WO untuk mencoba lagi.",
+          );
+      }
       onSaved(updated);
     } catch (error) {
       const message = presentApiError(error, "Aktivitas gagal disimpan.").message;

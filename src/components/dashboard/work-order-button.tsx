@@ -5,11 +5,11 @@ import { Download, LoaderCircle } from "lucide-react";
 import { ActivityExportButton } from "@/components/dashboard/activity-export-button";
 import { Button } from "@/components/ui/button";
 import { useDocumentActions } from "@/hooks/use-document-actions";
-import type { DocumentItem } from "@/lib/workflow";
+import { getWorkOrderAction, type DocumentItem } from "@/lib/workflow";
 
-// Download button for a work-order (WO) row on the timeline.
-// - The team that owns the WO generates the PDF (POST export, owner-only).
-// - Every other role downloads the generated PDF from the document list (GET).
+// Download button for a work-order (WO) row on the timeline. The PDF is generated
+// when the WO form is saved, so everyone downloads the existing file (GET) from
+// the document list. Only the owning team can generate it from here (POST).
 export function WorkOrderButton({
   applicationId,
   applicationNumber,
@@ -25,8 +25,11 @@ export function WorkOrderButton({
   file?: DocumentItem;
 }) {
   const { activeAction, downloadDocument } = useDocumentActions();
+  const action = getWorkOrderAction(canGenerate, file);
 
-  if (canGenerate) {
+  // Safety net for the owner: a WO saved before its PDF was generated at submit
+  // (or whose generation failed) can still be produced from here.
+  if (action === "generate") {
     return (
       <ActivityExportButton
         applicationId={applicationId}
@@ -44,9 +47,9 @@ export function WorkOrderButton({
       variant="outline"
       size="icon-sm"
       className="size-8"
-      disabled={!file || !!activeAction}
-      aria-label={file ? "Unduh WO" : "WO belum dibuat"}
-      title={file ? "Unduh WO" : "File WO belum dibuat oleh pembuatnya"}
+      disabled={action !== "download" || !!activeAction}
+      aria-label={file ? "Unduh WO" : "WO belum tersedia"}
+      title={file ? "Unduh WO" : "File WO belum tersedia"}
       onClick={() => file && void downloadDocument(file, "File WO")}
     >
       {busy ? (

@@ -640,6 +640,17 @@ export function canGenerateWorkOrder(
   );
 }
 
+// What a WO row's button does. An existing file is downloaded (GET) by everyone.
+// Without a file, the owning team can still generate it (POST) — this covers work
+// orders saved before generation happened at submit, or a generation that failed.
+export function getWorkOrderAction(
+  canGenerate: boolean,
+  file: DocumentItem | undefined,
+): "download" | "generate" | "unavailable" {
+  if (file) return "download";
+  return canGenerate ? "generate" : "unavailable";
+}
+
 // The generated work-order PDF attached to a WO activity, from the document list
 // the API returns (already limited to what the caller may read). Evidence that
 // was uploaded by hand on the same node is not the work order. Newest wins.

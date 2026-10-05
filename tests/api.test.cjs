@@ -1082,3 +1082,43 @@ test("document list keeps the source so a generated WO can be told from evidence
   assert.deepEqual(mapped.map((item) => item.source), ["generated", "uploaded"]);
   assert.equal(workflow.getWorkOrderFile(mapped, "7").id, "d1");
 });
+
+test("a WO row downloads an existing file for everyone, and only the owner may generate one", () => {
+  const file = { id: "wo-file", name: "wo.pdf", actionId: "7", addedAt: "2026-10-05", mimeType: "application/pdf", sizeBytes: 1, source: "generated" };
+  // File exists -> download for the owner and for everyone else alike.
+  assert.equal(workflow.getWorkOrderAction(true, file), "download");
+  assert.equal(workflow.getWorkOrderAction(false, file), "download");
+  // No file yet: the owner can still generate it, others have to wait.
+  assert.equal(workflow.getWorkOrderAction(true, undefined), "generate");
+  assert.equal(workflow.getWorkOrderAction(false, undefined), "unavailable");
+});
+
+for (const [workflowNode, endpoint] of [
+  ["wo_tiang", "tiang"],
+  ["wo_konstruksi", "konstruksi"],
+  ["wo_app", "app"],
+]) {
+  test("saving a WO form generates its PDF with POST: " + workflowNode, async () => {
+    const calls = [];
+    global.fetch = async (url, init) => {
+      calls.push([url, init.method]);
+      return new Response("wo pdf", { headers: { "Content-Type": "application/pdf" } });
+    };
+    const result = await applications.generateWorkOrderFile("test-id", workflowNode);
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(calls, [
+      [`https://api.example.test/api/permohonan/test-id/wo-vendor/${endpoint}/export`, "POST"],
+    ]);
+  });
+}
+
+for (const status of [403, 404, 409, 500]) {
+  test("a failed WO generation after saving is reported, not thrown: HTTP " + status, async () => {
+    global.fetch = async () =>
+      json({ status: false, message: "failed", error: "caller does not own workflow node" }, status);
+    // The node is already saved, so this must resolve and let the form carry on.
+    const result = await applications.generateWorkOrderFile("test-id", "wo_konstruksi");
+    assert.equal(result.ok, false);
+    assert.ok("error" in result);
+  });
+}

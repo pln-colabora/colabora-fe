@@ -355,6 +355,20 @@ export async function exportApplicationActivity(
   )}/activities/${encodeURIComponent(workflowNode)}/export`;
   return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
 }
+// Generates the work-order PDF right after its form is saved, so the file already
+// exists when anyone else wants to download it. The node is completed by then, so
+// a failure here must not look like a failed submission: report it, never throw.
+export async function generateWorkOrderFile(
+  applicationId: string,
+  workflowNode: string,
+): Promise<{ ok: true } | { ok: false; error: unknown }> {
+  try {
+    await exportApplicationActivity(applicationId, workflowNode);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
 export async function previewApplicationDocument(documentId: string) {
   const path = `/api/documents/${encodeURIComponent(documentId)}/preview`;
   return (await apiClient.get<Blob>(path, { responseType: "blob" })).data;
