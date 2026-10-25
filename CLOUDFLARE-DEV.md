@@ -2,8 +2,10 @@
 
 Dev URL: <https://colabora-dev.bimorajendraa.workers.dev/login>.
 Initial deployment used the pushed `dev` source, without building `main`.
-The GitHub build connection is prepared with production branch `dev` and previews
-disabled; saving it requires the dedicated CI credential.
+GitHub repository `pln-colabora/colabora-fe` is connected to Workers Builds with
+production branch `dev`, automatic builds enabled, and previews disabled.
+The dedicated user build token has only Workers Scripts: Edit and Account
+Settings: Read within the selected Cloudflare account.
 
 Workers Free was selected instead of Pages to retain the existing Next.js dynamic
 routes. The Worker name is `colabora-dev`. Hosting setup does not change pages,
@@ -42,6 +44,7 @@ settings:
 | Deploy command | `npm run deploy:vinext -- --prebuilt` |
 | Root directory | Repository root |
 | Build variable | `NEXT_PUBLIC_API_BASE_URL=https://api-colabora.anargya.fun` |
+| Deployment account variable | `CLOUDFLARE_ACCOUNT_ID=c5a8765fe4efb1e9ec3ce5b0ee6f1091` |
 | Non-production branch builds | Disabled |
 
 Pushes to `dev` should trigger the connected build. Do not enable `main` builds
@@ -50,7 +53,9 @@ or create an additional GitHub Actions deployment workflow.
 `typecheck` regenerates Next.js route types because both builders share
 `.next/types`. Generated output and local environment files stay ignored.
 
-CLI OAuth requests account-read and Workers-script read/write permissions.
+CLI OAuth requests account-read, Workers-script read/write, and Workers CI
+read/write permissions. CI access manages the GitHub build connection; the
+dedicated deployment token retains the narrower permissions listed above.
 Credentials are encrypted with the Windows keyring; never commit tokens or paste
 them into chat. MCP and CLI authorization are separate. Installed Codex skills
 are available on the next turn; restart the agent to load the new MCP server.
