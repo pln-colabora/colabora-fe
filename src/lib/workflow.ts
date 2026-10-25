@@ -15,6 +15,7 @@ export type RoleId =
   | "user";
 
 export type ActionId =
+  | "priority"
   | "1"
   | "2"
   | "3"
@@ -71,10 +72,16 @@ export type ApplicationSummary = {
   /** Previous power in VA; only for Perubahan daya. */
   dayaLama?: number;
   requestedAt: string;
+  paymentDate?: string;
+  paymentAmount?: number;
+  energizeStatus?: "temporary" | "permanent";
   currentAction: ActionId | null;
   decisions: WorkflowDecisions;
   rejected?: boolean;
   sla: {
+    basis?: string;
+    remainingDays?: number | null;
+    calendarError?: string;
     tone: "safe" | "due" | "late" | "done";
     label: string;
     deadline: string | null;
@@ -92,6 +99,7 @@ export type HistoryItem = {
 };
 
 export type DocumentItem = {
+  category?: string;
   id: string;
   name: string;
   actionId: ActionId | undefined;
@@ -104,12 +112,16 @@ export type DocumentItem = {
 };
 
 export type WorkflowNode = {
+  revision?: number;
   workflow_node: string;
   activity_number: number | null;
   stage_number: StageId;
   status: "locked" | "available" | "in_progress" | "completed" | "skipped";
   sla_deadline: string | null;
   sla_status: "none" | "on_time" | "due_soon" | "overdue";
+  sla_basis?: string;
+  sla_remaining_days?: number | null;
+  sla_calendar_error?: string;
   completed_at: string | null;
   completed_by: string | null;
   payload: Record<string, unknown>;
@@ -235,9 +247,6 @@ const planningOwner = surveyOwner;
 const energizeOwner = (application: ApplicationSummary): RoleId =>
   isPlgTm(application) ? "jaringan" : "teknik";
 
-const appVendorOwner = (application: ApplicationSummary): RoleId =>
-  isPlgTm(application) ? "vendor-konstruksi" : "vendor-sr-app";
-
 const notesField: FieldDefinition = {
   name: "notes",
   label: "Catatan",
@@ -295,6 +304,16 @@ export const activities: ActivityDefinition[] = [
     ],
     evidence: "Evidence aktivitas",
     owner: planningOwner,
+  },
+  {
+    id: "priority",
+    stage: 3,
+    label: "Verifikasi Prioritas Pekerjaan",
+    shortLabel: "Verifikasi prioritas",
+    description:
+      "Konfirmasi hasil perencanaan sebelum permohonan diteruskan ke NPS.",
+    fields: [notesField],
+    owner: "perencanaan",
   },
   {
     id: "4",
@@ -450,6 +469,13 @@ export const activities: ActivityDefinition[] = [
         required: true,
         maxLength: 500,
       },
+      {
+        name: "energize_status",
+        label: "Status penyalaan",
+        type: "select",
+        options: ["Nyala tetap", "Nyala sementara"],
+        required: true,
+      },
       notesField,
     ],
     evidence: "Evidence aktivitas",
@@ -464,7 +490,7 @@ export const activities: ActivityDefinition[] = [
       "Lengkapi identitas meter, hasil pemasangan, dan status penyalaan.",
     fields: [notesField],
     evidence: "Evidence aktivitas",
-    owner: appVendorOwner,
+    owner: "transaksi-energi",
   },
   {
     id: "15",
@@ -506,6 +532,7 @@ export const nodeActions: Record<string, ActionId> = {
   rab_kko_kkf: "3",
   "rab-kko-kkf": "3",
   kebutuhan_tiang: "3",
+  verifikasi_prioritas: "priority",
   permohonan_perluasan: "4",
   nps_delegation: "5",
   wo_tiang: "6",
@@ -553,6 +580,10 @@ export function actionPrerequisitesMet(
 ): boolean {
   const normalize = (name: string) => name.replaceAll("-", "_");
   const key = normalize(workflowNode);
+  if (key === "pemasangan_sr_app")
+    return nodes.some(
+      (node) => normalize(node.workflow_node) === "tera_app" && node.status === "completed",
+    );
   const predecessor = stage4Predecessor[key];
   // The action's stage may be absent; fall back to the mapped activity's stage.
   const stage = stageNumber ?? getActivity(nodeActions[key])?.stage;
@@ -595,8 +626,9 @@ function isWorkOrderFor(
   activityId: ActionId,
 ) {
   if (activityId === "8") {
-    const installation = getActivity("14");
-    return !!installation && getOwner(installation, application) === roleId;
+    return (
+      roleId === (isPlgTm(application) ? "vendor-konstruksi" : "vendor-sr-app")
+    );
   }
   return vendorWoActionId[roleId] === activityId;
 }
@@ -611,6 +643,8 @@ export function canExportActivity(
 ) {
   if (node.status !== "completed") return false;
   if (!roleId.startsWith("vendor-")) return true;
+  if (node.workflow_node === "pemasangan_sr_app" && application.nodes.some(item => item.workflow_node === "wo_app" && item.status === "completed"))
+    return roleId === (isPlgTm(application) ? "vendor-konstruksi" : "vendor-sr-app");
   const activity = getActivity(nodeActions[node.workflow_node]);
   if (!activity) return false;
   return (
@@ -620,7 +654,7 @@ export function canExportActivity(
 }
 
 // WO Vendor Tiang / Konstruksi / APP.
-const workOrderActionIds: ActionId[] = ["6", "7", "8"];
+const workOrderActionIds: ActionId[] = ["6", "7"];
 export function isWorkOrderActivity(activityId: ActionId | undefined) {
   return !!activityId && workOrderActionIds.includes(activityId);
 }
@@ -666,8 +700,14 @@ export function getWorkOrderFile(
     .sort((a, b) => b.addedAt.localeCompare(a.addedAt))[0];
 }
 
-export function getOwnedSla(application: Application, roleId: RoleId) {
-  if (roleId.startsWith("vendor-") && hasRoleCompletedAllVendorTasks(application, roleId)) {
+export function getOwnedSla(
+  application: Application,
+  roleId: RoleId,
+): Application["sla"] | null {
+  if (
+    roleId.startsWith("vendor-") &&
+    hasRoleCompletedAllVendorTasks(application, roleId)
+  ) {
     return {
       tone: "done" as const,
       label: "Selesai",
@@ -714,6 +754,9 @@ export function getOwnedSla(application: Application, roleId: RoleId) {
             ? "Tepat waktu"
             : "Tenggat",
     deadline: node.sla_deadline,
+    basis: node.sla_basis,
+    remainingDays: node.sla_remaining_days,
+    calendarError: node.sla_calendar_error,
   };
 }
 

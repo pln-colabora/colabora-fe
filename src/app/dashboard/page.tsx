@@ -54,11 +54,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApplications } from "@/hooks/use-applications";
 import { useSession } from "@/hooks/use-session";
-import {
-  formatApiDate,
-  formatSlaRemaining,
-  getSlaDaysRemaining,
-} from "@/lib/utils";
+import { formatApiDate, formatApplicationSlaRemaining } from "@/lib/utils";
 import {
   activities,
   getActivity,
@@ -688,7 +684,11 @@ function DashboardContent() {
                     <SelectContent>
                       <SelectItem value="all">Semua status</SelectItem>
                       {Array.from(
-                        new Set(applications.map((item) => getApplicationStatus(item, roleId))),
+                        new Set(
+                          applications.map((item) =>
+                            getApplicationStatus(item, roleId),
+                          ),
+                        ),
                       ).map((status) => (
                         <SelectItem key={status} value={status}>
                           {status}
@@ -1251,10 +1251,9 @@ function SlaIndicator({
   sla?: Application["sla"];
   compact?: boolean;
 }) {
-  const effectiveSla = sla ?? getOwnedSla(application, roleId ?? "user") ?? application.sla;
-  const remainingLabel = formatSlaRemaining(
-    getSlaDaysRemaining(effectiveSla.deadline),
-  );
+  const effectiveSla =
+    sla ?? getOwnedSla(application, roleId ?? "user") ?? application.sla;
+  const remainingLabel = formatApplicationSlaRemaining(effectiveSla);
   const Icon =
     effectiveSla.tone === "late"
       ? TriangleAlert

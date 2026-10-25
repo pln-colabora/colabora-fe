@@ -262,6 +262,7 @@ export default function RegistrationPage() {
                         <EvidenceUploader
                           files={field.value ? [field.value] : []}
                           selectionMode="single"
+                          accept=".pdf,.jpg,.jpeg,.png"
                           fileLabel="dokumen verifikasi"
                           helpText="Pilih satu file PDF, JPG, JPEG, atau PNG."
                           aria-labelledby="registration-document-label"

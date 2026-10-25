@@ -19,6 +19,9 @@ type PermohonanResponse = {
   jenis_sambungan: string;
   ulp_unit: string;
   request_date: string | null;
+  tanggal_pembayaran?: string | null;
+  nominal_pembayaran?: number | null;
+  energize_status?: "temporary" | "permanent" | null;
   current_stage: StageId;
   status: string;
   kebutuhan_tiang: boolean | null;
@@ -27,6 +30,9 @@ type PermohonanResponse = {
   // The list endpoint exposes an aggregate SLA in addition to per-node data.
   sla_deadline?: string | null;
   sla_status?: "none" | "on_time" | "due_soon" | "overdue";
+  sla_basis?: string;
+  sla_remaining_days?: number | null;
+  sla_calendar_error?: string;
   // Create inputs. The API returns them at the top level (null on records made
   // before they were captured) although the published schema omits them; the
   // permohonan node payload is kept as a fallback.
@@ -44,6 +50,7 @@ function toPositiveNumber(value: unknown) {
     : undefined;
 }
 type DocumentResponse = {
+  type?: string;
   id: string;
   original_filename: string;
   created_at: string;
@@ -69,7 +76,8 @@ export function mapApplication(data: PermohonanResponse): Application {
   const slaNode =
     active.find((node) => node.sla_status === "overdue") ??
     active.find((node) => node.sla_status === "due_soon") ??
-    active.find((node) => node.sla_status === "on_time");
+    active.find((node) => node.sla_status === "on_time") ??
+    active.find((node) => node.sla_deadline);
   // Prefer the aggregate values from the list response, while keeping the
   // per-node fallback for older API responses.
   const sla =
@@ -115,6 +123,9 @@ export function mapApplication(data: PermohonanResponse): Application {
     dayaBaru: toPositiveNumber(data.daya_baru ?? createInputs.daya_baru),
     dayaLama: toPositiveNumber(data.daya_lama ?? createInputs.daya_lama),
     requestedAt: data.request_date ?? "",
+    paymentDate: data.tanggal_pembayaran ?? undefined,
+    paymentAmount: data.nominal_pembayaran ?? undefined,
+    energizeStatus: data.energize_status ?? undefined,
     updatedAt: latestCompletedAt ?? "—",
     currentAction:
       active.map((node) => nodeActions[node.workflow_node]).find(Boolean) ??
@@ -132,6 +143,9 @@ export function mapApplication(data: PermohonanResponse): Application {
           : data.nps_delegation_status === "delegated",
     },
     sla: {
+      basis: data.sla_basis ?? slaNode?.sla_basis,
+      remainingDays: data.sla_remaining_days ?? slaNode?.sla_remaining_days,
+      calendarError: data.sla_calendar_error ?? slaNode?.sla_calendar_error,
       tone:
         data.status === "completed"
           ? "done"
@@ -217,6 +231,7 @@ export async function getApplicationDocuments(id: string) {
     sizeBytes: document.size_bytes,
     uploadedBy: document.uploaded_by_name,
     source: document.source,
+    category: document.type,
   }));
 }
 export async function getApplicationHistory(id: string) {
@@ -275,6 +290,8 @@ export type CreateApplicationRequest = {
   daya_lama?: number;
   ulp_unit?: string;
   evidence_files: File[];
+  tanggal_pembayaran: string;
+  nominal_pembayaran: number;
 };
 export async function createApplication(payload: CreateApplicationRequest) {
   // Multipart: the create endpoint binds the customer's evidence to the new
@@ -285,6 +302,8 @@ export async function createApplication(payload: CreateApplicationRequest) {
   body.set("pelanggan_nama", payload.pelanggan_nama);
   body.set("pelanggan_alamat", payload.pelanggan_alamat);
   body.set("pelanggan_no_hp", payload.pelanggan_no_hp);
+  body.set("tanggal_pembayaran", payload.tanggal_pembayaran);
+  body.set("nominal_pembayaran", String(payload.nominal_pembayaran));
   body.set("tarif", payload.tarif);
   body.set("daya_baru", String(payload.daya_baru));
   if (payload.daya_lama !== undefined)
@@ -304,17 +323,20 @@ export async function createApplication(payload: CreateApplicationRequest) {
 export async function uploadEvidence(
   file: File,
   onProgress?: (percentage: number) => void,
+  category = "evidence",
 ) {
   const body = new FormData();
   body.set("file", file);
-  body.set("type", "evidence");
+  body.set("type", category);
   return (
     await apiRequest<DocumentResponse>("/api/documents", {
       method: "POST",
       data: body,
       onUploadProgress: (event) => {
         if (event.total)
-          onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+          onProgress?.(
+            Math.min(100, Math.round((event.loaded / event.total) * 100)),
+          );
       },
       // The current gateway omits CORS headers on its 413 response, so the
       // browser reports that response as a network failure.
@@ -337,10 +359,7 @@ export async function exportApplicationActivity(
   const normalizedNode = workflowNode.replaceAll("-", "_");
   // Each work order has its own PDF endpoint (POST: generates once, then serves).
   const vendorPath = (
-    { wo_tiang: "tiang", wo_konstruksi: "konstruksi", wo_app: "app" } as Record<
-      string,
-      string
-    >
+    { wo_tiang: "tiang", wo_konstruksi: "konstruksi" } as Record<string, string>
   )[normalizedNode];
   if (vendorPath) {
     const path = `/api/permohonan/${encodeURIComponent(
@@ -399,12 +418,16 @@ export async function submitAction(
   if (workflowNode === "wo_konstruksi") {
     payload.perlu_pdkb = values.perlu_pdkb === "Ya";
     payload.estimasi_tanggal_selesai = values.estimasi_tanggal_selesai;
+    if (payload.perlu_pdkb) payload.tanggal_pdkb = values.tanggal_pdkb;
   }
   // reservasi_material (vendor-konstruksi) and tera_app (transaksi-energi) are
   // now separate nodes; each takes a plain optional notes field.
   if (values.notes) payload.notes = values.notes;
   if (workflowNode === "energize_jaringan")
     payload.operation_result = values.operation_result;
+  if (workflowNode === "energize_jaringan")
+    payload.energize_status =
+      values.energize_status === "Nyala sementara" ? "temporary" : "permanent";
   if (
     workflowNode === "pemasangan_tiang" ||
     workflowNode === "pelaksanaan_konstruksi"

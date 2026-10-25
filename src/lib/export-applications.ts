@@ -1,4 +1,4 @@
-import { formatApiDate } from "@/lib/utils";
+import { formatApiDate, formatApplicationSlaRemaining } from "@/lib/utils";
 import {
   getActivity,
   getApplicationStatus,
@@ -23,6 +23,10 @@ export type ExportRow = {
   dayaBaru: string;
   unit: string;
   requestedAt: string;
+  paymentDate: string;
+  paymentAmount: string;
+  energizeStatus: string;
+  slaRemaining: string;
   stage: string;
   activity: string;
   status: string;
@@ -91,6 +95,29 @@ const columns: ExportColumn[] = [
     value: (row) => row.requestedAt,
     date: true,
   },
+  {
+    header: "Tanggal Pembayaran",
+    width: 18,
+    value: (row) => row.paymentDate,
+    date: true,
+    internalOnly: true,
+    excelOnly: true,
+  },
+  {
+    header: "Nominal Pembayaran (Rp)",
+    width: 24,
+    value: (row) => row.paymentAmount,
+    number: true,
+    internalOnly: true,
+    excelOnly: true,
+  },
+  { header: "Status Penyalaan", width: 20, value: (row) => row.energizeStatus },
+  {
+    header: "Sisa SLA",
+    width: 28,
+    value: (row) => row.slaRemaining,
+    excelOnly: true,
+  },
   { header: "Tahap Saat Ini", width: 18, value: (row) => row.stage },
   { header: "Aktivitas Saat Ini", width: 26, value: (row) => row.activity },
   { header: "Status", width: 20, value: (row) => row.status },
@@ -142,6 +169,17 @@ export function buildExportRows(
       dayaBaru: application.dayaBaru ? String(application.dayaBaru) : "",
       unit: application.unit,
       requestedAt: application.requestedAt.slice(0, 10),
+      paymentDate: application.paymentDate?.slice(0, 10) ?? "",
+      paymentAmount:
+        application.paymentAmount == null
+          ? ""
+          : String(application.paymentAmount),
+      energizeStatus: application.energizeStatus
+        ? application.energizeStatus === "temporary"
+          ? "Nyala sementara"
+          : "Nyala tetap"
+        : "",
+      slaRemaining: sla.deadline ? formatApplicationSlaRemaining(sla) : "",
       stage: application.rejected
         ? "Delegasi PK NPS"
         : (stage?.shortLabel ?? ""),

@@ -338,6 +338,8 @@ test("create posts multipart fields, evidence files, and bearer token", async ()
     pelanggan_no_hp: "08123456789",
     tarif: "rumah_tangga",
     daya_baru: 2200,
+    tanggal_pembayaran:"2026-10-23",
+    nominal_pembayaran:150000,
     evidence_files: [file],
   };
   global.fetch = async (url, init) => {
@@ -349,6 +351,8 @@ test("create posts multipart fields, evidence files, and bearer token", async ()
     assert.equal(init.body.get("jenis_sambungan"), "JTR");
     assert.equal(init.body.get("tarif"), "rumah_tangga");
     assert.equal(init.body.get("daya_baru"), "2200");
+    assert.equal(init.body.get("tanggal_pembayaran"), "2026-10-23");
+    assert.equal(init.body.get("nominal_pembayaran"), "150000");
     // Pasang Baru sends no daya_lama.
     assert.equal(init.body.get("daya_lama"), null);
     const files = init.body.getAll("evidence_files");
@@ -420,7 +424,6 @@ const cases = [
     { perlu_pdkb: true, estimasi_tanggal_selesai: "2026-11-01" },
   ],
   ["wo_tiang", "wo-vendor/tiang", {}, {}],
-  ["wo_app", "wo-vendor/app", {}, {}],
   ["wo_pdkb", "wo-pdkb", {}, {}],
   ["reservasi_material", "reservasi-material", { notes: "Reserve" }, { notes: "Reserve" }],
   ["tera_app", "tera-app", { notes: "Tera" }, { notes: "Tera" }],
@@ -440,8 +443,8 @@ const cases = [
   [
     "energize_jaringan",
     "energize-jaringan",
-    { operation_result: "Test result" },
-    { operation_result: "Test result" },
+    { operation_result: "Test result", energize_status:"Nyala sementara" },
+    { operation_result: "Test result", energize_status:"temporary" },
   ],
   ["pemasangan_sr_app", "pemasangan-sr-app", {}, {}],
   ["entri_mutasi_pdl", "closing", {}, {}],
@@ -607,7 +610,6 @@ test("activity export uses the authenticated workflow node endpoint", async () =
 for (const [workflowNode, endpoint] of [
   ["wo_tiang", "tiang"],
   ["wo_konstruksi", "konstruksi"],
-  ["wo_app", "app"],
 ]) {
   test("WO activity export uses the dedicated POST endpoint: " + workflowNode, async () => {
     global.fetch = async (url, init) => {
@@ -971,13 +973,13 @@ test("each vendor downloads only its own work order and the activities it perfor
   );
 });
 
-test("SR/APP installation belongs to vendor SR/APP on JTR/JTM but to vendor konstruksi on PLG TM", () => {
+test("SR/APP installation belongs to Transaksi Energi for every connection", () => {
   const jtm = applications.mapApplication(fixture);
   const plgTm = { ...jtm, connectionType: "PLG TM <5 GWNG" };
   const node = exportNode("pemasangan_sr_app");
-  assert.equal(workflow.canExportActivity("vendor-sr-app", jtm, node), true);
+  assert.equal(workflow.canExportActivity("vendor-sr-app", jtm, node), false);
   assert.equal(workflow.canExportActivity("vendor-konstruksi", jtm, node), false);
-  assert.equal(workflow.canExportActivity("vendor-konstruksi", plgTm, node), true);
+  assert.equal(workflow.canExportActivity("vendor-konstruksi", plgTm, node), false);
   assert.equal(workflow.canExportActivity("vendor-sr-app", plgTm, node), false);
 });
 
@@ -1004,7 +1006,7 @@ test("only the owning team generates a work order; every other role downloads it
   // Owners: Perencanaan (WO tiang), Konstruksi (WO konstruksi), Transaksi Energi (WO APP).
   assert.equal(generates("perencanaan", "6"), true);
   assert.equal(generates("konstruksi", "7"), true);
-  assert.equal(generates("transaksi-energi", "8"), true);
+  assert.equal(generates("transaksi-energi", "8"), false);
 
   // Not the owner of that specific WO.
   assert.equal(generates("konstruksi", "6"), false);
@@ -1017,7 +1019,7 @@ test("only the owning team generates a work order; every other role downloads it
   assert.equal(workflow.isWorkOrderActivity("12"), false);
   assert.equal(generates("vendor-konstruksi", "12"), false);
   assert.equal(workflow.isWorkOrderActivity(undefined), false);
-  assert.deepEqual(["6", "7", "8"].map(workflow.isWorkOrderActivity), [true, true, true]);
+  assert.deepEqual(["6", "7", "8"].map(workflow.isWorkOrderActivity), [true, true, false]);
 });
 
 test("the WO file is the newest generated PDF on the WO node, never hand-uploaded evidence", () => {
@@ -1096,7 +1098,6 @@ test("a WO row downloads an existing file for everyone, and only the owner may g
 for (const [workflowNode, endpoint] of [
   ["wo_tiang", "tiang"],
   ["wo_konstruksi", "konstruksi"],
-  ["wo_app", "app"],
 ]) {
   test("saving a WO form generates its PDF with POST: " + workflowNode, async () => {
     const calls = [];
@@ -1122,3 +1123,48 @@ for (const status of [403, 404, 409, 500]) {
     assert.ok("error" in result);
   });
 }
+
+
+test("payment, temporary energize and business-day SLA are retained in the server projection", () => {
+  const app=applications.mapApplication({...fixture,tanggal_pembayaran:"2026-10-24",nominal_pembayaran:150000,energize_status:"temporary",sla_basis:"payment_workdays_v1",sla_remaining_days:3});
+  assert.equal(app.paymentDate,"2026-10-24");assert.equal(app.paymentAmount,150000);assert.equal(app.energizeStatus,"temporary");assert.equal(app.sla.remainingDays,3);
+  assert.equal(load("@/lib/utils").formatApplicationSlaRemaining({...app.sla,remainingDays:-2}),"Terlambat 2 hari kerja");
+  assert.equal(load("@/lib/utils").formatApplicationSlaRemaining({...app.sla,remainingDays:null}),"Kalender SLA belum tersedia");
+});
+
+test("priority confirmation needs no evidence documents", async () => {
+  global.fetch=async(url,init)=>{assert.equal(init.method,"POST");assert.deepEqual(JSON.parse(init.body),{document_ids:[],notes:"Terverifikasi"});return json({status:true,data:fixture});};
+  await applications.submitAction("test-id",{workflow_node:"verifikasi_prioritas",method:"POST",path:"/api/permohonan/{id}/verifikasi-prioritas"},{notes:"Terverifikasi"},[]);
+});
+
+test("SR/APP depends on Tera while construction is still pending",()=>{
+  assert.equal(workflow.getOwner(workflow.getActivity("14"),applications.mapApplication(fixture)),"transaksi-energi");
+  const nodes=[{workflow_node:"tera_app",status:"completed",stage_number:4},{workflow_node:"pelaksanaan_konstruksi",status:"locked",stage_number:5}];
+  assert.equal(workflow.actionPrerequisitesMet(nodes,"pemasangan_sr_app",6),true);
+  nodes[0].status="available";assert.equal(workflow.actionPrerequisitesMet(nodes,"pemasangan_sr_app",6),false);
+  assert.equal(workflow.actionPrerequisitesMet([],"pemasangan_sr_app",6),false);
+});
+
+test("survey evidence upload preserves its selected permission category",async()=>{
+  global.fetch=async(url,init)=>{assert.equal(init.body.get("type"),"izin_perangkat_desa");return json({status:true,data:{id:"permission"}});};
+  assert.equal((await applications.uploadEvidence(new File(["pdf"],"izin.pdf"),undefined,"izin_perangkat_desa")).id,"permission");
+});
+
+test("PDKB calendar uses authenticated date-range and CRUD contracts",async()=>{
+  const schedules=load("@/lib/pdkb-schedules");const calls=[];
+  global.fetch=async(url,init)=>{calls.push([url,init.method]);assert.equal(init.headers.get("Authorization"),"Bearer access-test");return json({status:true,data:init.method==="GET"?[]:{id:"schedule"}});};
+  await schedules.listPdkbSchedules("2026-10-01","2026-10-31");await schedules.savePdkbSchedule(null,"2026-10-27","Kegiatan");await schedules.savePdkbSchedule("schedule","2026-10-28","Revisi");await schedules.deletePdkbSchedule("schedule");
+  assert.deepEqual(calls.map(call=>call[1]),["GET","POST","PUT","DELETE"]);assert.match(calls[0][0],/from=2026-10-01&to=2026-10-31/);
+});
+
+test("survey and construction revisions send the expected version",async()=>{
+  const revisions=load("@/lib/activity-revisions");const calls=[];
+  global.fetch=async(url,init)=>{calls.push([url,init.method,JSON.parse(init.body)]);return json({status:true,data:fixture});};
+  await revisions.saveActivityRevision("test-id","survei",2,["doc"],{surveyed_at:"2026-10-20",notes:"Revisi"});await revisions.saveActivityRevision("test-id","wo_konstruksi",4,["doc"]);
+  assert.match(calls[0][0],/test-id\/survei$/);assert.deepEqual(calls[0].slice(1),["PUT",{expected_revision:2,document_ids:["doc"],surveyed_at:"2026-10-20",notes:"Revisi"}]);assert.match(calls[1][0],/wo-vendor\/konstruksi\/documents$/);assert.equal(calls[1][2].expected_revision,4);
+});
+
+test("historical WO APP export is a read-only GET",async()=>{
+ global.fetch=async(url,init)=>{assert.match(url,/activities\/wo_app\/export$/);assert.equal(init.method,"GET");return new Response("historical PDF");};
+ assert.equal(await (await applications.exportApplicationActivity("test-id","wo_app")).text(),"historical PDF");assert.equal(workflow.canGenerateWorkOrder("transaksi-energi",applications.mapApplication(fixture),"8"),false);
+});

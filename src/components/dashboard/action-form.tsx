@@ -45,11 +45,13 @@ import {
   uploadEvidence,
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
+import { listPdkbSchedules, type PdkbSchedule } from "@/lib/pdkb-schedules";
 import {
   cn,
   isDateOnOrAfterToday,
   isValidDateValue,
   startOfToday,
+  parseDateValue,
 } from "@/lib/utils";
 import {
   getActivity,
@@ -62,10 +64,13 @@ import {
   type RoleId,
 } from "@/lib/workflow";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const acceptedFile = /\.(pdf|jpe?g|png)$/i;
+const MAX_FILE_SIZE = 30 * 1024 * 1024;
+const acceptedFile = /\.(pdf|jpe?g|png|xlsx?)$/i;
 
-function createActionSchema(fields: FieldDefinition[]) {
+function createActionSchema(
+  fields: FieldDefinition[],
+  requiresEvidence = true,
+) {
   const shape = Object.fromEntries(
     fields.map((field) => {
       let schema = z.string().trim();
@@ -114,14 +119,14 @@ function createActionSchema(fields: FieldDefinition[]) {
           )
           .refine(
             (file) => file.size <= MAX_FILE_SIZE,
-            "Ukuran setiap evidence maksimal 10 MB.",
+            "Ukuran setiap evidence maksimal 30 MB.",
           )
           .refine(
             (file) => acceptedFile.test(file.name),
-            "Evidence harus berupa PDF, JPG, JPEG, atau PNG.",
+            "Evidence harus berupa PDF, JPG, JPEG, PNG, XLS, atau XLSX.",
           ),
       )
-      .min(1, "Pilih minimal satu evidence."),
+      .min(requiresEvidence ? 1 : 0, "Pilih minimal satu evidence."),
   });
 }
 
@@ -176,8 +181,6 @@ export function ActionForm({
     const node = formNode.replaceAll("-", "_");
     if (node === "wo_tiang") return "vendor-tiang";
     if (node === "wo_konstruksi") return "vendor-konstruksi";
-    if (node === "wo_app" && !application.connectionType.startsWith("PLG TM"))
-      return "vendor-sr-app";
     return null;
   })();
   const vendorLabel = vendorRole ? getRole(vendorRole).label : "";
@@ -185,9 +188,18 @@ export function ActionForm({
     ? { name: "vendor_id", label: vendorLabel, required: true }
     : null;
   const baseFields = activity?.fields ?? [];
-  const schemaFields = vendorField ? [...baseFields, vendorField] : baseFields;
+  const pdkbField: FieldDefinition = {
+    name: "tanggal_pdkb",
+    label: "Tanggal kegiatan PDKB",
+    type: "date",
+  };
+  const schemaFields = [
+    ...baseFields,
+    ...(vendorField ? [vendorField] : []),
+    ...(formNode === "wo_konstruksi" ? [pdkbField] : []),
+  ];
   const schema = useMemo(
-    () => createActionSchema(schemaFields),
+    () => createActionSchema(schemaFields, formNode !== "verifikasi_prioritas"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activity, vendorRole],
   );
@@ -204,6 +216,60 @@ export function ActionForm({
   const [vendorLoading, setVendorLoading] = useState(false);
   const [vendorError, setVendorError] = useState<unknown>(null);
   const assignedVendor = useRef(false);
+  const [schedules, setSchedules] = useState<PdkbSchedule[]>([]);
+  const [scheduleError, setScheduleError] = useState<unknown>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(
+    formNode === "wo_konstruksi",
+  );
+  const [scheduleVersion, setScheduleVersion] = useState(0);
+  const [calendarMonth, setCalendarMonth] = useState(startOfToday);
+  const needsPdkb = form.watch("values.perlu_pdkb") === "Ya";
+  const pdkbDate = form.watch("values.tanggal_pdkb");
+  useEffect(() => {
+    const date = parseDateValue(pdkbDate);
+    if (date)
+      setCalendarMonth((previous) =>
+        previous.getFullYear() === date.getFullYear() &&
+        previous.getMonth() === date.getMonth()
+          ? previous
+          : date,
+      );
+  }, [pdkbDate]);
+  const [categories, setCategories] = useState<Map<File, string>>(new Map());
+  useEffect(() => {
+    if (formNode !== "wo_konstruksi") return;
+    let cancelled = false;
+    setScheduleLoading(true);
+    const from = new Date(
+      calendarMonth.getFullYear(),
+      calendarMonth.getMonth(),
+      1,
+    );
+    const end = new Date(
+      calendarMonth.getFullYear(),
+      calendarMonth.getMonth() + 1,
+      0,
+    );
+    listPdkbSchedules(
+      from.toLocaleDateString("sv-SE"),
+      end.toLocaleDateString("sv-SE"),
+    )
+      .then((rows) => {
+        if (!cancelled) {
+          setSchedules(rows);
+          setScheduleError(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setScheduleError(error);
+      })
+      .finally(() => {
+        if (!cancelled) setScheduleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [formNode, scheduleVersion, calendarMonth]);
 
   useEffect(() => {
     if (!vendorRole) return;
@@ -296,7 +362,13 @@ export function ActionForm({
           ) : definition.type === "select" ? (
             <Select
               value={field.value}
-              onValueChange={field.onChange}
+              onValueChange={(value) => {
+                field.onChange(value);
+                if (definition.name === "perlu_pdkb" && value === "Tidak") {
+                  form.setValue("values.tanggal_pdkb", "");
+                  form.clearErrors("values.tanggal_pdkb");
+                }
+              }}
               disabled={busy}
             >
               <FormControl>
@@ -337,6 +409,20 @@ export function ActionForm({
   );
 
   async function submit(data: ActionFormValues) {
+    if (
+      formNode === "wo_konstruksi" &&
+      needsPdkb &&
+      (scheduleLoading ||
+        scheduleError ||
+        !data.values.tanggal_pdkb ||
+        schedules.some((item) => item.date === data.values.tanggal_pdkb))
+    ) {
+      form.setError("values.tanggal_pdkb", {
+        message:
+          "Pilih tanggal PDKB yang tersedia. Muat ulang kalender bila diperlukan.",
+      });
+      return;
+    }
     if (needsCoordinate && !coordinate) {
       setCoordinateError(true);
       return;
@@ -358,6 +444,7 @@ export function ActionForm({
           try {
             const document = await uploadEvidence(file, (progress) =>
               setFileStatus(file, { state: "uploading", progress }),
+              categories.get(file) ?? "evidence",
             );
             uploads.current.set(file, document.id);
             setFileStatus(file, { state: "uploaded", progress: 100 });
@@ -429,6 +516,49 @@ export function ActionForm({
           {(beforeNotes.length > 0 || !!vendorRole) && (
             <div className="grid gap-4 md:grid-cols-2">
               {beforeNotes.map(renderField)}
+                {formNode === "wo_konstruksi" && needsPdkb && (
+                  <div className="md:col-span-2">
+                    <FormField
+                      control={form.control}
+                      name="values.tanggal_pdkb"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tanggal kegiatan PDKB</FormLabel>
+                          <FormControl>
+                            <DatePicker
+                              {...field}
+                              minDate={startOfToday()}
+                              onCalendarMonthChange={setCalendarMonth}
+                              unavailableDates={schedules.map(
+                                (item) => item.date,
+                              )}
+                              disabled={busy || Boolean(scheduleError)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <p className="text-muted-foreground mt-2 text-xs">
+                      Satu kegiatan per hari. Jadwal dikunci saat WO disimpan.
+                      {scheduleLoading ? " Memuat ketersediaan…" : ""}
+                    </p>
+                    {Boolean(scheduleError) && (
+                      <ErrorNotice
+                        error={scheduleError}
+                        onRetry={() => setScheduleVersion((value) => value + 1)}
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      variant="link"
+                      onClick={() => setScheduleVersion((value) => value + 1)}
+                      disabled={scheduleLoading}
+                    >
+                      Perbarui ketersediaan
+                    </Button>
+                  </div>
+                )}
               {vendorRole ? (
                 <FormField
                   control={form.control}
@@ -501,6 +631,7 @@ export function ActionForm({
             </div>
           ) : null}
 
+            {formNode !== "verifikasi_prioritas" && (
           <FormField
             control={form.control}
             name="files"
@@ -523,6 +654,37 @@ export function ActionForm({
               </FormItem>
             )}
           />
+            )}
+            {formNode === "survei" &&
+              form.watch("files").map((file, index) => (
+                <div key={`${file.name}:${index}`} className="mt-3">
+                  <label className="text-sm" htmlFor={`category-${index}`}>
+                    Jenis lampiran: {file.name}
+                  </label>
+                  <select
+                    id={`category-${index}`}
+                    className="bg-background mt-1 block w-full rounded-md border p-2 text-sm"
+                    value={categories.get(file) ?? "evidence"}
+                    disabled={busy || uploads.current.has(file)}
+                    onChange={(event) =>
+                      setCategories((previous) =>
+                        new Map(previous).set(file, event.target.value),
+                      )
+                    }
+                  >
+                    <option value="evidence">Evidence survei</option>
+                    <option value="izin_pemilik_tanah">
+                      Izin pemilik tanah
+                    </option>
+                    <option value="izin_perangkat_desa">
+                      Izin perangkat desa
+                    </option>
+                    <option value="izin_pemilik_tanah_dan_perangkat_desa">
+                      Izin pemilik tanah dan perangkat desa
+                    </option>
+                  </select>
+                </div>
+              ))}
 
           {notesDef ? renderField(notesDef) : null}
 

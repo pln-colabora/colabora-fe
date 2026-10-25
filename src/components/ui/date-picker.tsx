@@ -22,6 +22,8 @@ type DatePickerProps = Omit<
   value?: string;
   onChange: (value: string) => void;
   minDate?: Date;
+  unavailableDates?: string[];
+  onCalendarMonthChange?: (date: Date) => void;
 };
 
 function toDateValue(date: Date) {
@@ -55,7 +57,17 @@ function normalizeManualDate(value: string) {
 
 const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
   function DatePicker(
-    { value, onChange, disabled, className, minDate, onClick, ...props },
+    {
+      value,
+      onChange,
+      disabled,
+      className,
+      minDate,
+      unavailableDates = [],
+      onCalendarMonthChange,
+      onClick,
+      ...props
+    },
     ref,
   ) {
     const [open, setOpen] = React.useState(false);
@@ -137,7 +149,19 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
             mode="single"
             selected={selectedDate}
             defaultMonth={selectedDate ?? new Date()}
-            disabled={minDate ? { before: minDate } : undefined}
+            onMonthChange={onCalendarMonthChange}
+            disabled={(date) =>
+              Boolean(
+                (minDate && date < minDate) ||
+                unavailableDates.includes(toDateValue(date)),
+              )
+            }
+            modifiers={{
+              occupied: (date) => unavailableDates.includes(toDateValue(date)),
+            }}
+            modifiersClassNames={{
+              occupied: "bg-destructive/15 text-destructive line-through",
+            }}
             onSelect={(date) => {
               if (!date) return;
               onChange(toDateValue(date));
@@ -145,6 +169,11 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
             }}
             className="mx-auto w-fit max-w-full"
           />
+          {unavailableDates.length > 0 && (
+            <p className="text-muted-foreground px-3 pb-3 text-xs">
+              Tanggal dicoret sudah terisi dan tidak dapat dipilih.
+            </p>
+          )}
         </PopoverContent>
       </Popover>
     );

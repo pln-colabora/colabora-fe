@@ -20,6 +20,7 @@ import { EvidenceUploader } from "@/components/dashboard/evidence-uploader";
 import { FormPageSkeleton } from "@/components/dashboard/page-skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Form,
   FormControl,
@@ -63,8 +64,8 @@ const tarifOrder = Object.keys(tarifLabels);
 const toApiJenis = (connectionType: string) =>
   connectionType === "JTM / Gardu" ? "JTM/Gardu" : connectionType;
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const acceptedFile = /\.(pdf|jpe?g|png)$/i;
+const MAX_FILE_SIZE = 30 * 1024 * 1024;
+const acceptedFile = /\.(pdf|jpe?g|png|xlsx?)$/i;
 
 const baseSchema = z.object({
   customer: z
@@ -92,6 +93,17 @@ const baseSchema = z.object({
   tarif: z.string().min(1, "Tarif wajib dipilih."),
   dayaBaru: z.string().min(1, "Daya wajib dipilih."),
   dayaLama: z.string(),
+  paymentDate: z.iso.date("Tanggal pembayaran tidak valid."),
+  paymentAmount: z
+    .string()
+    .regex(
+      /^[1-9]\d*$/,
+      "Nominal pembayaran harus berupa rupiah bulat lebih dari nol.",
+    )
+    .refine(
+      (value) => Number.isSafeInteger(Number(value)),
+      "Nominal pembayaran terlalu besar.",
+    ),
   files: z
     .array(
       z
@@ -101,11 +113,11 @@ const baseSchema = z.object({
         )
         .refine(
           (file) => file.size <= MAX_FILE_SIZE,
-          "Ukuran setiap evidence maksimal 10 MB.",
+          "Ukuran setiap evidence maksimal 30 MB.",
         )
         .refine(
           (file) => acceptedFile.test(file.name),
-          "Evidence harus berupa PDF, JPG, JPEG, atau PNG.",
+          "Evidence harus berupa PDF, JPG, JPEG, PNG, XLS, atau XLSX.",
         ),
     )
     .min(1, "Unggah minimal satu evidence."),
@@ -251,6 +263,8 @@ function CreateForm({
       tarif: "",
       dayaBaru: "",
       dayaLama: "",
+      paymentDate: "",
+      paymentAmount: "",
       files: [],
     },
   });
@@ -328,6 +342,8 @@ function CreateForm({
         pelanggan_nama: values.customer,
         pelanggan_no_hp: values.phone,
         pelanggan_alamat: values.location,
+        tanggal_pembayaran: values.paymentDate,
+        nominal_pembayaran: Number(values.paymentAmount),
         jenis_permohonan:
           values.requestType === "Pasang baru"
             ? "Pasang Baru (PB)"
@@ -401,6 +417,36 @@ function CreateForm({
                   )}
                 />
 
+                  <FormField
+                    control={form.control}
+                    name="paymentDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tanggal pembayaran</FormLabel>
+                        <FormControl>
+                          <DatePicker {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="paymentAmount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nominal pembayaran (Rp)</FormLabel>
+                        <FormControl>
+                          <Input
+                            inputMode="numeric"
+                            placeholder="150000"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 <FormField
                   control={form.control}
                   name="requestType"
