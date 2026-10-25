@@ -1,5 +1,10 @@
 # Cloudflare Workers — dev
 
+Dev URL: <https://colabora-dev.bimorajendraa.workers.dev/login>.
+Initial deployment used the pushed `dev` source, without building `main`.
+The GitHub build connection is prepared with production branch `dev` and previews
+disabled; saving it requires the dedicated CI credential.
+
 Workers Free was selected instead of Pages to retain the existing Next.js dynamic
 routes. The Worker name is `colabora-dev`. Hosting setup does not change pages,
 API contracts, or workflow rules.
@@ -59,9 +64,11 @@ migrations must reach that service before the new features work online. Frontend
 deployment does not update that backend.
 
 82 frontend tests, lint, typecheck, and the original Next.js Webpack build passed.
-Workers build and deployment dry-run passed: 105 assets, approximately 873 KiB
-gzip for the Worker, and static assets as the only binding. The local runtime
-renders the existing login page and retains dynamic request routes. No cache,
+Workers build, deployment dry-run and initial upload passed: 105 assets, approximately 873 KiB
+gzip for the Worker, and static assets as the only binding. Local and online
+runtime checks verified login and dynamic routes with HTTP 200. The online login
+page rendered with no captured browser errors. Backend CORS preflight returned
+204 with the dev origin permitted. No production data was created by these checks. No cache,
 database, image service, or other paid resource is configured.
 
 The dependency audit reports existing and toolchain advisories, including the
