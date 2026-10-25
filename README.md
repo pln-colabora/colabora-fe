@@ -12,6 +12,12 @@ npm run dev
 
 Buka http://localhost:3000 dan masuk memakai akun backend. Untuk dropdown akun development, isi `COLABORA_DEV_ACCOUNTS` di `.env.local` dengan JSON akun yang diberikan (jangan commit password). Dropdown hanya mengisi kredensial; tombol Masuk tetap memanggil API. Konfigurasi tersebut tidak ditampilkan pada build production.
 
+## Cloudflare dari branch dev
+
+Konfigurasi deployment Workers dan batas verifikasinya tersedia di
+[CLOUDFLARE-DEV.md](CLOUDFLARE-DEV.md). Target deployment hanya `dev`; jalur
+pengembangan Next.js yang ada tetap tersedia.
+
 ## Pemeriksaan
 
 ```sh
