@@ -1,6 +1,10 @@
 # COLABORA — Flow End-to-End (Permohonan PB/PD)
 
-Status: diperbarui 2026-10-24. Tujuh tahap UI tetap; node/izin dan aksi berasal dari backend. Nomor aktivitas historis tetap dipakai untuk referensi SLA, bukan urutan transisi.
+Status: dicocokkan dengan implementasi branch `dev` pada 2026-10-26. Tujuh tahap UI tetap; node/izin dan aksi berasal dari backend. Nomor aktivitas historis tetap dipakai untuk referensi SLA, bukan urutan transisi.
+Diagram lengkap tersedia di backend melalui `/docs/architecture` atau
+[Markdown flowchart branch dev](https://github.com/pln-colabora/colabora-be/tree/dev/docs/architecture).
+Nama `forms/*.html` di bawah adalah referensi prototipe lama, bukan URL frontend aktif;
+implementasi frontend ada di `src/app/permohonan` dan `src/lib/workflow.ts`.
 
 ## Aktor & Role
 
@@ -27,7 +31,9 @@ Status: diperbarui 2026-10-24. Tujuh tahap UI tetap; node/izin dan aksi berasal 
 | JTR / JTM | `pelayanan-pelanggan` | `forms/01-permohonan-pbpd.html` | H |
 | PLG TM | `nps` | `forms/01-permohonan-pbpd.html` (opsi jenis dibatasi otomatis per role login — tidak ada dropdown campuran) | G |
 
-Output: status *Survey*.
+Tanggal pembayaran dan nominal pembayaran wajib diisi. SLA baru menggunakan tanggal
+pembayaran, bukan tanggal pembuatan permohonan. Setelah disimpan, node permohonan
+completed dan survei tersedia bagi pemiliknya.
 
 ## Stage 2 — Survei Perluasan Jaringan
 
@@ -36,11 +42,12 @@ Output: status *Survey*.
 | JTR / JTM | `teknik` | `forms/02-survei.html` (default) | H+2 |
 | PLG TM | `perencanaan` | `forms/02-survei.html?jenis=plgtm` | G+2 |
 
-Output: status *Permohonan Perluasan Jaringan*.
+Setelah survei selesai, RAB/KKO/KKF tersedia. Survei tetap dapat direvisi oleh
+role/unit pemilik tanpa mengubah waktu completion atau SLA.
 
 ## Stage 3 — Perencanaan Perluasan
 
-Co-owner: `teknik` / `perencanaan` / `nps`. Narrow per permohonan via `CURRENT_STAGE_OWNERS`.
+Owner aksi ditentukan per node/jenis sambungan oleh backend: `teknik`, `perencanaan`, atau `nps`.
 
 | # | Kegiatan | Role | Form |
 |---|---|---|---|
@@ -49,6 +56,9 @@ Co-owner: `teknik` / `perencanaan` / `nps`. Narrow per permohonan via `CURRENT_S
 | — | Verifikasi Prioritas Pekerjaan (setelah RAB/keputusan tiang, sebelum NPS) | `perencanaan` semua jenis | Konfirmasi, catatan opsional |
 | 4 | Permohonan Perluasan | `nps` | `forms/03-permohonan-perluasan.html` |
 | 5 | Delegasi Perintah Kerja NPS *(wajib semua permohonan — bukan approval permohonan pelanggan)* | `nps` | dalam form 03 |
+
+Verifikasi prioritas wajib untuk semua jenis setelah RAB dan keputusan tiang;
+konfirmasi ini tidak menambah keputusan penolakan.
 
 Decision #3b — Ya: WO Tiang ikut terbit di Stage 4. Tidak: skip WO Tiang.
 Decision #5 — NPS **mendelegasikan** PK Pekerjaan ke bagian tujuan (Perencanaan/Konstruksi/Transaksi Energi); bukan menyetujui/menolak permohonan pelanggan itu sendiri. Outcome: **Didelegasikan** → lanjut ke Stage 4. **Dikembalikan** → proses berhenti.
@@ -66,15 +76,27 @@ Co-owner: `perencanaan` / `konstruksi` / `transaksi-energi`.
 | 9 | Reservasi Material | `vendor-konstruksi` | `forms/06-reservasi-material.html` |
 | 10 | Perakitan & Tera APP | `transaksi-energi` | `forms/06-reservasi-material.html` |
 
+Tera APP tersedia langsung setelah delegasi NPS, paralel dengan cabang WO Tiang
+(jika perlu) dan WO Konstruksi. Reservasi material menunggu WO Konstruksi. Bila
+perlu PDKB, `tanggal_pdkb` wajib kosong pada kalender satu tim/satu hari dan dibooking
+atomik bersama WO Konstruksi; bentrok menghasilkan 409. Estimasi selesai konstruksi
+adalah tanggal terpisah. PDKB mengelola kegiatan manual; booking WO terkunci.
+
 ## Stage 5 — Pelaksanaan Konstruksi (paralel)
 
-Co-owner: `vendor-tiang` / `vendor-konstruksi` / `pdkb`. Konstruksi UP3 **tidak** punya wewenang di Stage 5–6 — perannya selesai di Stage 4 (penerbitan WO).
+Co-owner: `vendor-tiang` / `vendor-konstruksi` / `pdkb`. Konstruksi UP3 tidak
+menyelesaikan node Stage 5–6; revisi lampiran upload WO Konstruksi tetap diizinkan
+setelah penerbitan, termasuk setelah closing/returned.
 
 | # | Kegiatan | Role | Form |
 |---|---|---|---|
 | 11 | Pemasangan Tiang | `vendor-tiang` | `forms/08-pelaksanaan-konstruksi.html` |
 | 12 | Pelaksanaan Konstruksi | `vendor-konstruksi` | `forms/08-pelaksanaan-konstruksi.html` |
 | — | Dokumentasi PDKB *(jika Perlu PDKB = Ya)* | `pdkb` | `forms/08b-pdkb-dokumentasi.html` |
+
+Pelaksanaan konstruksi menunggu WO Konstruksi, reservasi material, dan WO PDKB
+selesai atau skipped yang sah bila tidak perlu PDKB. Pemasangan tiang menunggu WO
+Tiang dan skipped bila tidak perlu tiang. Dokumentasi PDKB menunggu konstruksi.
 
 ## Stage 6 — Energize Jaringan (paralel)
 
@@ -87,6 +109,11 @@ Co-owner: `teknik` / `jaringan` / `transaksi-energi`.
 | 14 | Pemasangan SR/APP & Penyalaan | JTR/JTM | `transaksi-energi` | `forms/12-pemasangan-sr-app.html` |
 | 14 | Pemasangan SR/APP & Penyalaan | PLG TM | `transaksi-energi` | `forms/12-pemasangan-sr-app.html` |
 
+SR/APP oleh Transaksi Energi hanya menunggu Tera APP. Energize jaringan menunggu
+konstruksi, pemasangan tiang, dan dokumentasi PDKB yang applicable. Pilihan nyala
+sementara (`temporary`) atau tetap (`permanent`) melekat pada hasil energize;
+keduanya boleh menuju closing dan tidak menjadi status aggregate tersendiri.
+
 ## Stage 7 — Penutupan / Selesai
 
 | # | Kegiatan | Role | Form |
@@ -97,6 +124,10 @@ Co-owner: `teknik` / `jaringan` / `transaksi-energi`.
 
 ---
 
+Closing menunggu **energize jaringan dan SR/APP**. Satu submission menyelesaikan
+PDL, AIL, dan Selesai secara atomik. Status aggregate menjadi `completed`; NPS
+`returned` tetap terminal dan bukan loop perencanaan.
+
 ## SLA per jenis sambungan (H/G + offset hari kerja untuk permohonan baru)
 
 | # | Kegiatan | JTR | JTM/Gardu | PLG TM <5 GWNG | PLG TM >5 GWNG |
@@ -104,16 +135,17 @@ Co-owner: `teknik` / `jaringan` / `transaksi-energi`.
 | 1 | Permohonan PB/PD | H | H | G | G |
 | 2 | Survei Perluasan Jaringan | H+2 | H+2 | G+2 | G+2 |
 | 3 | RAB, KKO & KKF | H+2 | H+2 | G+2 | G+2 |
-| — | Verifikasi Prioritas Pekerjaan (setelah RAB/keputusan tiang, sebelum NPS) | `perencanaan` semua jenis | Konfirmasi, catatan opsional |
+| — | Verifikasi Prioritas (mengikuti RAB) | H+2 | H+2 | G+2 | G+2 |
 | 4 | Permohonan Perluasan | H+2 | H+2 | H | H |
-| 6–8 | WO Vendor (Tiang/Konstruksi) | H+2 | H+2 | H+1 | H+1 |
+| 6–7 | WO Vendor (Tiang/Konstruksi) | H+2 | H+2 | H+1 | H+1 |
 | 9 | Reservasi Material | H+2 | H+2 | H+2 | H+2 |
 | 10 | Perakitan & Tera APP | H+3 | H+3 | H+2 | H+2 |
 | 11 | Pelaksanaan Pemasangan Tiang | H+6 | H+8 | H+8 | H+12 |
 | 12 | Pelaksanaan Konstruksi | H+8 | H+12 | H+19 | H+49 |
 | 13 | Pengoperasian Jaringan Listrik | H+9 | H+13 | H+20 | H+50 |
 | 14 | Pemasangan SR/APP & Penyalaan | H+10 | H+14 | H+20 | H+50 |
-| 15–17 | Penutupan (PDL, AIL, Selesai) | H+10 | H+14 | H+20 | H+50 |
+| 15 | Entri & Mutasi PDL | H+10 | H+10 | H+20 | H+50 |
+| 16–17 | Arsip AIL & Selesai | H+10 | H+14 | H+20 | H+50 |
 
 ---
 
@@ -133,7 +165,7 @@ Co-owner: `teknik` / `jaringan` / `transaksi-energi`.
 - `forms/02-survei.html`: jadi jenis-aware via query param `?jenis=jtr|plgtm`, guard role menyesuaikan (mirror pola form 04).
 - Dashboard: tombol **"+ Permohonan Baru"** kini tampil untuk role `pelayanan-pelanggan` **dan** `nps`.
 - Wording keputusan NPS (Stage 3, aktivitas #5) diubah dari **"Persetujuan NPS"** menjadi **"Delegasi Perintah Kerja NPS"** — NPS tidak menyetujui/menolak permohonan pelanggan, hanya mendelegasikan PK Pekerjaan ke bagian tujuan. Edge diagram: `Disetujui/Ditolak` → `Didelegasikan/Dikembalikan`.
-- Diagram alur publik (`workflow/jtr-jtm.html`, `workflow/plg-tm.html`) disinkronkan dengan semua perubahan di atas.
+- Diagram implementasi terkini ada di backend `docs/architecture/diagrams`; path `workflow/*.html` adalah referensi prototipe historis.
 
 ## Ketentuan revisi 24 Oktober 2026
 
@@ -149,6 +181,12 @@ Co-owner: `teknik` / `jaringan` / `transaksi-energi`.
 
 ## Referensi
 
-- Spec domain lengkap: `DEVELOPMENT.md` (§2 role, §3 tabel 17 aktivitas, §5 screen inventory, §6 RBAC).
-- Diagram visual: `workflow/jtr-jtm.html`, `workflow/plg-tm.html`.
-- Source RBAC: `assets/rbac.js` (`COLABORA_STAGE_OWNERS`, `COLABORA_ROLES`).
+- [Flowchart JTR/JTM](https://github.com/pln-colabora/colabora-be/blob/dev/docs/architecture/diagrams/01-workflow-jtr-jtm.md).
+- [Flowchart PLG TM](https://github.com/pln-colabora/colabora-be/blob/dev/docs/architecture/diagrams/02-workflow-plg-tm.md).
+- [SLA dan dependency](https://github.com/pln-colabora/colabora-be/blob/dev/docs/architecture/diagrams/10-sla-critical-path.md).
+- Backend: `pkg/workflow/definition.go`, `pkg/rbac`, `pkg/businessday`,
+  `modules/permohonan/routes.go`, `docs/WORKFLOW_UPDATES_2026-10.md`.
+- Frontend: `src/lib/workflow.ts`; izin dan `available_actions` tetap berasal dari backend.
+
+Dokumen ini menggambarkan kode dev, bukan jaminan versi backend yang sedang online.
+Perincian katalog daya tetap ditunda; tidak digambarkan sebagai fitur selesai.
