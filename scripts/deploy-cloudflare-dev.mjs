@@ -32,7 +32,7 @@ const result = spawnSync(
     stdio: "inherit",
     env: {
       ...process.env,
-      NEXT_PUBLIC_API_BASE_URL: "https://api-colabora.anargya.fun",
+      NEXT_PUBLIC_API_BASE_URL: "https://api-staging-colabora.anargya.fun",
     },
   },
 );

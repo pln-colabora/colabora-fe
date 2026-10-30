@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 
 import { ActivityExportButton } from "@/components/dashboard/activity-export-button";
-import { ActivityRevisionForm } from "@/components/dashboard/activity-revision-form";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
@@ -246,28 +245,12 @@ export default function ApplicationDetailPage() {
               activityInputs={activityInputs}
               documents={visibleDocuments}
             />
-            {application.nodes
-              .filter(
-                (node) =>
-                  node.status === "completed" &&
-                  (node.workflow_node === "survei" ||
-                    node.workflow_node === "wo_konstruksi"),
-              )
-              .map((node) => {
-                const activity = getActivity(nodeActions[node.workflow_node]);
-                const owns =
-                  activity &&
-                  getOwner(activity, application) === roleId &&
-                  (roleId !== "teknik" || user?.unit === application.unit);
-                return owns ? (
-                  <ActivityRevisionForm
-                    key={node.workflow_node}
-                    id={application.id}
-                    node={node.workflow_node as "survei" | "wo_konstruksi"}
-                    onSaved={reload}
-                  />
-                ) : null;
-              })}
+            <RevisionLinks
+              application={application}
+              roleId={roleId}
+              unit={user?.unit}
+              returnTo={returnTo}
+            />
             <DocumentsSection
               documents={visibleDocuments}
               loading={relatedLoading}
@@ -297,6 +280,56 @@ export default function ApplicationDetailPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function RevisionLinks({
+  application,
+  roleId,
+  unit,
+  returnTo,
+}: {
+  application: Application;
+  roleId: RoleId;
+  unit?: string;
+  returnTo: string;
+}) {
+  const nodes = application.nodes.filter(
+    (node) =>
+      node.status === "completed" &&
+      (node.workflow_node === "survei" ||
+        node.workflow_node === "wo_konstruksi"),
+  );
+  const links = nodes.filter((node) => {
+    const activity = getActivity(nodeActions[node.workflow_node]);
+    return (
+      activity &&
+      getOwner(activity, application) === roleId &&
+      (roleId !== "teknik" || unit === application.unit)
+    );
+  });
+  if (!links.length) return null;
+  return (
+    <section className="border-t pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-muted-foreground text-sm">
+          Data aktivitas sudah selesai dan dapat direvisi tanpa mengubah SLA.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {links.map((node) => (
+            <Button key={node.workflow_node} asChild variant="outline">
+              <Link
+                href={`/permohonan/${application.id}/revisi?node=${encodeURIComponent(node.workflow_node)}&returnTo=${encodeURIComponent(returnTo)}`}
+              >
+                {node.workflow_node === "survei"
+                  ? "Edit revisi survei"
+                  : "Edit revisi lampiran WO"}
+              </Link>
+            </Button>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -346,6 +379,7 @@ function CurrentAction({
       </section>
     );
   }
+
   if (application.completed || !activity) {
     return (
       <section

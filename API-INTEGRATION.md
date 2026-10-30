@@ -2,9 +2,9 @@
 
 Implementasi mengikuti API Reference dan Architecture / API Action Map yang dibaca pada 9 September 2026:
 
-- https://api-colabora.anargya.fun/docs
-- https://api-colabora.anargya.fun/docs/architecture#api-actions
-- https://api-colabora.anargya.fun/docs/openapi.yaml
+- https://api-staging-colabora.anargya.fun/docs
+- https://api-staging-colabora.anargya.fun/docs/architecture#api-actions
+- https://api-staging-colabora.anargya.fun/docs/openapi.yaml
 
 ## Alur request
 

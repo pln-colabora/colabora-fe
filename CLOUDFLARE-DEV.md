@@ -30,7 +30,7 @@ npm run deploy:vinext
 
 The deploy script refuses branches other than `dev`, targets `colabora-dev`,
 disables automatic resource provisioning, and builds with
-`NEXT_PUBLIC_API_BASE_URL=https://api-colabora.anargya.fun`. It leaves `.env.local`
+`NEXT_PUBLIC_API_BASE_URL=https://api-staging-colabora.anargya.fun`. It leaves `.env.local`
 unchanged. `--prebuilt` uploads previously verified build output. The guard also
 checks `WORKERS_CI_BRANCH` for Workers Builds' detached checkouts.
 
@@ -43,7 +43,7 @@ settings:
 | Build command | `npm run build:vinext` |
 | Deploy command | `npm run deploy:vinext -- --prebuilt` |
 | Root directory | Repository root |
-| Build variable | `NEXT_PUBLIC_API_BASE_URL=https://api-colabora.anargya.fun` |
+| Build variable | `NEXT_PUBLIC_API_BASE_URL=https://api-staging-colabora.anargya.fun` |
 | Deployment account variable | `CLOUDFLARE_ACCOUNT_ID=c5a8765fe4efb1e9ec3ce5b0ee6f1091` |
 | Non-production branch builds | Disabled |
 

@@ -27,12 +27,14 @@ export function ActivityRevisionForm({
   id,
   node,
   onSaved,
+  standalone = false,
 }: {
   id: string;
   node: "survei" | "wo_konstruksi";
   onSaved: () => void;
+  standalone?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(standalone);
   const [current, setCurrent] = useState<ActivityDetail>();
   const [history, setHistory] = useState<ActivityRevision[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -174,29 +176,31 @@ export function ActivityRevisionForm({
     }
   }
   return (
-    <section className="mt-3 border-t pt-3">
+    <section className={standalone ? "space-y-3" : "mt-3 border-t pt-3"}>
       {dialog}
       {unsavedDialog}
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => {
-          void confirmDiscard().then((confirmed) => {
-            if (confirmed) {
-              setOpen(!open);
-              setFiles([]);
-              setUploaded(new Map());
-            }
-          });
-        }}
-        disabled={saving}
-      >
-        {open
-          ? "Tutup revisi"
-          : survey
-            ? "Edit survei & riwayat"
-            : "Edit lampiran WO & riwayat"}
-      </Button>
+      {!standalone && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            void confirmDiscard().then((confirmed) => {
+              if (confirmed) {
+                setOpen(!open);
+                setFiles([]);
+                setUploaded(new Map());
+              }
+            });
+          }}
+          disabled={saving}
+        >
+          {open
+            ? "Tutup revisi"
+            : survey
+              ? "Edit survei & riwayat"
+              : "Edit lampiran WO & riwayat"}
+        </Button>
+      )}
       {open && (
         <div className="mt-3 space-y-3">
           {Boolean(error) && (
@@ -212,10 +216,11 @@ export function ActivityRevisionForm({
           ) : (
             current && (
               <>
-                <p className="text-muted-foreground text-xs">
-                  Revisi aktif {current.revision}. Data penyelesaian dan SLA
-                  tetap.
-                </p>
+                {current.revision > 1 && (
+                  <p className="text-muted-foreground text-xs">
+                    Revisi ke {current.revision}
+                  </p>
+                )}
                 {survey && (
                   <>
                     <label htmlFor={`${node}-date`} className="block text-sm">
