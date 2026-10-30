@@ -62,8 +62,11 @@ are available on the next turn; restart the agent to load the new MCP server.
 
 ## Scope and verification
 
-The backend remains the existing Go/PostgreSQL service. Its health check passes,
-but `/api/pdkb/schedules` returns 404 and its OpenAPI does not yet list the new
+The frontend dev deployment now uses `https://api-staging-colabora.anargya.fun`.
+Its `/health` check returned 200 with the database up on 30 October 2026.
+
+The initial 25 October verification used `https://api-colabora.anargya.fun`:
+its health check passed, but `/api/pdkb/schedules` returned 404 and its OpenAPI did not list the new
 priority, revision, or working-day SLA contracts. The backend `dev` changes and
 migrations must reach that service before the new features work online. Frontend
 deployment does not update that backend.
