@@ -37,8 +37,12 @@ type PermohonanResponse = {
   // before they were captured) although the published schema omits them; the
   // permohonan node payload is kept as a fallback.
   tarif?: string | null;
+  golongan_tarif?: string | null;
+  golongan_tarif_lama?: string | null;
   daya_baru?: number | null;
   daya_lama?: number | null;
+  pembatas_baru?: string | null;
+  pembatas_lama?: string | null;
   workflow_nodes: WorkflowNode[];
   available_actions: AvailableAction[];
 };
@@ -102,6 +106,8 @@ export function mapApplication(data: PermohonanResponse): Application {
   const createInputs =
     nodes.find((node) => node.workflow_node === "permohonan")?.payload ?? {};
   const tarifValue = data.tarif ?? createInputs.tarif;
+  const golonganTarifValue =
+    data.golongan_tarif ?? createInputs.golongan_tarif;
   return {
     id: data.id,
     number: data.no_permohonan,
@@ -120,6 +126,18 @@ export function mapApplication(data: PermohonanResponse): Application {
     unit: data.ulp_unit,
     tarif:
       typeof tarifValue === "string" && tarifValue ? tarifValue : undefined,
+    golonganTarif:
+      typeof golonganTarifValue === "string" && golonganTarifValue
+        ? golonganTarifValue
+        : undefined,
+    golonganTarifLama:
+      typeof (data.golongan_tarif_lama ?? createInputs.golongan_tarif_lama) ===
+        "string" &&
+      (data.golongan_tarif_lama ?? createInputs.golongan_tarif_lama)
+        ? String(data.golongan_tarif_lama ?? createInputs.golongan_tarif_lama)
+        : undefined,
+    pembatasBaru: data.pembatas_baru ?? undefined,
+    pembatasLama: data.pembatas_lama ?? undefined,
     dayaBaru: toPositiveNumber(data.daya_baru ?? createInputs.daya_baru),
     dayaLama: toPositiveNumber(data.daya_lama ?? createInputs.daya_lama),
     requestedAt: data.request_date ?? "",
@@ -268,8 +286,10 @@ export type TariffPowerOption = {
   golongan_tarif: string;
   jenis_sambungan: string;
   label: string;
+  daya_label?: string | null;
   daya_min: number;
   daya_max: number | null;
+  pembatas?: string | null;
 };
 // Active tarif + power bands, optionally scoped to a jenis sambungan.
 export async function getTariffOptions(jenisSambungan?: string) {
@@ -286,8 +306,12 @@ export type CreateApplicationRequest = {
   pelanggan_alamat: string;
   pelanggan_no_hp: string;
   tarif: string;
+  golongan_tarif?: string;
+  golongan_tarif_lama?: string;
   daya_baru: number;
   daya_lama?: number;
+  pembatas_baru?: string;
+  pembatas_lama?: string;
   ulp_unit?: string;
   evidence_files: File[];
   tanggal_pembayaran: string;
@@ -305,9 +329,17 @@ export async function createApplication(payload: CreateApplicationRequest) {
   body.set("tanggal_pembayaran", payload.tanggal_pembayaran);
   body.set("nominal_pembayaran", String(payload.nominal_pembayaran));
   body.set("tarif", payload.tarif);
+  if (payload.golongan_tarif)
+    body.set("golongan_tarif", payload.golongan_tarif);
+  if (payload.golongan_tarif_lama)
+    body.set("golongan_tarif_lama", payload.golongan_tarif_lama);
   body.set("daya_baru", String(payload.daya_baru));
   if (payload.daya_lama !== undefined)
     body.set("daya_lama", String(payload.daya_lama));
+  if (payload.pembatas_baru)
+    body.set("pembatas_baru", payload.pembatas_baru);
+  if (payload.pembatas_lama)
+    body.set("pembatas_lama", payload.pembatas_lama);
   if (payload.ulp_unit) body.set("ulp_unit", payload.ulp_unit);
   for (const file of payload.evidence_files)
     body.append("evidence_files", file);

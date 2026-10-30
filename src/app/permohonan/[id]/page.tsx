@@ -1315,13 +1315,21 @@ function ApplicationFacts({ application }: { application: Application }) {
   const power: Array<[string, string]> = [];
   if (application.tarif)
     power.push(["Tarif", tarifLabels[application.tarif] ?? application.tarif]);
+  if (application.golonganTarif)
+    power.push(["Golongan tarif", application.golonganTarif]);
   if (isPowerChange && application.dayaLama)
     power.push(["Daya lama", formatDaya(application.dayaLama)]);
+  if (isPowerChange && application.golonganTarifLama)
+    power.push(["Golongan tarif lama", application.golonganTarifLama]);
+  if (isPowerChange && application.pembatasLama)
+    power.push(["Pembatas lama", application.pembatasLama]);
   if (application.dayaBaru)
     power.push([
       isPowerChange ? "Daya baru" : "Permohonan daya",
       formatDaya(application.dayaBaru),
     ]);
+  if (application.pembatasBaru)
+    power.push(["Pembatas", application.pembatasBaru]);
   const facts: Array<[string, string]> = [
     ["Nomor permohonan", application.number],
     ["No. HP / telepon", application.phone],

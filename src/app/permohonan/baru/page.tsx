@@ -47,7 +47,12 @@ import {
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
-import { getRole, tarifLabels, type RoleId } from "@/lib/workflow";
+import {
+  getRole,
+  exactTariffPowers,
+  tarifLabels,
+  type RoleId,
+} from "@/lib/workflow";
 
 const jenisByRole: Partial<Record<RoleId, string[]>> = {
   "pelayanan-pelanggan": ["JTR", "JTM / Gardu"],
@@ -66,6 +71,19 @@ const toApiJenis = (connectionType: string) =>
 
 const MAX_FILE_SIZE = 30 * 1024 * 1024;
 const acceptedFile = /\.(pdf|jpe?g|png|xlsx?)$/i;
+
+function tariffDisplayLabel(value: string) {
+  return tarifLabels[value] ?? value;
+}
+
+function exactPowerLabel(option: TariffPowerOption) {
+  const daya =
+    option.daya_label ??
+    `${new Intl.NumberFormat("id-ID", {
+      maximumFractionDigits: 0,
+    }).format(option.daya_min)} VA`;
+  return option.pembatas ? `${daya} · ${option.pembatas}` : daya;
+}
 
 const baseSchema = z.object({
   customer: z
@@ -91,6 +109,8 @@ const baseSchema = z.object({
     .min(2, "Lokasi minimal 2 karakter.")
     .max(255, "Lokasi maksimal 255 karakter."),
   tarif: z.string().min(1, "Tarif wajib dipilih."),
+  golonganTarif: z.string().min(1, "Golongan tarif wajib dipilih."),
+  golonganTarifLama: z.string(),
   dayaBaru: z.string().min(1, "Daya wajib dipilih."),
   dayaLama: z.string(),
   paymentDate: z.iso.date("Tanggal pembayaran tidak valid."),
@@ -242,7 +262,8 @@ function CreateForm({
         )
         .refine(
           (values) =>
-            values.requestType !== "Perubahan daya" || values.dayaLama !== "",
+            values.requestType !== "Perubahan daya" ||
+            (values.dayaLama !== "" && values.golonganTarifLama !== ""),
           {
             path: ["dayaLama"],
             message: "Daya lama wajib dipilih.",
@@ -261,6 +282,8 @@ function CreateForm({
       unit: units[0],
       location: "",
       tarif: "",
+      golonganTarif: "",
+      golonganTarifLama: "",
       dayaBaru: "",
       dayaLama: "",
       paymentDate: "",
@@ -306,26 +329,84 @@ function CreateForm({
   const requestType = form.watch("requestType");
   const connectionType = form.watch("connectionType");
   const tarif = form.watch("tarif");
+  const golonganTarif = form.watch("golonganTarif");
+  const golonganTarifLama = form.watch("golonganTarifLama");
   const apiJenis = toApiJenis(connectionType);
+
+  const detailedTariffs = useMemo(() => {
+    const apiHasExactValues = tariffs.some(
+      (option) => option.daya_label && option.golongan_tarif,
+    );
+    if (apiHasExactValues) return tariffs;
+    return exactTariffPowers.map((option) => ({
+      ...option,
+      jenis_sambungan: apiJenis,
+      label: option.daya_label,
+      daya_max: option.daya_min,
+    }));
+  }, [tariffs, apiJenis]);
 
   const tarifChoices = useMemo(() => {
     const present = new Set(
-      tariffs.filter((o) => o.jenis_sambungan === apiJenis).map((o) => o.tarif),
+      detailedTariffs
+        .filter((o) => o.jenis_sambungan === apiJenis)
+        .map((o) => o.tarif),
     );
     return tarifOrder.filter((value) => present.has(value));
-  }, [tariffs, apiJenis]);
+  }, [detailedTariffs, apiJenis]);
 
-  const dayaChoices = useMemo(() => {
-    const seen = new Set<number>();
-    return tariffs
-      .filter((o) => o.tarif === tarif && o.jenis_sambungan === apiJenis)
+  const tariffPowerChoices = useMemo(() => {
+    const seen = new Set<string>();
+    return detailedTariffs
+      .filter(
+        (o) =>
+          o.tarif === tarif &&
+          o.jenis_sambungan === apiJenis,
+      )
       .filter((o) => {
-        if (seen.has(o.daya_min)) return false;
-        seen.add(o.daya_min);
+        const key = `${o.daya_min}:${o.pembatas ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       })
-      .sort((a, b) => a.daya_min - b.daya_min);
-  }, [tariffs, tarif, apiJenis]);
+      .sort(
+        (a, b) => (a.daya_min ?? Infinity) - (b.daya_min ?? Infinity),
+      );
+  }, [detailedTariffs, tarif, apiJenis]);
+  const dayaChoices = tariffPowerChoices.filter(
+    (option) => option.golongan_tarif === golonganTarif,
+  );
+
+  const golonganChoices = useMemo(
+    () =>
+      [
+        ...new Set(
+          detailedTariffs
+            .filter(
+              (option) =>
+                option.tarif === tarif &&
+                option.jenis_sambungan === apiJenis &&
+                option.golongan_tarif,
+            )
+            .map((option) => option.golongan_tarif),
+        ),
+      ].sort(),
+    [detailedTariffs, tarif, apiJenis],
+  );
+  const golonganLamaChoices = golonganChoices;
+  const dayaLamaChoices = useMemo(
+    () =>
+      tariffPowerChoices.filter(
+        (option) => option.golongan_tarif === golonganTarifLama,
+      ),
+    [tariffPowerChoices, golonganTarifLama],
+  );
+  const selectedDayaBaru = dayaChoices.find(
+    (option) => String(option.daya_min) === form.getValues("dayaBaru"),
+  );
+  const selectedDayaLama = dayaLamaChoices.find(
+    (option) => String(option.daya_min) === form.getValues("dayaLama"),
+  );
 
   async function handleSubmit(values: FormValues) {
     if (
@@ -350,9 +431,19 @@ function CreateForm({
             : "Perubahan Daya (PD)",
         jenis_sambungan: toApiJenis(values.connectionType),
         tarif: values.tarif,
+        golongan_tarif: values.golonganTarif,
         daya_baru: Number(values.dayaBaru),
         ...(values.requestType === "Perubahan daya"
-          ? { daya_lama: Number(values.dayaLama) }
+          ? {
+              daya_lama: Number(values.dayaLama),
+              golongan_tarif_lama: values.golonganTarifLama,
+              ...(selectedDayaLama?.pembatas
+                ? { pembatas_lama: selectedDayaLama.pembatas }
+                : {}),
+            }
+          : {}),
+        ...(selectedDayaBaru?.pembatas
+          ? { pembatas_baru: selectedDayaBaru.pembatas }
           : {}),
         evidence_files: values.files,
         ...(values.connectionType.startsWith("PLG TM")
@@ -570,6 +661,8 @@ function CreateForm({
                         value={field.value}
                         onValueChange={(value) => {
                           field.onChange(value);
+                          form.setValue("golonganTarif", "");
+                          form.setValue("golonganTarifLama", "");
                           form.setValue("dayaBaru", "");
                           form.setValue("dayaLama", "");
                         }}
@@ -587,7 +680,7 @@ function CreateForm({
                         <SelectContent>
                           {tarifChoices.map((value) => (
                             <SelectItem key={value} value={value}>
-                              {tarifLabels[value] ?? value}
+                                {tariffDisplayLabel(value)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -605,6 +698,72 @@ function CreateForm({
                 {requestType === "Perubahan daya" && (
                   <FormField
                     control={form.control}
+                    name="golonganTarifLama"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Golongan tarif lama</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            form.setValue("dayaLama", "");
+                          }}
+                          disabled={busy || !tarif || !golonganLamaChoices.length}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="bg-background h-11 w-full">
+                              <SelectValue placeholder="Pilih golongan tarif lama" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {golonganLamaChoices.map((value) => (
+                              <SelectItem key={value} value={value}>
+                                {value}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="golonganTarif"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Golongan tarif</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue("dayaBaru", "");
+                        }}
+                        disabled={busy || !tarif || !golonganChoices.length}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background h-11 w-full">
+                            <SelectValue placeholder="Pilih golongan tarif" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {golonganChoices.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {requestType === "Perubahan daya" && (
+                  <FormField
+                    control={form.control}
                     name="dayaLama"
                     render={({ field }) => (
                       <FormItem>
@@ -612,24 +771,32 @@ function CreateForm({
                         <Select
                           value={field.value}
                           onValueChange={field.onChange}
-                          disabled={busy || !tarif || !dayaChoices.length}
+                          disabled={
+                            busy || !golonganTarifLama || !dayaLamaChoices.length
+                          }
                         >
                           <FormControl>
                             <SelectTrigger className="bg-background h-11 w-full">
                               <SelectValue
                                 placeholder={
-                                  tarif ? "Pilih daya lama" : "Pilih tarif dulu"
+                                  golonganTarifLama
+                                    ? "Pilih daya lama"
+                                    : "Pilih golongan tarif lama dulu"
                                 }
                               />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
-                            {dayaChoices.map((option) => (
+                          <SelectContent
+                            side="bottom"
+                            avoidCollisions={false}
+                            className="max-h-60"
+                          >
+                            {dayaLamaChoices.map((option) => (
                               <SelectItem
                                 key={option.daya_min}
                                 value={String(option.daya_min)}
                               >
-                                {option.golongan_tarif} · {option.label}
+                                {exactPowerLabel(option)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -653,24 +820,30 @@ function CreateForm({
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
-                        disabled={busy || !tarif || !dayaChoices.length}
+                        disabled={busy || !golonganTarif || !dayaChoices.length}
                       >
                         <FormControl>
                           <SelectTrigger className="bg-background h-11 w-full">
                             <SelectValue
                               placeholder={
-                                tarif ? "Pilih daya" : "Pilih tarif dulu"
+                                golonganTarif
+                                  ? "Pilih daya"
+                                  : "Pilih golongan tarif dulu"
                               }
                             />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent
+                          side="bottom"
+                          avoidCollisions={false}
+                          className="max-h-60"
+                        >
                           {dayaChoices.map((option) => (
                             <SelectItem
                               key={option.daya_min}
                               value={String(option.daya_min)}
                             >
-                              {option.golongan_tarif} · {option.label}
+                              {exactPowerLabel(option)}
                             </SelectItem>
                           ))}
                         </SelectContent>

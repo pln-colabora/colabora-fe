@@ -52,6 +52,117 @@ export const tarifLabels: Record<string, string> = {
   pemerintah: "Pemerintah",
 };
 
+// Golongan detail mengikuti tabel Tangga Daya PLN. The API remains the source
+// of the applicable power bands; this map only supplies the selector groups
+// while older API responses omit the detailed group list.
+export const tarifGolonganLabels: Record<string, string[]> = {
+  rumah_tangga: ["R1", "R2", "R3"],
+  bisnis: ["B1", "B2", "B3"],
+  sosial: ["S1", "S2", "S3"],
+  pemerintah: ["P1", "P2"],
+  industri: ["I1", "I2", "I3", "I4"],
+};
+
+export type ExactTariffPower = {
+  tarif: string;
+  golongan_tarif: string;
+  daya_label: string;
+  daya_min: number | null;
+  pembatas: string | null;
+};
+
+const exactPowers = [
+  ["220", "1X1"],
+  ["450", "1x2"],
+  ["900", "1x4"],
+  ["1300", "1x6"],
+  ["2200", "1x10"],
+  ["3500", "1x16"],
+  ["3900", "3x6"],
+  ["4400", "1x20"],
+  ["5500", "1x25"],
+  ["6600", "3x10"],
+  ["7700", "1x35"],
+  ["10600", "3x16"],
+  ["11000", "1x50"],
+  ["13200", "3x20"],
+  ["16500", "3x25"],
+  ["23000", "3x35"],
+  ["33000", "3x50"],
+  ["41500", "3x63"],
+  ["53000", "3x80"],
+  ["66000", "3x100"],
+  ["82500", "3x125"],
+  ["105000", "3x160"],
+  ["131000", "3x200"],
+  ["147000", "3x225"],
+  ["164000", "3x250"],
+  ["197000", "3x300"],
+  ["210000", null],
+  ["240000", null],
+  ["345000", null],
+  ["555000", null],
+  ["690000", null],
+  ["865000", "25"],
+  ["1110000", null],
+  ["1210000", null],
+  ["1385000", null],
+  ["1730000", "50"],
+  ["2180000", "63"],
+  ["2770000", "80"],
+  ["3465000", "100"],
+  ["4330000", "125"],
+  ["5540000", "160"],
+  ["6930000", "200"],
+  ["8660000", "250"],
+  ["10380000", "300"],
+  ["11000000", null],
+  ["12000000", null],
+  ["13800000", null],
+] as const;
+
+const powersByGolongan: Record<string, string[]> = {
+  R1: ["220", "450", "900", "1300", "2200"],
+  R2: ["3500", "3900", "4400", "5500"],
+  R3: exactPowers.slice(9, 26).map(([value]) => value),
+  B1: ["450", "900", "1300", "2200", "3500", "3900", "4400", "5500"],
+  B2: exactPowers.slice(9, 26).map(([value]) => value),
+  B3: exactPowers.slice(26).map(([value]) => value),
+  S1: ["220"],
+  S2: exactPowers.slice(1, 26).map(([value]) => value),
+  S3: exactPowers.slice(26).map(([value]) => value),
+  P1: exactPowers.slice(1, 26).map(([value]) => value),
+  P2: exactPowers.slice(26).map(([value]) => value),
+  I1: ["450", "900", "1300", "2200", "3500", "3900", "4400", "5500", "6600", "7700", "10600", "11000", "13200", "16500"],
+  I2: exactPowers.slice(15, 26).map(([value]) => value),
+  I3: exactPowers.slice(26).map(([value]) => value),
+  I4: [],
+};
+
+export const exactTariffPowers: ExactTariffPower[] = Object.entries(
+  powersByGolongan,
+).flatMap(([golongan_tarif, values]) =>
+  values.map((value) => {
+    const row = exactPowers.find(([candidate]) => candidate === value);
+    return {
+      tarif:
+        golongan_tarif[0] === "R"
+          ? "rumah_tangga"
+          : golongan_tarif[0] === "B"
+            ? "bisnis"
+            : golongan_tarif[0] === "S"
+              ? "sosial"
+              : golongan_tarif[0] === "P"
+                ? "pemerintah"
+                : "industri",
+      golongan_tarif,
+      daya_label: `${new Intl.NumberFormat("id-ID").format(Number(value))} VA`,
+      daya_min: Number(value),
+      pembatas: row?.[1] ?? null,
+    };
+  }),
+);
+
 export type WorkflowDecisions = {
   needsPole?: boolean;
   needsPdkb?: boolean;
@@ -71,6 +182,10 @@ export type ApplicationSummary = {
   dayaBaru?: number;
   /** Previous power in VA; only for Perubahan daya. */
   dayaLama?: number;
+  golonganTarif?: string;
+  golonganTarifLama?: string;
+  pembatasBaru?: string;
+  pembatasLama?: string;
   requestedAt: string;
   paymentDate?: string;
   paymentAmount?: number;
@@ -312,7 +427,16 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "Verifikasi prioritas",
     description:
       "Konfirmasi hasil perencanaan sebelum permohonan diteruskan ke NPS.",
-    fields: [notesField],
+    fields: [
+      {
+        name: "priority",
+        label: "Prioritas",
+        type: "select",
+        options: ["High", "Medium", "Low"],
+        required: true,
+      },
+      notesField,
+    ],
     owner: "perencanaan",
   },
   {
