@@ -337,8 +337,6 @@ export function ActionForm({
       render={({ field }) => (
         <FormItem
           className={cn(
-            definition.type === "textarea" && "md:col-span-2",
-            definition.type === "date" && "md:col-span-2",
             definition.name === "notes" && "mt-5",
           )}
         >
@@ -397,7 +395,7 @@ export function ActionForm({
               <Input
                 type={definition.type ?? "text"}
                 maxLength={definition.maxLength}
-                className="bg-background h-11"
+                className="h-11"
                 {...field}
               />
             </FormControl>
@@ -514,10 +512,10 @@ export function ActionForm({
       >
         <fieldset className="min-w-0" disabled={busy}>
           {(beforeNotes.length > 0 || !!vendorRole) && (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               {beforeNotes.map(renderField)}
                 {formNode === "wo_konstruksi" && needsPdkb && (
-                  <div className="md:col-span-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="values.tanggal_pdkb"
@@ -570,7 +568,7 @@ export function ActionForm({
                   control={form.control}
                   name="values.vendor_id"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-2">
+                    <FormItem>
                       <FormLabel>{vendorLabel}</FormLabel>
                       <Select
                         value={field.value}

@@ -5,6 +5,8 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios";
 
+import { translateApiMessage } from "@/lib/api-messages";
+
 const TOKEN_KEY = "colabora_tokens";
 const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 
@@ -120,8 +122,10 @@ function toApiError(error: AxiosError) {
     );
   }
   return new ApiError(
-    getErrorDetail(error.response.data) ||
-      `Permintaan gagal (${error.response.status}).`,
+    translateApiMessage(
+      getErrorDetail(error.response.data),
+      error.response.status,
+    ),
     error.response.status,
   );
 }
@@ -169,7 +173,7 @@ apiClient.interceptors.response.use(
     const body = response.data as Partial<ApiEnvelope<unknown>> | undefined;
     if (body?.status === false) {
       throw new ApiError(
-        getErrorDetail(body) || `Permintaan gagal (${response.status}).`,
+        translateApiMessage(getErrorDetail(body), response.status),
         response.status,
       );
     }

@@ -268,6 +268,16 @@ function CreateForm({
             path: ["dayaLama"],
             message: "Daya lama wajib dipilih.",
           },
+        )
+        .refine(
+          (values) =>
+            values.requestType !== "Perubahan daya" ||
+            !values.dayaBaru ||
+            values.dayaBaru !== values.dayaLama,
+          {
+            path: ["dayaBaru"],
+            message: "Daya baru harus berbeda dari daya lama.",
+          },
         ),
     [connectionOptions],
   );
@@ -655,7 +665,7 @@ function CreateForm({
                   control={form.control}
                   name="tarif"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-2">
                       <FormLabel>Tarif</FormLabel>
                       <Select
                         value={field.value}

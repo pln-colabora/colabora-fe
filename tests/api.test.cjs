@@ -643,7 +643,7 @@ for (const status of [400, 403, 404, 409, 500]) {
           {
             status: false,
             message: "Failed operation",
-            error: "Backend validation detail",
+            error: "perubahan daya requires different daya_lama and daya_baru",
           },
           status,
         );
@@ -651,11 +651,32 @@ for (const status of [400, 403, 404, 409, 500]) {
         () => applications.getApplication("test-id"),
         (error) =>
           error.status === status &&
-          error.message === "Backend validation detail",
+          error.message ===
+            "Daya baru harus berbeda dari daya lama untuk perubahan daya.",
       );
     },
   );
 }
+
+test("unknown technical backend errors become a neutral Indonesian message", async () => {
+  global.fetch = async () =>
+    json({ status: false, message: "Failed operation", error: "some internal detail" }, 400);
+  await assert.rejects(
+    () => applications.getApplication("test-id"),
+    (error) =>
+      error.message ===
+      "Permintaan tidak dapat diproses. Periksa kembali data yang diisi lalu coba lagi.",
+  );
+});
+
+test("binding errors name the field in Indonesian", async () => {
+  global.fetch = async () =>
+    json({ status: false, message: "failed get data from body", error: "Key: 'CreatePermohonanRequest.DayaBaru' Error:Field validation for 'DayaBaru' failed on the 'required' tag" }, 400);
+  await assert.rejects(
+    () => applications.getApplication("test-id"),
+    (error) => error.message === "Daya baru wajib diisi.",
+  );
+});
 
 test("expired access token refreshes once and retries using the new token", async () => {
   const calls = [];
