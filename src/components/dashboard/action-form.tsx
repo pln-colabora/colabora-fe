@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -551,10 +551,16 @@ export function ActionForm({
                     )}
                     <Button
                       type="button"
-                      variant="link"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
                       onClick={() => setScheduleVersion((value) => value + 1)}
                       disabled={scheduleLoading}
                     >
+                      <RefreshCw
+                        className={scheduleLoading ? "animate-spin motion-reduce:animate-none" : undefined}
+                        aria-hidden="true"
+                      />
                       Perbarui ketersediaan
                     </Button>
                   </div>

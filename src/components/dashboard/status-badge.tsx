@@ -16,7 +16,7 @@ export function StatusBadge({
     ? "border-destructive-border bg-destructive-surface text-destructive"
     : isComplete
       ? "border-success-border bg-success-surface text-success"
-      : "border-warning-border bg-warning-surface text-warning";
+      : "border-border bg-muted text-foreground";
   const Icon = isCritical ? TriangleAlert : isComplete ? CircleCheck : Clock3;
 
   return (

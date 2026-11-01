@@ -9,6 +9,7 @@ import {
   Archive,
   ArrowRight,
   Calculator,
+  CircleAlert,
   CircleCheck,
   ClipboardCheck,
   Construction,
@@ -244,15 +245,19 @@ function DashboardContent() {
   const completedCount = roleScopedApplications.filter(
     (item) => getApplicationStatus(item, roleId) === "Selesai",
   ).length;
+  const isMonitoring = roleId === "admin" || roleId === "super-user";
+  // Monitoring roles never own an action, so for them the metric is every open
+  // request; every other role sees only what waits on its own team.
   const activeCount = roleScopedApplications.filter(
-    (item) => item.status === "in_progress" && isOwnedBy(item),
+    (item) =>
+      item.status === "in_progress" && (isMonitoring || isOwnedBy(item)),
   ).length;
   const overdueCount = roleScopedApplications.filter((item) => {
     const sla = getOwnedSla(item, roleId) ?? item.sla;
     return sla.tone === "late";
   }).length;
   const showKanban =
-    isHome && ready && (roleId === "admin" || roleId === "super-user");
+    isHome && ready && isMonitoring;
 
   return (
     <AppShell
@@ -416,7 +421,7 @@ function DashboardContent() {
               />
               <SummaryMetric
                 tone="warning"
-                label="Dalam proses"
+                label={isMonitoring ? "Dalam proses" : "Perlu tindakan Anda"}
                 value={activeCount}
                 ready={ready}
               />
@@ -795,7 +800,10 @@ function DashboardContent() {
                         <th className="px-4 py-3 font-medium">Unit</th>
                       )}
                       <th className="px-4 py-3 font-medium">Tahap saat ini</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
+                      <th className="px-4 py-3 font-medium">Tindakan Anda</th>
+                      <th className="px-4 py-3 font-medium">
+                        Status permohonan
+                      </th>
                       {isHome && (
                         <th className="px-4 py-3 font-medium">Tanggal</th>
                       )}
@@ -1078,6 +1086,10 @@ function ApplicationListItem({
         <StatusBadge status={getApplicationStatus(application, roleId)} />
       </div>
 
+      <div className="mt-2">
+        <ActionOwnership application={application} roleId={roleId} />
+      </div>
+
       <dl className="mt-3 grid min-w-0 grid-cols-2 gap-3 text-sm sm:grid-cols-2">
         <div className="min-w-0">
           <dt className="text-muted-foreground text-sm">Tahap saat ini</dt>
@@ -1211,6 +1223,9 @@ function ApplicationRow({
         ) : null}
       </td>
       <td className="px-4 py-3">
+        <ActionOwnership application={application} roleId={roleId} />
+      </td>
+      <td className="px-4 py-3">
         <StatusBadge status={status} />
       </td>
       {compact && (
@@ -1286,6 +1301,36 @@ function SlaIndicator({
           </span>
         ) : null}
       </span>
+    </span>
+  );
+}
+
+// Separates "this waits on me" from the request's overall status, which stays
+// "Dalam proses" while any team still has work on it.
+function ActionOwnership({
+  application,
+  roleId,
+}: {
+  application: Application;
+  roleId: RoleId;
+}) {
+  if (isOwnedBy(application))
+    return (
+      <span className="border-warning-border bg-warning-surface text-warning inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm font-semibold whitespace-nowrap">
+        <CircleAlert className="size-3.5" aria-hidden="true" />
+        Perlu tindakan Anda
+      </span>
+    );
+  if (
+    application.status !== "in_progress" ||
+    getApplicationStatus(application, roleId) !== "Dalam proses"
+  )
+    return <span className="text-muted-foreground text-sm">—</span>;
+  const activity = getActivity(application.currentAction);
+  const owner = activity ? getRole(getOwner(activity, application)) : null;
+  return (
+    <span className="text-muted-foreground block max-w-44 text-sm">
+      {owner ? `Menunggu ${owner.label}` : "Menunggu bagian lain"}
     </span>
   );
 }

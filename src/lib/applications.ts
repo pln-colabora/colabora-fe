@@ -447,6 +447,7 @@ export async function submitAction(
       values.nps_delegation_status === "Didelegasikan"
         ? "delegated"
         : "returned";
+  if (workflowNode === "verifikasi_prioritas") payload.priority = values.priority;
   if (workflowNode === "wo_konstruksi") {
     payload.perlu_pdkb = values.perlu_pdkb === "Ya";
     payload.estimasi_tanggal_selesai = values.estimasi_tanggal_selesai;

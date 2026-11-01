@@ -67,7 +67,7 @@ export type ExactTariffPower = {
   tarif: string;
   golongan_tarif: string;
   daya_label: string;
-  daya_min: number | null;
+  daya_min: number;
   pembatas: string | null;
 };
 
@@ -98,15 +98,15 @@ const exactPowers = [
   ["147000", "3x225"],
   ["164000", "3x250"],
   ["197000", "3x300"],
-  ["210000", null],
-  ["240000", null],
-  ["345000", null],
-  ["555000", null],
-  ["690000", null],
+  ["210000", "6"],
+  ["240000", "7"],
+  ["345000", "10"],
+  ["555000", "16"],
+  ["690000", "20"],
   ["865000", "25"],
-  ["1110000", null],
-  ["1210000", null],
-  ["1385000", null],
+  ["1110000", "32"],
+  ["1210000", "35"],
+  ["1385000", "40"],
   ["1730000", "50"],
   ["2180000", "63"],
   ["2770000", "80"],
@@ -116,13 +116,13 @@ const exactPowers = [
   ["6930000", "200"],
   ["8660000", "250"],
   ["10380000", "300"],
-  ["11000000", null],
-  ["12000000", null],
-  ["13800000", null],
+  ["11000000", "318"],
+  ["12000000", "347"],
+  ["13800000", "399"],
 ] as const;
 
 const powersByGolongan: Record<string, string[]> = {
-  R1: ["220", "450", "900", "1300", "2200"],
+  R1: ["450", "900", "1300", "2200"],
   R2: ["3500", "3900", "4400", "5500"],
   R3: exactPowers.slice(9, 26).map(([value]) => value),
   B1: ["450", "900", "1300", "2200", "3500", "3900", "4400", "5500"],
@@ -133,10 +133,11 @@ const powersByGolongan: Record<string, string[]> = {
   S3: exactPowers.slice(26).map(([value]) => value),
   P1: exactPowers.slice(1, 26).map(([value]) => value),
   P2: exactPowers.slice(26).map(([value]) => value),
-  I1: ["450", "900", "1300", "2200", "3500", "3900", "4400", "5500", "6600", "7700", "10600", "11000", "13200", "16500"],
-  I2: exactPowers.slice(15, 26).map(([value]) => value),
+  I1: exactPowers.slice(1, 14).map(([value]) => value),
+  I2: exactPowers.slice(14, 26).map(([value]) => value),
   I3: exactPowers.slice(26).map(([value]) => value),
-  I4: [],
+  // Tangga Daya PLN lists I4 only as "> 30.000.000" VA, with no exact step.
+  I4: ["30000000"],
 };
 
 export const exactTariffPowers: ExactTariffPower[] = Object.entries(
@@ -156,7 +157,7 @@ export const exactTariffPowers: ExactTariffPower[] = Object.entries(
                 ? "pemerintah"
                 : "industri",
       golongan_tarif,
-      daya_label: `${new Intl.NumberFormat("id-ID").format(Number(value))} VA`,
+      daya_label: `${golongan_tarif === "I4" ? "> " : ""}${new Intl.NumberFormat("id-ID").format(Number(value))} VA`,
       daya_min: Number(value),
       pembatas: row?.[1] ?? null,
     };
@@ -943,7 +944,7 @@ export function getApplicationStatus(
   const status = (
     (
       {
-        in_progress: "Menunggu tindakan",
+        in_progress: "Dalam proses",
         returned: "PK dikembalikan",
         completed: "Selesai",
       } as Record<string, string>
@@ -952,7 +953,7 @@ export function getApplicationStatus(
 
   if (
     roleId &&
-    status === "Menunggu tindakan" &&
+    status === "Dalam proses" &&
     hasRoleCompletedAllVendorTasks(application, roleId)
   ) {
     return "Selesai";

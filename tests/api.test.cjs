@@ -233,7 +233,7 @@ test("vendor status resolves to completed when all vendor-owned tasks are finish
   );
   assert.equal(
     workflow.getApplicationStatus(mapped, "vendor-konstruksi"),
-    "Menunggu tindakan",
+    "Dalam proses",
   );
 });
 
@@ -746,7 +746,7 @@ test("export rows mirror the list for the role and map SLA to a label", () => {
   assert.equal(row.number, "PBPD-2026-0099");
   assert.equal(row.requestedAt, "2026-09-10");
   assert.equal(row.stage, "Pra konstruksi");
-  assert.equal(row.status, "Menunggu tindakan");
+  assert.equal(row.status, "Dalam proses");
   assert.equal(row.slaStatus, "Terlambat");
   assert.equal(row.slaDeadline, "2026-09-12");
 });
@@ -1132,9 +1132,9 @@ test("payment, temporary energize and business-day SLA are retained in the serve
   assert.equal(load("@/lib/utils").formatApplicationSlaRemaining({...app.sla,remainingDays:null}),"Kalender SLA belum tersedia");
 });
 
-test("priority confirmation needs no evidence documents", async () => {
-  global.fetch=async(url,init)=>{assert.equal(init.method,"POST");assert.deepEqual(JSON.parse(init.body),{document_ids:[],notes:"Terverifikasi"});return json({status:true,data:fixture});};
-  await applications.submitAction("test-id",{workflow_node:"verifikasi_prioritas",method:"POST",path:"/api/permohonan/{id}/verifikasi-prioritas"},{notes:"Terverifikasi"},[]);
+test("priority confirmation sends the chosen priority without evidence", async () => {
+  global.fetch=async(url,init)=>{assert.equal(init.method,"POST");assert.deepEqual(JSON.parse(init.body),{document_ids:[],priority:"High",notes:"Terverifikasi"});return json({status:true,data:fixture});};
+  await applications.submitAction("test-id",{workflow_node:"verifikasi_prioritas",method:"POST",path:"/api/permohonan/{id}/verifikasi-prioritas"},{priority:"High",notes:"Terverifikasi"},[]);
 });
 
 test("SR/APP depends on Tera while construction is still pending",()=>{
