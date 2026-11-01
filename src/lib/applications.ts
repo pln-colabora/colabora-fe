@@ -456,7 +456,7 @@ export async function submitAction(
   // reservasi_material (vendor-konstruksi) and tera_app (transaksi-energi) are
   // now separate nodes; each takes a plain optional notes field.
   if (
-    ["wo_tiang", "wo_konstruksi", "wo_app"].includes(workflowNode) &&
+    ["wo_tiang", "wo_konstruksi", "wo_app", "wo_pdkb"].includes(workflowNode) &&
     values.nomor_surat
   )
     payload.nomor_surat = values.nomor_surat;

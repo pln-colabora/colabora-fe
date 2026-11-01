@@ -520,7 +520,7 @@ export const activities: ActivityDefinition[] = [
     label: "WO PDKB",
     shortLabel: "WO PDKB",
     description: "Terbitkan penugasan Tim PDKB sebelum konstruksi dimulai.",
-    fields: [notesField],
+    fields: [nomorSuratField, notesField],
     evidence: "Evidence aktivitas",
     owner: "konstruksi",
   },

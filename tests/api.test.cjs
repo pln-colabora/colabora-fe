@@ -1189,3 +1189,11 @@ test("historical WO APP export is a read-only GET",async()=>{
  global.fetch=async(url,init)=>{assert.match(url,/activities\/wo_app\/export$/);assert.equal(init.method,"GET");return new Response("historical PDF");};
  assert.equal(await (await applications.exportApplicationActivity("test-id","wo_app")).text(),"historical PDF");assert.equal(workflow.canGenerateWorkOrder("transaksi-energi",applications.mapApplication(fixture),"8"),false);
 });
+
+test("WO PDKB sends its optional nomor surat", async () => {
+  global.fetch = async (url, init) => {
+    assert.deepEqual(JSON.parse(init.body), { document_ids: ["doc-1"], nomor_surat: "001/PDKB/2026" });
+    return json({ status: true, data: fixture });
+  };
+  await applications.submitAction("test-id", { workflow_node: "wo_pdkb", method: "POST", path: "/api/permohonan/{id}/wo-pdkb" }, { nomor_surat: "001/PDKB/2026" }, ["doc-1"]);
+});
