@@ -15,6 +15,7 @@ export type RoleId =
   | "user";
 
 export type ActionId =
+  | "priority"
   | "1"
   | "2"
   | "3"
@@ -51,6 +52,118 @@ export const tarifLabels: Record<string, string> = {
   pemerintah: "Pemerintah",
 };
 
+// Golongan detail mengikuti tabel Tangga Daya PLN. The API remains the source
+// of the applicable power bands; this map only supplies the selector groups
+// while older API responses omit the detailed group list.
+export const tarifGolonganLabels: Record<string, string[]> = {
+  rumah_tangga: ["R1", "R2", "R3"],
+  bisnis: ["B1", "B2", "B3"],
+  sosial: ["S1", "S2", "S3"],
+  pemerintah: ["P1", "P2"],
+  industri: ["I1", "I2", "I3", "I4"],
+};
+
+export type ExactTariffPower = {
+  tarif: string;
+  golongan_tarif: string;
+  daya_label: string;
+  daya_min: number;
+  pembatas: string | null;
+};
+
+const exactPowers = [
+  ["220", "1X1"],
+  ["450", "1x2"],
+  ["900", "1x4"],
+  ["1300", "1x6"],
+  ["2200", "1x10"],
+  ["3500", "1x16"],
+  ["3900", "3x6"],
+  ["4400", "1x20"],
+  ["5500", "1x25"],
+  ["6600", "3x10"],
+  ["7700", "1x35"],
+  ["10600", "3x16"],
+  ["11000", "1x50"],
+  ["13200", "3x20"],
+  ["16500", "3x25"],
+  ["23000", "3x35"],
+  ["33000", "3x50"],
+  ["41500", "3x63"],
+  ["53000", "3x80"],
+  ["66000", "3x100"],
+  ["82500", "3x125"],
+  ["105000", "3x160"],
+  ["131000", "3x200"],
+  ["147000", "3x225"],
+  ["164000", "3x250"],
+  ["197000", "3x300"],
+  ["210000", "6"],
+  ["240000", "7"],
+  ["345000", "10"],
+  ["555000", "16"],
+  ["690000", "20"],
+  ["865000", "25"],
+  ["1110000", "32"],
+  ["1210000", "35"],
+  ["1385000", "40"],
+  ["1730000", "50"],
+  ["2180000", "63"],
+  ["2770000", "80"],
+  ["3465000", "100"],
+  ["4330000", "125"],
+  ["5540000", "160"],
+  ["6930000", "200"],
+  ["8660000", "250"],
+  ["10380000", "300"],
+  ["11000000", "318"],
+  ["12000000", "347"],
+  ["13800000", "399"],
+] as const;
+
+const powersByGolongan: Record<string, string[]> = {
+  R1: ["450", "900", "1300", "2200"],
+  R2: ["3500", "3900", "4400", "5500"],
+  R3: exactPowers.slice(9, 26).map(([value]) => value),
+  B1: ["450", "900", "1300", "2200", "3500", "3900", "4400", "5500"],
+  B2: exactPowers.slice(9, 26).map(([value]) => value),
+  B3: exactPowers.slice(26).map(([value]) => value),
+  S1: ["220"],
+  S2: exactPowers.slice(1, 26).map(([value]) => value),
+  S3: exactPowers.slice(26).map(([value]) => value),
+  P1: exactPowers.slice(1, 26).map(([value]) => value),
+  P2: exactPowers.slice(26).map(([value]) => value),
+  I1: exactPowers.slice(1, 14).map(([value]) => value),
+  I2: exactPowers.slice(14, 26).map(([value]) => value),
+  I3: exactPowers.slice(26).map(([value]) => value),
+  // Tangga Daya PLN lists I4 only as "> 30.000.000" VA, with no exact step.
+  I4: ["30000000"],
+};
+
+export const exactTariffPowers: ExactTariffPower[] = Object.entries(
+  powersByGolongan,
+).flatMap(([golongan_tarif, values]) =>
+  values.map((value) => {
+    const row = exactPowers.find(([candidate]) => candidate === value);
+    return {
+      tarif:
+        golongan_tarif[0] === "R"
+          ? "rumah_tangga"
+          : golongan_tarif[0] === "B"
+            ? "bisnis"
+            : golongan_tarif[0] === "S"
+              ? "sosial"
+              : golongan_tarif[0] === "P"
+                ? "pemerintah"
+                : "industri",
+      golongan_tarif,
+      daya_label: `${golongan_tarif === "I4" ? "> " : ""}${new Intl.NumberFormat("id-ID").format(Number(value))} VA`,
+      daya_min: Number(value),
+      pembatas: row?.[1] ?? null,
+    };
+  }),
+);
+
 export type WorkflowDecisions = {
   needsPole?: boolean;
   needsPdkb?: boolean;
@@ -70,11 +183,21 @@ export type ApplicationSummary = {
   dayaBaru?: number;
   /** Previous power in VA; only for Perubahan daya. */
   dayaLama?: number;
+  golonganTarif?: string;
+  golonganTarifLama?: string;
+  pembatasBaru?: string;
+  pembatasLama?: string;
   requestedAt: string;
+  paymentDate?: string;
+  paymentAmount?: number;
+  energizeStatus?: "temporary" | "permanent";
   currentAction: ActionId | null;
   decisions: WorkflowDecisions;
   rejected?: boolean;
   sla: {
+    basis?: string;
+    remainingDays?: number | null;
+    calendarError?: string;
     tone: "safe" | "due" | "late" | "done";
     label: string;
     deadline: string | null;
@@ -92,6 +215,7 @@ export type HistoryItem = {
 };
 
 export type DocumentItem = {
+  category?: string;
   id: string;
   name: string;
   actionId: ActionId | undefined;
@@ -104,12 +228,16 @@ export type DocumentItem = {
 };
 
 export type WorkflowNode = {
+  revision?: number;
   workflow_node: string;
   activity_number: number | null;
   stage_number: StageId;
   status: "locked" | "available" | "in_progress" | "completed" | "skipped";
   sla_deadline: string | null;
   sla_status: "none" | "on_time" | "due_soon" | "overdue";
+  sla_basis?: string;
+  sla_remaining_days?: number | null;
+  sla_calendar_error?: string;
   completed_at: string | null;
   completed_by: string | null;
   payload: Record<string, unknown>;
@@ -235,8 +363,11 @@ const planningOwner = surveyOwner;
 const energizeOwner = (application: ApplicationSummary): RoleId =>
   isPlgTm(application) ? "jaringan" : "teknik";
 
-const appVendorOwner = (application: ApplicationSummary): RoleId =>
-  isPlgTm(application) ? "vendor-konstruksi" : "vendor-sr-app";
+const nomorSuratField: FieldDefinition = {
+  name: "nomor_surat",
+  label: "Nomor Surat",
+  maxLength: 100,
+};
 
 const notesField: FieldDefinition = {
   name: "notes",
@@ -297,6 +428,25 @@ export const activities: ActivityDefinition[] = [
     owner: planningOwner,
   },
   {
+    id: "priority",
+    stage: 3,
+    label: "Verifikasi Prioritas Pekerjaan",
+    shortLabel: "Verifikasi prioritas",
+    description:
+      "Konfirmasi hasil perencanaan sebelum permohonan diteruskan ke NPS.",
+    fields: [
+      {
+        name: "priority",
+        label: "Prioritas",
+        type: "select",
+        options: ["High", "Medium", "Low"],
+        required: true,
+      },
+      notesField,
+    ],
+    owner: "perencanaan",
+  },
+  {
     id: "4",
     stage: 3,
     label: "Permohonan Perluasan",
@@ -333,7 +483,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "WO Vendor Tiang",
     description:
       "Terbitkan work order pemasangan tiang sesuai hasil perencanaan.",
-    fields: [notesField],
+    fields: [nomorSuratField, notesField],
     evidence: "Evidence aktivitas",
     owner: "perencanaan",
   },
@@ -358,6 +508,7 @@ export const activities: ActivityDefinition[] = [
         type: "date",
         required: true,
       },
+      nomorSuratField,
       notesField,
     ],
     evidence: "Evidence aktivitas",
@@ -369,7 +520,7 @@ export const activities: ActivityDefinition[] = [
     label: "WO PDKB",
     shortLabel: "WO PDKB",
     description: "Terbitkan penugasan Tim PDKB sebelum konstruksi dimulai.",
-    fields: [notesField],
+    fields: [nomorSuratField, notesField],
     evidence: "Evidence aktivitas",
     owner: "konstruksi",
   },
@@ -379,7 +530,7 @@ export const activities: ActivityDefinition[] = [
     label: "WO Vendor APP",
     shortLabel: "WO Vendor APP",
     description: "Terbitkan work order penyediaan dan pemasangan APP.",
-    fields: [notesField],
+    fields: [nomorSuratField, notesField],
     evidence: "Evidence aktivitas",
     owner: "transaksi-energi",
   },
@@ -450,6 +601,13 @@ export const activities: ActivityDefinition[] = [
         required: true,
         maxLength: 500,
       },
+      {
+        name: "energize_status",
+        label: "Status penyalaan",
+        type: "select",
+        options: ["Nyala tetap", "Nyala sementara"],
+        required: true,
+      },
       notesField,
     ],
     evidence: "Evidence aktivitas",
@@ -464,7 +622,7 @@ export const activities: ActivityDefinition[] = [
       "Lengkapi identitas meter, hasil pemasangan, dan status penyalaan.",
     fields: [notesField],
     evidence: "Evidence aktivitas",
-    owner: appVendorOwner,
+    owner: "transaksi-energi",
   },
   {
     id: "15",
@@ -506,6 +664,7 @@ export const nodeActions: Record<string, ActionId> = {
   rab_kko_kkf: "3",
   "rab-kko-kkf": "3",
   kebutuhan_tiang: "3",
+  verifikasi_prioritas: "priority",
   permohonan_perluasan: "4",
   nps_delegation: "5",
   wo_tiang: "6",
@@ -553,6 +712,10 @@ export function actionPrerequisitesMet(
 ): boolean {
   const normalize = (name: string) => name.replaceAll("-", "_");
   const key = normalize(workflowNode);
+  if (key === "pemasangan_sr_app")
+    return nodes.some(
+      (node) => normalize(node.workflow_node) === "tera_app" && node.status === "completed",
+    );
   const predecessor = stage4Predecessor[key];
   // The action's stage may be absent; fall back to the mapped activity's stage.
   const stage = stageNumber ?? getActivity(nodeActions[key])?.stage;
@@ -595,8 +758,9 @@ function isWorkOrderFor(
   activityId: ActionId,
 ) {
   if (activityId === "8") {
-    const installation = getActivity("14");
-    return !!installation && getOwner(installation, application) === roleId;
+    return (
+      roleId === (isPlgTm(application) ? "vendor-konstruksi" : "vendor-sr-app")
+    );
   }
   return vendorWoActionId[roleId] === activityId;
 }
@@ -611,6 +775,8 @@ export function canExportActivity(
 ) {
   if (node.status !== "completed") return false;
   if (!roleId.startsWith("vendor-")) return true;
+  if (node.workflow_node === "pemasangan_sr_app" && application.nodes.some(item => item.workflow_node === "wo_app" && item.status === "completed"))
+    return roleId === (isPlgTm(application) ? "vendor-konstruksi" : "vendor-sr-app");
   const activity = getActivity(nodeActions[node.workflow_node]);
   if (!activity) return false;
   return (
@@ -620,7 +786,7 @@ export function canExportActivity(
 }
 
 // WO Vendor Tiang / Konstruksi / APP.
-const workOrderActionIds: ActionId[] = ["6", "7", "8"];
+const workOrderActionIds: ActionId[] = ["6", "7"];
 export function isWorkOrderActivity(activityId: ActionId | undefined) {
   return !!activityId && workOrderActionIds.includes(activityId);
 }
@@ -666,8 +832,14 @@ export function getWorkOrderFile(
     .sort((a, b) => b.addedAt.localeCompare(a.addedAt))[0];
 }
 
-export function getOwnedSla(application: Application, roleId: RoleId) {
-  if (roleId.startsWith("vendor-") && hasRoleCompletedAllVendorTasks(application, roleId)) {
+export function getOwnedSla(
+  application: Application,
+  roleId: RoleId,
+): Application["sla"] | null {
+  if (
+    roleId.startsWith("vendor-") &&
+    hasRoleCompletedAllVendorTasks(application, roleId)
+  ) {
     return {
       tone: "done" as const,
       label: "Selesai",
@@ -714,6 +886,9 @@ export function getOwnedSla(application: Application, roleId: RoleId) {
             ? "Tepat waktu"
             : "Tenggat",
     deadline: node.sla_deadline,
+    basis: node.sla_basis,
+    remainingDays: node.sla_remaining_days,
+    calendarError: node.sla_calendar_error,
   };
 }
 
@@ -776,7 +951,7 @@ export function getApplicationStatus(
   const status = (
     (
       {
-        in_progress: "Menunggu tindakan",
+        in_progress: "Dalam proses",
         returned: "PK dikembalikan",
         completed: "Selesai",
       } as Record<string, string>
@@ -785,7 +960,7 @@ export function getApplicationStatus(
 
   if (
     roleId &&
-    status === "Menunggu tindakan" &&
+    status === "Dalam proses" &&
     hasRoleCompletedAllVendorTasks(application, roleId)
   ) {
     return "Selesai";

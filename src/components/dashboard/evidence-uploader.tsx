@@ -31,6 +31,7 @@ type EvidenceUploaderProps = {
   enableCamera?: boolean;
   fileLabel?: string;
   helpText?: string;
+  accept?: string;
 } & Pick<
   ComponentProps<"div">,
   "id" | "aria-describedby" | "aria-invalid" | "aria-labelledby"
@@ -44,7 +45,8 @@ export function EvidenceUploader({
   selectionMode = "multiple",
   enableCamera = false,
   fileLabel = "evidence",
-  helpText = "PDF, JPG, JPEG, atau PNG · maksimal 10 MB per berkas",
+  accept = ".pdf,.jpg,.jpeg,.png,.xls,.xlsx",
+  helpText = "PDF, JPG, JPEG, PNG, XLS, atau XLSX · maksimal 30 MB per berkas",
   ...controlProps
 }: EvidenceUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -210,7 +212,7 @@ export function EvidenceUploader({
           ref={inputRef}
           type="file"
           multiple={!singleFile}
-          accept=".pdf,.jpg,.jpeg,.png"
+          accept={accept}
           className="sr-only"
           disabled={disabled}
           tabIndex={-1}

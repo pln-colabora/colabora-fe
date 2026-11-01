@@ -22,6 +22,7 @@ import {
   Eye,
   LoaderCircle,
   LockKeyhole,
+  PencilLine,
   XCircle,
 } from "lucide-react";
 
@@ -49,6 +50,7 @@ import {
   formatDaya,
   formatFileSize,
   formatSlaRemaining,
+  formatApplicationSlaRemaining,
   getSlaDaysRemaining,
 } from "@/lib/utils";
 import {
@@ -139,6 +141,13 @@ export default function ApplicationDetailPage() {
   const documents = getDocuments(application);
   const history = getHistory(application);
   const ownedSla = getOwnedSla(application, roleId);
+  // When another team holds the current step the caller owns no SLA; say whose
+  // SLA it is instead of leaving the field empty.
+  const headerSla = ownedSla ?? application.sla;
+  const slaText = (sla: Application["sla"]) =>
+    sla.deadline ? formatApplicationSlaRemaining(sla) || sla.label : sla.label;
+  const slaBelongsElsewhere =
+    !ownedSla && application.status === "in_progress" && !!owner;
   // Vendors are external to PLN: hide internal panels and keep only their own log.
   const isVendor = roleId.startsWith("vendor-");
   // Vendors only see log entries for activities they own.
@@ -202,8 +211,17 @@ export default function ApplicationDetailPage() {
               />
               <HeaderFact
                 label="SLA"
-                value={ownedSla?.label ?? "—"}
-                tone={ownedSla?.tone}
+                value={
+                  slaBelongsElsewhere && !headerSla.deadline
+                    ? `Milik ${owner.label}`
+                    : slaText(headerSla)
+                }
+                note={
+                  slaBelongsElsewhere && headerSla.deadline
+                    ? `SLA ${owner.label}`
+                    : undefined
+                }
+                tone={headerSla.tone}
               />
               <HeaderFact
                 label="Terakhir diperbarui"
@@ -214,7 +232,11 @@ export default function ApplicationDetailPage() {
         </header>
 
         {ownedSla?.deadline && !application.completed ? (
-          <SlaReminder deadline={ownedSla.deadline} tone={ownedSla.tone} />
+          <SlaReminder
+            deadline={ownedSla.deadline}
+            tone={ownedSla.tone}
+            sla={ownedSla}
+          />
         ) : null}
 
         <CurrentAction
@@ -239,6 +261,8 @@ export default function ApplicationDetailPage() {
               roleId={roleId}
               activityInputs={activityInputs}
               documents={visibleDocuments}
+              unit={user?.unit}
+              returnTo={returnTo}
             />
             <DocumentsSection
               documents={visibleDocuments}
@@ -269,6 +293,55 @@ export default function ApplicationDetailPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+// Completed survei and WO Konstruksi data can be revised by the owning team
+// (Teknik only within its own ULP) without changing completion time or SLA.
+function RevisionButton({
+  application,
+  roleId,
+  node,
+  unit,
+  returnTo,
+}: {
+  application: Application;
+  roleId: RoleId;
+  node: WorkflowNode;
+  unit?: string;
+  returnTo: string;
+}) {
+  if (
+    node.status !== "completed" ||
+    (node.workflow_node !== "survei" && node.workflow_node !== "wo_konstruksi")
+  )
+    return null;
+  const activity = getActivity(nodeActions[node.workflow_node]);
+  if (
+    !activity ||
+    getOwner(activity, application) !== roleId ||
+    (roleId === "teknik" && unit !== application.unit)
+  )
+    return null;
+  const label =
+    node.workflow_node === "survei"
+      ? "Edit revisi survei"
+      : "Edit revisi lampiran WO";
+  return (
+    <Button
+      asChild
+      variant="outline"
+      size="icon-sm"
+      className="size-8"
+      title={label}
+    >
+      <Link
+        href={`/permohonan/${application.id}/revisi?node=${encodeURIComponent(node.workflow_node)}&returnTo=${encodeURIComponent(returnTo)}`}
+        aria-label={label}
+      >
+        <PencilLine aria-hidden="true" />
+      </Link>
+    </Button>
   );
 }
 
@@ -318,6 +391,7 @@ function CurrentAction({
       </section>
     );
   }
+
   if (application.completed || !activity) {
     return (
       <section
@@ -512,6 +586,7 @@ function formatInputLabel(key: string) {
     tera_notes: "Catatan tera",
     vendor_id: "Vendor",
     location_coordinates: "Koordinat pemasangan",
+    tanggal_pdkb: "Tanggal kegiatan PDKB",
   };
   return (
     labels[key] ??
@@ -522,6 +597,7 @@ function formatInputLabel(key: string) {
 }
 
 function formatInputValue(key: string, value: unknown) {
+  if (key === "energize_status") return value === "temporary" ? "Nyala sementara" : value === "permanent" ? "Nyala tetap" : "";
   if (key === "location_coordinates") return formatLocationCoordinates(value);
   return formatActivityInput(value);
 }
@@ -572,7 +648,7 @@ function ActivityInputList({
   return (
     <div className="mt-1 sm:col-span-3">
       <div className="border-border bg-muted/60 min-w-0 space-y-1 rounded-md border px-2.5 py-2.5 text-xs">
-        {visibleEntries.map((entry) => (
+        {visibleEntries.map((entry) =>
           entry.coordinates ? (
             <CoordinateDetails
               key={entry.key}
@@ -588,8 +664,8 @@ function ActivityInputList({
                 {entry.value}
               </span>
             </p>
-          )
-        ))}
+          ),
+        )}
       </div>
     </div>
   );
@@ -708,11 +784,15 @@ function WorkflowTimeline({
   roleId,
   activityInputs,
   documents,
+  unit,
+  returnTo,
 }: {
   application: Application;
   roleId: RoleId;
   activityInputs: Record<string, Record<string, unknown>>;
   documents: DocumentItem[];
+  unit?: string;
+  returnTo: string;
 }) {
   // Vendors are external to PLN and see only the nodes the backend returns for
   // them, so their timeline is driven by workflow_nodes (source of truth),
@@ -751,7 +831,14 @@ function WorkflowTimeline({
       <ol className="mt-5 space-y-0">
         {stages.map((stage, index) => {
           const stageActivities = activities.filter(
-            (activity) => activity.stage === stage.id,
+            (activity) =>
+              activity.stage === stage.id &&
+              (activity.id !== "8" ||
+                application.nodes.some(
+                  (node) =>
+                    node.workflow_node === "wo_app" &&
+                    node.status === "completed",
+                )),
           );
           const stageStatus = getStageStatus(stage.id, application);
           return (
@@ -791,14 +878,16 @@ function WorkflowTimeline({
                     const detailNode = completedNode ?? nodes[0];
                     const combinedInputs = Object.assign(
                       {},
-                      ...nodes.map((node) => activityInputs[node.workflow_node]),
+                      ...nodes.map(
+                        (node) => activityInputs[node.workflow_node],
+                      ),
                     );
                     return (
                       <li
                         key={activity.id}
                         className="rounded-md border bg-background px-2.5 py-2 text-sm"
                       >
-                        <div className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(180px,220px)_auto] sm:items-center">
+                        <div className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_220px_12rem] sm:items-center">
                           <span className="flex w-full items-center gap-2 font-medium">
                             <ActivityStatusIcon status={status} />
                             {activity.shortLabel}
@@ -811,12 +900,21 @@ function WorkflowTimeline({
                               {activityStatusLabel(status)}
                             </span>
                             {completedNode ? (
-                              <TimelineExportButton
-                                application={application}
-                                roleId={roleId}
-                                node={completedNode}
-                                documents={documents}
-                              />
+                              <>
+                                <RevisionButton
+                                  application={application}
+                                  roleId={roleId}
+                                  node={completedNode}
+                                  unit={unit}
+                                  returnTo={returnTo}
+                                />
+                                <TimelineExportButton
+                                  application={application}
+                                  roleId={roleId}
+                                  node={completedNode}
+                                  documents={documents}
+                                />
+                              </>
                             ) : null}
                           </div>
                           {detailNode ? (
@@ -1242,13 +1340,24 @@ function ApplicationFacts({ application }: { application: Application }) {
   const power: Array<[string, string]> = [];
   if (application.tarif)
     power.push(["Tarif", tarifLabels[application.tarif] ?? application.tarif]);
+  if (application.golonganTarif)
+    power.push([
+      isPowerChange ? "Golongan tarif baru" : "Golongan tarif",
+      application.golonganTarif,
+    ]);
   if (isPowerChange && application.dayaLama)
     power.push(["Daya lama", formatDaya(application.dayaLama)]);
+  if (isPowerChange && application.golonganTarifLama)
+    power.push(["Golongan tarif lama", application.golonganTarifLama]);
+  if (isPowerChange && application.pembatasLama)
+    power.push(["Pembatas lama", application.pembatasLama]);
   if (application.dayaBaru)
     power.push([
       isPowerChange ? "Daya baru" : "Permohonan daya",
       formatDaya(application.dayaBaru),
     ]);
+  if (application.pembatasBaru)
+    power.push(["Pembatas", application.pembatasBaru]);
   const facts: Array<[string, string]> = [
     ["Nomor permohonan", application.number],
     ["No. HP / telepon", application.phone],
@@ -1258,6 +1367,27 @@ function ApplicationFacts({ application }: { application: Application }) {
     ["Unit / ULP", application.unit],
     ["Lokasi", application.location],
     ["Tanggal permohonan", formatDate(application.requestedAt)],
+    ["Tanggal pembayaran", formatDate(application.paymentDate ?? "")],
+    [
+      "Nominal pembayaran",
+      application.paymentAmount == null
+        ? "—"
+        : new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            maximumFractionDigits: 0,
+          }).format(application.paymentAmount),
+    ],
+    ...(application.energizeStatus
+      ? [
+          [
+            "Status penyalaan",
+            application.energizeStatus === "temporary"
+              ? "Nyala sementara"
+              : "Nyala tetap",
+          ] as [string, string],
+        ]
+      : []),
   ];
   return (
     <section aria-labelledby="facts-title" className="bg-card rounded-lg p-5">
@@ -1381,10 +1511,12 @@ function HistorySection({
 function HeaderFact({
   label,
   value,
+  note,
   tone,
 }: {
   label: string;
   value: string;
+  note?: string;
   tone?: Application["sla"]["tone"];
 }) {
   const color =
@@ -1398,7 +1530,14 @@ function HeaderFact({
   return (
     <div>
       <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className={`mt-1 max-w-44 text-sm font-medium ${color}`}>{value}</dd>
+      <dd className={`mt-1 max-w-44 text-sm font-medium ${color}`}>
+        {value}
+        {note ? (
+          <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
+            {note}
+          </span>
+        ) : null}
+      </dd>
     </div>
   );
 }
@@ -1406,9 +1545,11 @@ function HeaderFact({
 function SlaReminder({
   deadline,
   tone,
+  sla,
 }: {
   deadline: string;
   tone: Application["sla"]["tone"];
+  sla: Application["sla"];
 }) {
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
 
@@ -1427,7 +1568,10 @@ function SlaReminder({
       : tone === "due"
         ? "border-warning-border bg-warning-surface text-warning"
         : "border-border bg-muted/30 text-foreground";
-  const remainingLabel = formatSlaRemaining(daysRemaining);
+  const remainingLabel =
+    sla.basis === "payment_workdays_v1"
+      ? formatApplicationSlaRemaining(sla)
+      : formatSlaRemaining(daysRemaining);
   const deadlineLabel = formatApiDate(deadline.slice(0, 10), {
     day: "numeric",
     month: "long",

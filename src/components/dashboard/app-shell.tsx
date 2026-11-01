@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import {
   ChevronDown,
+  CalendarDays,
   ClipboardList,
   FilePlus2,
   House,
@@ -76,7 +77,7 @@ export function canManageAccounts(roleId: RoleId) {
 
 type AppShellProps = {
   children: React.ReactNode;
-  active: "dashboard" | "applications" | "create" | "accounts";
+  active: "dashboard" | "applications" | "create" | "accounts" | "schedule";
   roleId: RoleId;
   user?: User | null;
 };
@@ -158,9 +159,22 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
   const destinations = canCreatePermohonan(roleId)
     ? [...baseDestinations, createDestination]
     : baseDestinations;
-  const navigationDestinations = canManageAccounts(roleId)
+  const accountDestinations = canManageAccounts(roleId)
     ? [...destinations, accountDestination]
     : destinations;
+  const navigationDestinations =
+    roleId === "pdkb"
+      ? [
+          ...accountDestinations,
+          {
+            id: "schedule",
+            href: "/pdkb/jadwal",
+            label: "Jadwal PDKB",
+            mobileLabel: "Jadwal",
+            icon: CalendarDays,
+          },
+        ]
+      : accountDestinations;
 
   return (
     <div

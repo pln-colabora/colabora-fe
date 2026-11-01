@@ -81,6 +81,25 @@ export function formatSlaRemaining(daysRemaining: number | null) {
   return `Tersisa ${daysRemaining} hari`;
 }
 
+export function formatApplicationSlaRemaining(sla: {
+  deadline: string | null;
+  basis?: string;
+  remainingDays?: number | null;
+  calendarError?: string;
+}) {
+  if (!sla.deadline) return "";
+  if (sla.calendarError) return sla.calendarError;
+  if (sla.basis === "payment_workdays_v1") {
+    if (sla.remainingDays == null) return "Kalender SLA belum tersedia";
+    return sla.remainingDays < 0
+      ? `Terlambat ${Math.abs(sla.remainingDays)} hari kerja`
+      : `${sla.remainingDays} hari kerja tersisa`;
+  }
+  return formatSlaRemaining(
+    sla.remainingDays ?? getSlaDaysRemaining(sla.deadline),
+  );
+}
+
 // Power is stored in VA; group digits the Indonesian way (e.g. "555.000 VA").
 export function formatDaya(va: number) {
   return `${va.toLocaleString("id-ID")} VA`;
