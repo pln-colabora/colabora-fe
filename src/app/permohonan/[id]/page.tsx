@@ -140,6 +140,13 @@ export default function ApplicationDetailPage() {
   const documents = getDocuments(application);
   const history = getHistory(application);
   const ownedSla = getOwnedSla(application, roleId);
+  // When another team holds the current step the caller owns no SLA; say whose
+  // SLA it is instead of leaving the field empty.
+  const headerSla = ownedSla ?? application.sla;
+  const slaText = (sla: Application["sla"]) =>
+    sla.deadline ? formatApplicationSlaRemaining(sla) || sla.label : sla.label;
+  const slaBelongsElsewhere =
+    !ownedSla && application.status === "in_progress" && !!owner;
   // Vendors are external to PLN: hide internal panels and keep only their own log.
   const isVendor = roleId.startsWith("vendor-");
   // Vendors only see log entries for activities they own.
@@ -203,8 +210,17 @@ export default function ApplicationDetailPage() {
               />
               <HeaderFact
                 label="SLA"
-                value={ownedSla?.label ?? "—"}
-                tone={ownedSla?.tone}
+                value={
+                  slaBelongsElsewhere && !headerSla.deadline
+                    ? `Milik ${owner.label}`
+                    : slaText(headerSla)
+                }
+                note={
+                  slaBelongsElsewhere && headerSla.deadline
+                    ? `SLA ${owner.label}`
+                    : undefined
+                }
+                tone={headerSla.tone}
               />
               <HeaderFact
                 label="Terakhir diperbarui"
@@ -1316,7 +1332,10 @@ function ApplicationFacts({ application }: { application: Application }) {
   if (application.tarif)
     power.push(["Tarif", tarifLabels[application.tarif] ?? application.tarif]);
   if (application.golonganTarif)
-    power.push(["Golongan tarif", application.golonganTarif]);
+    power.push([
+      isPowerChange ? "Golongan tarif baru" : "Golongan tarif",
+      application.golonganTarif,
+    ]);
   if (isPowerChange && application.dayaLama)
     power.push(["Daya lama", formatDaya(application.dayaLama)]);
   if (isPowerChange && application.golonganTarifLama)
@@ -1483,10 +1502,12 @@ function HistorySection({
 function HeaderFact({
   label,
   value,
+  note,
   tone,
 }: {
   label: string;
   value: string;
+  note?: string;
   tone?: Application["sla"]["tone"];
 }) {
   const color =
@@ -1500,7 +1521,14 @@ function HeaderFact({
   return (
     <div>
       <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className={`mt-1 max-w-44 text-sm font-medium ${color}`}>{value}</dd>
+      <dd className={`mt-1 max-w-44 text-sm font-medium ${color}`}>
+        {value}
+        {note ? (
+          <span className="text-muted-foreground mt-0.5 block text-xs font-normal">
+            {note}
+          </span>
+        ) : null}
+      </dd>
     </div>
   );
 }

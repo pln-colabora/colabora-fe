@@ -884,7 +884,7 @@ function WelcomeDialog({
     setOpen(true);
   }, [active, user]);
 
-  const topTasks = [...roleQueue]
+  const queue = [...roleQueue]
     .map((application) => ({
       application,
       sla: getOwnedSla(application, roleId) ?? application.sla,
@@ -893,21 +893,32 @@ function WelcomeDialog({
       const aDeadline = a.sla.deadline ?? "9999";
       const bDeadline = b.sla.deadline ?? "9999";
       return aDeadline.localeCompare(bDeadline);
-    })
-    .slice(0, 3);
+    });
+  const topTasks = queue.slice(0, 3);
+  const lateTasks = queue.filter(({ sla }) => sla.tone === "late").length;
+  const dueTasks = queue.filter(({ sla }) => sla.tone === "due").length;
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-xl gap-0 overflow-hidden border-0 p-0">
-        <AlertDialogHeader className="bg-primary text-primary-foreground flex-row items-start justify-between gap-4 px-5 py-4 text-left sm:px-6">
+      <AlertDialogContent
+        tabIndex={-1}
+        // Radix focuses "Nanti" on open, which draws its focus ring before the
+        // user has done anything; keep focus on the dialog itself instead.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement).focus();
+        }}
+        className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg gap-0 overflow-hidden p-0 outline-none"
+      >
+        <AlertDialogHeader className="flex-row items-start justify-between gap-4 px-5 pt-5 pb-4 text-left sm:px-6">
           <div className="min-w-0">
-            <p className="text-primary-foreground/80 text-xs font-medium">
+            <p className="text-primary text-xs font-semibold tracking-wide uppercase">
               {role.label} · {role.lane}
             </p>
-            <AlertDialogTitle className="text-primary-foreground mt-1 text-xl">
+            <AlertDialogTitle className="font-display mt-1.5 text-xl">
               Selamat datang, {user?.name}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-primary-foreground mt-1 text-sm leading-5">
+            <AlertDialogDescription className="text-muted-foreground mt-1 text-sm leading-5">
               {isMonitoring
                 ? "Berikut ringkasan permohonan yang dapat Anda pantau."
                 : roleQueue.length
@@ -917,13 +928,13 @@ function WelcomeDialog({
           </div>
           <AlertDialogCancel
             aria-label="Tutup sapaan"
-            className="hover:bg-primary-foreground/15 text-primary-foreground hover:text-primary-foreground -mt-1 -mr-2 size-10 shrink-0 border-0 bg-transparent p-0 shadow-none [&_svg]:size-4"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted -mt-1 -mr-2 size-10 shrink-0 border-0 bg-transparent p-0 shadow-none [&_svg]:size-4"
           >
             <X className="size-4" aria-hidden="true" />
           </AlertDialogCancel>
         </AlertDialogHeader>
 
-        <div className="max-h-[calc(85dvh-10rem)] overflow-y-auto p-4 sm:p-5">
+        <div className="max-h-[calc(85dvh-10rem)] overflow-y-auto px-5 pb-5 sm:px-6">
           {isMonitoring ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <WelcomeMetric label="Total" value={totalCount} icon={FileText} />
@@ -946,24 +957,41 @@ function WelcomeDialog({
             </div>
           ) : topTasks.length ? (
             <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">Prioritas saat ini</h3>
-              </div>
+              <dl className="grid grid-cols-3 divide-x rounded-lg border">
+                <WelcomeCount label="Perlu tindakan" value={queue.length} />
+                <WelcomeCount
+                  label="Terlambat"
+                  value={lateTasks}
+                  tone={lateTasks ? "late" : undefined}
+                />
+                <WelcomeCount
+                  label="Mendekati tenggat"
+                  value={dueTasks}
+                  tone={dueTasks ? "due" : undefined}
+                />
+              </dl>
+              <h3 className="mt-5 mb-2 text-sm font-semibold">
+                Tenggat terdekat
+              </h3>
               <ul className="divide-y rounded-lg border">
                 {topTasks.map(({ application, sla }) => (
                   <li key={application.id}>
                     <Link
                       href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(taskHref)}`}
                       onClick={() => setOpen(false)}
-                      className="hover:bg-muted/40 flex min-h-16 items-center justify-between gap-3 px-3 py-2.5"
+                      className="hover:bg-muted/40 focus-visible:bg-muted/40 flex min-h-16 items-center justify-between gap-4 px-4 py-3 outline-none"
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium">
                           {application.customer}
                         </span>
                         <span className="text-muted-foreground mt-0.5 block truncate text-xs">
-                          {application.number} ·{" "}
-                          {availableActivitySummary(application)}
+                          <span className="font-mono">{application.number}</span>
+                          {" · "}
+                          {availableActivitySummary(application).replace(
+                            /^Aktivitas: /,
+                            "",
+                          )}
                         </span>
                       </span>
                       <SlaIndicator
@@ -975,6 +1003,12 @@ function WelcomeDialog({
                   </li>
                 ))}
               </ul>
+              {queue.length > topTasks.length ? (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  +{queue.length - topTasks.length} permohonan lainnya di daftar
+                  tugas.
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="bg-muted/50 flex items-start gap-3 rounded-lg border p-4">
@@ -995,7 +1029,7 @@ function WelcomeDialog({
           )}
         </div>
 
-        <AlertDialogFooter className="bg-muted/40 border-t p-4 sm:px-5">
+        <AlertDialogFooter className="border-t px-5 py-4 sm:px-6">
           <AlertDialogCancel className="min-h-11">Nanti</AlertDialogCancel>
           <AlertDialogAction asChild className="min-h-11">
             <Link
@@ -1018,6 +1052,27 @@ function WelcomeDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+function WelcomeCount({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "late" | "due";
+}) {
+  return (
+    <div className="px-3 py-3 sm:px-4">
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd
+        className={`mt-1 text-2xl font-semibold tabular-nums ${tone === "late" ? "text-destructive" : tone === "due" ? "text-warning" : "text-foreground"}`}
+      >
+        {value.toLocaleString("id-ID")}
+      </dd>
+    </div>
   );
 }
 

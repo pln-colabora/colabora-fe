@@ -734,7 +734,11 @@ function CreateForm({
                   name="golonganTarif"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Golongan tarif</FormLabel>
+                      <FormLabel>
+                        {requestType === "Perubahan daya"
+                          ? "Golongan tarif baru"
+                          : "Golongan tarif"}
+                      </FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={(value) => {
