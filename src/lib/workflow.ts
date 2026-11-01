@@ -363,6 +363,12 @@ const planningOwner = surveyOwner;
 const energizeOwner = (application: ApplicationSummary): RoleId =>
   isPlgTm(application) ? "jaringan" : "teknik";
 
+const nomorSuratField: FieldDefinition = {
+  name: "nomor_surat",
+  label: "Nomor Surat",
+  maxLength: 100,
+};
+
 const notesField: FieldDefinition = {
   name: "notes",
   label: "Catatan",
@@ -477,7 +483,7 @@ export const activities: ActivityDefinition[] = [
     shortLabel: "WO Vendor Tiang",
     description:
       "Terbitkan work order pemasangan tiang sesuai hasil perencanaan.",
-    fields: [notesField],
+    fields: [nomorSuratField, notesField],
     evidence: "Evidence aktivitas",
     owner: "perencanaan",
   },
@@ -502,6 +508,7 @@ export const activities: ActivityDefinition[] = [
         type: "date",
         required: true,
       },
+      nomorSuratField,
       notesField,
     ],
     evidence: "Evidence aktivitas",
@@ -523,7 +530,7 @@ export const activities: ActivityDefinition[] = [
     label: "WO Vendor APP",
     shortLabel: "WO Vendor APP",
     description: "Terbitkan work order penyediaan dan pemasangan APP.",
-    fields: [notesField],
+    fields: [nomorSuratField, notesField],
     evidence: "Evidence aktivitas",
     owner: "transaksi-energi",
   },
