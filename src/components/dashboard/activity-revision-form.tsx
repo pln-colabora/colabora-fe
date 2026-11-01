@@ -308,13 +308,15 @@ export function ActivityRevisionForm({
                       </select>
                     </div>
                   ))}
-                <Button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void save()}
-                >
-                  {saving ? "Menyimpan…" : "Simpan revisi"}
-                </Button>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void save()}
+                  >
+                    {saving ? "Menyimpan…" : "Simpan revisi"}
+                  </Button>
+                </div>
                 <h4 className="pt-3 text-sm font-medium">Riwayat revisi</h4>
                 {!history.length && (
                   <p className="text-muted-foreground text-sm">
