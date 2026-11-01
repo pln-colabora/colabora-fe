@@ -22,6 +22,7 @@ import {
   Eye,
   LoaderCircle,
   LockKeyhole,
+  PencilLine,
   XCircle,
 } from "lucide-react";
 
@@ -260,10 +261,6 @@ export default function ApplicationDetailPage() {
               roleId={roleId}
               activityInputs={activityInputs}
               documents={visibleDocuments}
-            />
-            <RevisionLinks
-              application={application}
-              roleId={roleId}
               unit={user?.unit}
               returnTo={returnTo}
             />
@@ -299,53 +296,52 @@ export default function ApplicationDetailPage() {
   );
 }
 
-function RevisionLinks({
+// Completed survei and WO Konstruksi data can be revised by the owning team
+// (Teknik only within its own ULP) without changing completion time or SLA.
+function RevisionButton({
   application,
   roleId,
+  node,
   unit,
   returnTo,
 }: {
   application: Application;
   roleId: RoleId;
+  node: WorkflowNode;
   unit?: string;
   returnTo: string;
 }) {
-  const nodes = application.nodes.filter(
-    (node) =>
-      node.status === "completed" &&
-      (node.workflow_node === "survei" ||
-        node.workflow_node === "wo_konstruksi"),
-  );
-  const links = nodes.filter((node) => {
-    const activity = getActivity(nodeActions[node.workflow_node]);
-    return (
-      activity &&
-      getOwner(activity, application) === roleId &&
-      (roleId !== "teknik" || unit === application.unit)
-    );
-  });
-  if (!links.length) return null;
+  if (
+    node.status !== "completed" ||
+    (node.workflow_node !== "survei" && node.workflow_node !== "wo_konstruksi")
+  )
+    return null;
+  const activity = getActivity(nodeActions[node.workflow_node]);
+  if (
+    !activity ||
+    getOwner(activity, application) !== roleId ||
+    (roleId === "teknik" && unit !== application.unit)
+  )
+    return null;
+  const label =
+    node.workflow_node === "survei"
+      ? "Edit revisi survei"
+      : "Edit revisi lampiran WO";
   return (
-    <section className="border-t pt-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-muted-foreground text-sm">
-          Data aktivitas sudah selesai dan dapat direvisi tanpa mengubah SLA.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {links.map((node) => (
-            <Button key={node.workflow_node} asChild variant="outline">
-              <Link
-                href={`/permohonan/${application.id}/revisi?node=${encodeURIComponent(node.workflow_node)}&returnTo=${encodeURIComponent(returnTo)}`}
-              >
-                {node.workflow_node === "survei"
-                  ? "Edit revisi survei"
-                  : "Edit revisi lampiran WO"}
-              </Link>
-            </Button>
-          ))}
-        </div>
-      </div>
-    </section>
+    <Button
+      asChild
+      variant="outline"
+      size="icon-sm"
+      className="size-8"
+      title={label}
+    >
+      <Link
+        href={`/permohonan/${application.id}/revisi?node=${encodeURIComponent(node.workflow_node)}&returnTo=${encodeURIComponent(returnTo)}`}
+        aria-label={label}
+      >
+        <PencilLine aria-hidden="true" />
+      </Link>
+    </Button>
   );
 }
 
@@ -788,11 +784,15 @@ function WorkflowTimeline({
   roleId,
   activityInputs,
   documents,
+  unit,
+  returnTo,
 }: {
   application: Application;
   roleId: RoleId;
   activityInputs: Record<string, Record<string, unknown>>;
   documents: DocumentItem[];
+  unit?: string;
+  returnTo: string;
 }) {
   // Vendors are external to PLN and see only the nodes the backend returns for
   // them, so their timeline is driven by workflow_nodes (source of truth),
@@ -887,7 +887,7 @@ function WorkflowTimeline({
                         key={activity.id}
                         className="rounded-md border bg-background px-2.5 py-2 text-sm"
                       >
-                        <div className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(180px,220px)_auto] sm:items-center">
+                        <div className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_220px_12rem] sm:items-center">
                           <span className="flex w-full items-center gap-2 font-medium">
                             <ActivityStatusIcon status={status} />
                             {activity.shortLabel}
@@ -900,12 +900,21 @@ function WorkflowTimeline({
                               {activityStatusLabel(status)}
                             </span>
                             {completedNode ? (
-                              <TimelineExportButton
-                                application={application}
-                                roleId={roleId}
-                                node={completedNode}
-                                documents={documents}
-                              />
+                              <>
+                                <RevisionButton
+                                  application={application}
+                                  roleId={roleId}
+                                  node={completedNode}
+                                  unit={unit}
+                                  returnTo={returnTo}
+                                />
+                                <TimelineExportButton
+                                  application={application}
+                                  roleId={roleId}
+                                  node={completedNode}
+                                  documents={documents}
+                                />
+                              </>
                             ) : null}
                           </div>
                           {detailNode ? (
