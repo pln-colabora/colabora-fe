@@ -108,6 +108,7 @@ const baseSchema = z.object({
     .trim()
     .min(2, "Lokasi minimal 2 karakter.")
     .max(255, "Lokasi maksimal 255 karakter."),
+  jenisPembayaran: z.enum(["pascabayar", "prabayar"], { error: "Jenis pembayaran wajib dipilih." }),
   tarif: z.string().min(1, "Tarif wajib dipilih."),
   golonganTarif: z.string().min(1, "Golongan tarif wajib dipilih."),
   golonganTarifLama: z.string(),
@@ -291,6 +292,7 @@ function CreateForm({
       connectionType: connectionOptions[0] ?? "",
       unit: units[0],
       location: "",
+      jenisPembayaran: undefined,
       tarif: "",
       golonganTarif: "",
       golonganTarifLama: "",
@@ -440,6 +442,7 @@ function CreateForm({
             ? "Pasang Baru (PB)"
             : "Perubahan Daya (PD)",
         jenis_sambungan: toApiJenis(values.connectionType),
+        jenis_pembayaran: values.jenisPembayaran,
         tarif: values.tarif,
         golongan_tarif: values.golonganTarif,
         daya_baru: Number(values.dayaBaru),
@@ -656,6 +659,24 @@ function CreateForm({
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="jenisPembayaran"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Jenis pembayaran</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange} disabled={busy}>
+                        <FormControl><SelectTrigger className="bg-background h-11 w-full"><SelectValue placeholder="Pilih jenis pembayaran" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="pascabayar">Pascabayar</SelectItem>
+                          <SelectItem value="prabayar">Prabayar</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}

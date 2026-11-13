@@ -9,6 +9,7 @@ const fieldLabels: Record<string, string> = {
   golongan_tarif: "Golongan tarif",
   golongan_tarif_lama: "Golongan tarif lama",
   pembatas_lama: "Pembatas lama",
+  jenis_pembayaran: "Jenis pembayaran",
   tarif: "Tarif",
   jenis_permohonan: "Jenis permohonan",
   jenis_sambungan: "Jenis sambungan",

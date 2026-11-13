@@ -178,6 +178,7 @@ export type ApplicationSummary = {
   unit: string;
   location: string;
   /** Tarif key as stored by the backend (e.g. "rumah_tangga"); absent on older records. */
+  jenisPembayaran?: "pascabayar" | "prabayar";
   tarif?: string;
   /** Requested / new power in VA. */
   dayaBaru?: number;

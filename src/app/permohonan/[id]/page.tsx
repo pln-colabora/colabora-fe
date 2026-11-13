@@ -1338,6 +1338,8 @@ function ApplicationFacts({ application }: { application: Application }) {
   // Rows are omitted (not shown as "—") for records created before tarif/daya
   // were captured.
   const power: Array<[string, string]> = [];
+  if (application.jenisPembayaran)
+    power.push(["Jenis pembayaran", application.jenisPembayaran === "prabayar" ? "Prabayar" : "Pascabayar"]);
   if (application.tarif)
     power.push(["Tarif", tarifLabels[application.tarif] ?? application.tarif]);
   if (application.golonganTarif)

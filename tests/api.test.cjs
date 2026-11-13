@@ -336,6 +336,7 @@ test("create posts multipart fields, evidence files, and bearer token", async ()
     pelanggan_nama: "Test",
     pelanggan_alamat: "Test address",
     pelanggan_no_hp: "08123456789",
+    jenis_pembayaran: "pascabayar",
     tarif: "rumah_tangga",
     daya_baru: 2200,
     tanggal_pembayaran:"2026-10-23",
@@ -349,6 +350,7 @@ test("create posts multipart fields, evidence files, and bearer token", async ()
     assert.ok(init.body instanceof FormData);
     assert.equal(init.body.get("jenis_permohonan"), "Pasang Baru (PB)");
     assert.equal(init.body.get("jenis_sambungan"), "JTR");
+    assert.equal(init.body.get("jenis_pembayaran"), "pascabayar");
     assert.equal(init.body.get("tarif"), "rumah_tangga");
     assert.equal(init.body.get("daya_baru"), "2200");
     assert.equal(init.body.get("tanggal_pembayaran"), "2026-10-23");

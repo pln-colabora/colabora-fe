@@ -36,6 +36,7 @@ type PermohonanResponse = {
   // Create inputs. The API returns them at the top level (null on records made
   // before they were captured) although the published schema omits them; the
   // permohonan node payload is kept as a fallback.
+  jenis_pembayaran?: "pascabayar" | "prabayar" | null;
   tarif?: string | null;
   golongan_tarif?: string | null;
   golongan_tarif_lama?: string | null;
@@ -124,6 +125,7 @@ export function mapApplication(data: PermohonanResponse): Application {
       ? "JTM / Gardu"
       : data.jenis_sambungan) as Application["connectionType"],
     unit: data.ulp_unit,
+    jenisPembayaran: data.jenis_pembayaran ?? undefined,
     tarif:
       typeof tarifValue === "string" && tarifValue ? tarifValue : undefined,
     golonganTarif:
@@ -305,6 +307,7 @@ export type CreateApplicationRequest = {
   pelanggan_nama: string;
   pelanggan_alamat: string;
   pelanggan_no_hp: string;
+  jenis_pembayaran: "pascabayar" | "prabayar";
   tarif: string;
   golongan_tarif?: string;
   golongan_tarif_lama?: string;
@@ -328,6 +331,7 @@ export async function createApplication(payload: CreateApplicationRequest) {
   body.set("pelanggan_no_hp", payload.pelanggan_no_hp);
   body.set("tanggal_pembayaran", payload.tanggal_pembayaran);
   body.set("nominal_pembayaran", String(payload.nominal_pembayaran));
+  body.set("jenis_pembayaran", payload.jenis_pembayaran);
   body.set("tarif", payload.tarif);
   if (payload.golongan_tarif)
     body.set("golongan_tarif", payload.golongan_tarif);
