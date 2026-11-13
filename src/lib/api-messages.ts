@@ -30,6 +30,8 @@ const fieldLabels: Record<string, string> = {
   document_ids: "Evidence",
   email: "Email",
   password: "Kata sandi",
+  current_password: "Kata sandi saat ini",
+  new_password: "Kata sandi baru",
   name: "Nama",
   role: "Peran",
 };
@@ -96,6 +98,7 @@ const exact: Record<string, string> = {
   "booking WO tidak dapat diubah melalui kalender":
     "Jadwal dari WO tidak dapat diubah melalui kalender.",
   "invalid credentials": "Email atau kata sandi tidak cocok.",
+  "current password is incorrect": "Kata sandi saat ini salah.",
   "invalid-email": "Format email tidak valid.",
   "account is not verified":
     "Akun belum diverifikasi. Hubungi pengelola akun.",

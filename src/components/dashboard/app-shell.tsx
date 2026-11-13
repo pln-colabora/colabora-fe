@@ -12,6 +12,7 @@ import {
   ClipboardList,
   FilePlus2,
   House,
+  KeyRound,
   LogOut,
   Menu,
   PanelLeft,
@@ -29,6 +30,7 @@ import {
 import { getRole, type RoleId } from "@/lib/workflow";
 
 const SIDEBAR_STORAGE_KEY = "colabora:sidebar-collapsed";
+const PASSWORD_PATH = "/akun/kata-sandi";
 
 const baseDestinations = [
   {
@@ -77,7 +79,13 @@ export function canManageAccounts(roleId: RoleId) {
 
 type AppShellProps = {
   children: React.ReactNode;
-  active: "dashboard" | "applications" | "create" | "accounts" | "schedule";
+  active:
+    | "dashboard"
+    | "applications"
+    | "create"
+    | "accounts"
+    | "schedule"
+    | "password";
   roleId: RoleId;
   user?: User | null;
 };
@@ -278,10 +286,19 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                 >
                   {user?.unit || "—"}
                 </p>
+                <Link
+                  href={PASSWORD_PATH}
+                  onClick={(event) => handleNavigation(event, PASSWORD_PATH)}
+                  aria-current={active === "password" ? "page" : undefined}
+                  className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground aria-[current=page]:text-foreground mt-3 flex min-h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors"
+                >
+                  <KeyRound className="size-4 shrink-0" aria-hidden="true" />
+                  Ubah kata sandi
+                </Link>
                 <Button
                   type="button"
                   variant="ghost"
-                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive mt-3 min-h-10 w-full justify-start gap-3 border-0 px-3 text-sm font-medium shadow-none transition-colors outline-none focus:outline-none focus-visible:ring-0"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive min-h-10 w-full justify-start gap-3 border-0 px-3 text-sm font-medium shadow-none transition-colors outline-none focus:outline-none focus-visible:ring-0"
                   onClick={handleLogout}
                 >
                   <LogOut className="size-4 shrink-0" aria-hidden="true" />
@@ -297,6 +314,16 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                 >
                   {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
                 </div>
+                <Link
+                  href={PASSWORD_PATH}
+                  onClick={(event) => handleNavigation(event, PASSWORD_PATH)}
+                  aria-current={active === "password" ? "page" : undefined}
+                  title="Ubah kata sandi"
+                  aria-label="Ubah kata sandi"
+                  className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex size-9 items-center justify-center rounded-md transition-colors"
+                >
+                  <KeyRound className="size-4 shrink-0" aria-hidden="true" />
+                </Link>
                 <Button
                   type="button"
                   variant="ghost"
@@ -460,10 +487,23 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                     ),
                   )}
                 </nav>
+                <Link
+                  href={PASSWORD_PATH}
+                  aria-current={active === "password" ? "page" : undefined}
+                  onClick={(event) =>
+                    handleNavigation(event, PASSWORD_PATH, () =>
+                      setMobileMenuOpen(false),
+                    )
+                  }
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground mt-4 flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium"
+                >
+                  <KeyRound className="size-4 shrink-0" aria-hidden="true" />
+                  Ubah kata sandi
+                </Link>
                 <Button
                   type="button"
                   variant="ghost"
-                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive mt-4 min-h-11 w-full justify-start gap-3 px-3 text-sm font-medium"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive min-h-11 w-full justify-start gap-3 px-3 text-sm font-medium"
                   onClick={handleLogout}
                 >
                   <LogOut className="size-4 shrink-0" aria-hidden="true" />

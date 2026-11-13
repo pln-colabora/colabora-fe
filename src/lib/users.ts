@@ -43,6 +43,23 @@ export async function updateUserUnit(id: string, unit: string) {
   });
 }
 
+export async function changeOwnPassword(
+  currentPassword: string,
+  newPassword: string,
+) {
+  return apiRequest("/api/user/me/password", {
+    method: "PATCH",
+    data: { current_password: currentPassword, new_password: newPassword },
+  });
+}
+
+export async function resetUserPassword(id: string, newPassword: string) {
+  return apiRequest(`/api/user/${encodeURIComponent(id)}/password`, {
+    method: "PATCH",
+    data: { new_password: newPassword },
+  });
+}
+
 export async function getAccountDocument(path: string) {
   if (!path.startsWith("/api/"))
     throw new Error("Path API dokumen akun tidak valid.");

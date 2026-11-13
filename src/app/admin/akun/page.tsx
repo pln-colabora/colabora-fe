@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ExternalLink,
   FilePlus2,
+  KeyRound,
   LoaderCircle,
   Search,
   Trash2,
@@ -46,6 +47,7 @@ import { presentApiError } from "@/lib/error-utils";
 import {
   deleteUser,
   getAccountDocument,
+  resetUserPassword,
   updateUserUnit,
 } from "@/lib/users";
 import { getRole, type RoleId } from "@/lib/workflow";
@@ -113,6 +115,13 @@ export default function AccountsPage() {
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState<unknown>(null);
   const [documentReload, setDocumentReload] = useState(0);
+  const [pendingReset, setPendingReset] = useState<
+    (typeof users)[number] | null
+  >(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const managerId = user?.id;
 
   useEffect(() => {
@@ -209,6 +218,39 @@ export default function AccountsPage() {
       );
     } finally {
       setDeleting(false);
+    }
+  }
+
+  function closeResetDialog() {
+    setPendingReset(null);
+    setResetPassword("");
+    setResetConfirmation("");
+    setResetError(null);
+  }
+
+  async function handleResetPassword() {
+    if (!pendingReset) return;
+    if (resetPassword.length < 8) {
+      setResetError("Kata sandi minimal 8 karakter.");
+      return;
+    }
+    if (resetPassword !== resetConfirmation) {
+      setResetError("Konfirmasi kata sandi tidak cocok.");
+      return;
+    }
+    setResetting(true);
+    setResetError(null);
+    try {
+      await resetUserPassword(pendingReset.id, resetPassword);
+      toast.success(`Kata sandi ${pendingReset.name} berhasil direset.`);
+      closeResetDialog();
+    } catch (requestError) {
+      setResetError(
+        presentApiError(requestError, "Kata sandi tidak dapat direset.")
+          .message,
+      );
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -440,6 +482,21 @@ export default function AccountsPage() {
                                 <Button
                                   type="button"
                                   variant="outline"
+                                  className="min-h-10"
+                                  onClick={() => setPendingReset(account)}
+                                  disabled={account.id === user.id}
+                                  title={
+                                    account.id === user.id
+                                      ? "Ubah kata sandi akun Anda lewat menu Ubah kata sandi"
+                                      : "Reset kata sandi"
+                                  }
+                                >
+                                  <KeyRound aria-hidden="true" />
+                                  Reset kata sandi
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
                                   className="text-destructive hover:text-destructive min-h-10"
                                   onClick={() => setPendingDelete(account)}
                                   disabled={account.id === user.id}
@@ -486,6 +543,85 @@ export default function AccountsPage() {
             >
               {deleting ? "Menghapus..." : "Hapus akun"}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={!!pendingReset}
+        onOpenChange={(open) => !open && !resetting && closeResetDialog()}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Reset kata sandi {pendingReset?.name ?? "akun ini"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Kata sandi lama untuk {pendingReset?.email ?? "akun ini"} tidak
+              berlaku lagi dan semua sesi akun ini akan keluar. Sampaikan kata
+              sandi baru kepada pemilik akun.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <form
+            id="reset-password-form"
+            className="space-y-4"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleResetPassword();
+            }}
+          >
+            <div className="space-y-2">
+              <label htmlFor="reset-password" className="text-sm font-medium">
+                Kata sandi baru
+              </label>
+              <Input
+                id="reset-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Minimal 8 karakter"
+                className="h-11"
+                value={resetPassword}
+                onChange={(event) => setResetPassword(event.target.value)}
+                disabled={resetting}
+              />
+            </div>
+            <div className="space-y-2">
+              <label
+                htmlFor="reset-password-confirmation"
+                className="text-sm font-medium"
+              >
+                Konfirmasi kata sandi baru
+              </label>
+              <Input
+                id="reset-password-confirmation"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Ulangi kata sandi baru"
+                className="h-11"
+                value={resetConfirmation}
+                onChange={(event) => setResetConfirmation(event.target.value)}
+                disabled={resetting}
+              />
+            </div>
+            {resetError ? (
+              <p role="alert" className="text-destructive text-sm">
+                {resetError}
+              </p>
+            ) : null}
+          </form>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Batal</AlertDialogCancel>
+            <Button
+              type="submit"
+              form="reset-password-form"
+              disabled={resetting || !resetPassword || !resetConfirmation}
+              className="bg-destructive hover:bg-destructive/90 text-white"
+            >
+              {resetting ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : null}
+              {resetting ? "Mereset..." : "Reset kata sandi"}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
