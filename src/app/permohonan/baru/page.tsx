@@ -43,6 +43,9 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import {
   createApplication,
   getTariffOptions,
+  saveAndContinueDraft,
+  saveDraft,
+  type DraftApplicationRequest,
   type TariffPowerOption,
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
@@ -51,6 +54,7 @@ import {
   getRole,
   exactTariffPowers,
   tarifLabels,
+  type Application,
   type RoleId,
 } from "@/lib/workflow";
 
@@ -102,7 +106,7 @@ const baseSchema = z.object({
     ),
   requestType: z.enum(requestTypes),
   connectionType: z.string().min(1, "Jenis sambungan wajib dipilih."),
-  unit: z.enum(units),
+  unit: z.string().min(1, "Unit / ULP wajib dipilih."),
   location: z
     .string()
     .trim()
@@ -241,14 +245,16 @@ function Unauthorized({ roleId }: { roleId: RoleId }) {
   );
 }
 
-function CreateForm({
+export function CreateForm({
   roleId,
   returnTo,
   onDirtyChange,
+  draft,
 }: {
   roleId: RoleId;
   returnTo: string;
   onDirtyChange: (dirty: boolean) => void;
+  draft?: Application;
 }) {
   const connectionOptions = useMemo(() => jenisByRole[roleId] ?? [], [roleId]);
   const schema = useMemo(
@@ -286,24 +292,27 @@ function CreateForm({
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      customer: "",
-      phone: "",
-      requestType: requestTypes[0],
-      connectionType: connectionOptions[0] ?? "",
-      unit: units[0],
-      location: "",
-      jenisPembayaran: undefined,
-      tarif: "",
-      golonganTarif: "",
-      golonganTarifLama: "",
-      dayaBaru: "",
-      dayaLama: "",
-      paymentDate: "",
-      paymentAmount: "",
+      customer: draft?.customer ?? "",
+      phone: draft?.phone ?? "",
+      requestType: draft?.requestType ?? requestTypes[0],
+      connectionType: draft?.connectionType ?? connectionOptions[0] ?? "",
+      unit: draft?.unit ?? units[0],
+      location: draft?.location ?? "",
+      jenisPembayaran: draft?.jenisPembayaran,
+      tarif: draft?.tarif ?? "",
+      golonganTarif: draft?.golonganTarif ?? "",
+      golonganTarifLama: draft?.golonganTarifLama ?? "",
+      dayaBaru: draft?.dayaBaru ? String(draft.dayaBaru) : "",
+      dayaLama: draft?.dayaLama ? String(draft.dayaLama) : "",
+      paymentDate: draft?.paymentDate ?? "",
+      paymentAmount: draft?.paymentAmount ? String(draft.paymentAmount) : "",
       files: [],
     },
   });
   const busy = form.formState.isSubmitting;
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [savedNotice, setSavedNotice] = useState("");
+  const formBusy = busy || savingDraft;
   const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(
     form.formState.isDirty,
   );
@@ -364,8 +373,10 @@ function CreateForm({
         .filter((o) => o.jenis_sambungan === apiJenis)
         .map((o) => o.tarif),
     );
-    return tarifOrder.filter((value) => present.has(value));
-  }, [detailedTariffs, apiJenis]);
+    const choices = tarifOrder.filter((value) => present.has(value));
+    if (draft?.tarif && !choices.includes(draft.tarif)) choices.push(draft.tarif);
+    return choices;
+  }, [detailedTariffs, apiJenis, draft?.tarif]);
 
   const tariffPowerChoices = useMemo(() => {
     const seen = new Set<string>();
@@ -389,7 +400,7 @@ function CreateForm({
     (option) => option.golongan_tarif === golonganTarif,
   );
 
-  const golonganChoices = useMemo(
+  const availableGolonganChoices = useMemo(
     () =>
       [
         ...new Set(
@@ -405,7 +416,15 @@ function CreateForm({
       ].sort(),
     [detailedTariffs, tarif, apiJenis],
   );
-  const golonganLamaChoices = golonganChoices;
+  const golonganChoices = [...availableGolonganChoices];
+  if (draft?.golonganTarif && !golonganChoices.includes(draft.golonganTarif))
+    golonganChoices.push(draft.golonganTarif);
+  const golonganLamaChoices = [...golonganChoices];
+  if (
+    draft?.golonganTarifLama &&
+    !golonganLamaChoices.includes(draft.golonganTarifLama)
+  )
+    golonganLamaChoices.push(draft.golonganTarifLama);
   const dayaLamaChoices = useMemo(
     () =>
       tariffPowerChoices.filter(
@@ -420,7 +439,109 @@ function CreateForm({
     (option) => String(option.daya_min) === form.getValues("dayaLama"),
   );
 
+  function draftPayload(values: FormValues, continuing = false): DraftApplicationRequest {
+    const oldPower = detailedTariffs.find(
+      (option) =>
+        option.tarif === values.tarif &&
+        option.jenis_sambungan === toApiJenis(values.connectionType) &&
+        option.golongan_tarif === values.golonganTarifLama &&
+        String(option.daya_min) === values.dayaLama,
+    );
+    const newPower = detailedTariffs.find(
+      (option) =>
+        option.tarif === values.tarif &&
+        option.jenis_sambungan === toApiJenis(values.connectionType) &&
+        option.golongan_tarif === values.golonganTarif &&
+        String(option.daya_min) === values.dayaBaru,
+    );
+    const oldUnchanged = values.dayaLama === String(draft?.dayaLama ?? "");
+    const newUnchanged = values.dayaBaru === String(draft?.dayaBaru ?? "");
+    return {
+      jenis_permohonan:
+        values.requestType === "Pasang baru"
+          ? "Pasang Baru (PB)"
+          : "Perubahan Daya (PD)",
+      jenis_sambungan: toApiJenis(values.connectionType),
+      jenis_pembayaran: values.jenisPembayaran ?? "",
+      pelanggan_nama: values.customer,
+      pelanggan_alamat: values.location,
+      pelanggan_no_hp: values.phone,
+      tanggal_pembayaran: values.paymentDate,
+      nominal_pembayaran: values.paymentAmount ? Number(values.paymentAmount) : null,
+      tarif: values.tarif || null,
+      golongan_tarif: values.golonganTarif || null,
+      golongan_tarif_lama:
+        values.requestType === "Perubahan daya"
+          ? values.golonganTarifLama || null
+          : continuing
+            ? null
+            : draft?.golonganTarifLama ?? null,
+      daya_baru: values.dayaBaru ? Number(values.dayaBaru) : null,
+      daya_lama:
+        values.requestType === "Perubahan daya" && values.dayaLama
+          ? Number(values.dayaLama)
+          : continuing
+            ? null
+            : draft?.dayaLama ?? null,
+      pembatas_baru:
+        newPower?.pembatas ??
+        (newUnchanged ? draft?.pembatasBaru : null) ??
+        null,
+      pembatas_lama:
+        values.requestType === "Perubahan daya"
+          ? oldPower?.pembatas ??
+            (oldUnchanged ? draft?.pembatasLama : null) ??
+            null
+          : continuing
+            ? null
+            : draft?.pembatasLama ?? null,
+      ulp_unit: values.unit,
+    };
+  }
+
+  async function handleSaveDraft() {
+    if (!draft) return;
+    setSavingDraft(true);
+    setRequestError(null);
+    setSavedNotice("");
+    try {
+      await saveDraft(draft.id, draftPayload(form.getValues()));
+      form.reset(form.getValues());
+      setSavedNotice("Draft berhasil disimpan.");
+      toast.success("Draft berhasil disimpan.");
+    } catch (error) {
+      setRequestError(error);
+      toast.error(presentApiError(error, "Gagal menyimpan draft.").message);
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
   async function handleSubmit(values: FormValues) {
+    if (draft) {
+      if (!tariffPowerChoices.some((option) => option.golongan_tarif === values.golonganTarif && String(option.daya_min) === values.dayaBaru)) {
+        form.setError("dayaBaru", { message: "Tarif, golongan, atau daya import belum cocok dengan pilihan. Perbaiki sebelum melanjutkan." });
+        return;
+      }
+      if (values.requestType === "Perubahan daya" && !tariffPowerChoices.some((option) => option.golongan_tarif === values.golonganTarifLama && String(option.daya_min) === values.dayaLama)) {
+        form.setError("dayaLama", { message: "Daya lama import belum cocok dengan pilihan." });
+        return;
+      }
+      setRequestError(null);
+      setSavedNotice("");
+      try {
+        const application = await saveAndContinueDraft(draft.id, draftPayload(values, true), values.files, () => {
+          form.reset(values);
+          setSavedNotice("Perubahan draft sudah tersimpan.");
+        });
+        toast.success("Draft berhasil dilanjutkan.");
+        router.push(`/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`);
+      } catch (error) {
+        setRequestError(error);
+        toast.error(presentApiError(error, "Gagal melanjutkan draft.").message);
+      }
+      return;
+    }
     if (
       !(await confirmCreate({
         title: "Buat permohonan baru?",
@@ -482,7 +603,7 @@ function CreateForm({
       <CardContent className="p-5 sm:p-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} noValidate>
-            <fieldset className="min-w-0" disabled={busy}>
+            <fieldset className="min-w-0" disabled={formBusy}>
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -615,7 +736,7 @@ function CreateForm({
                   )}
                 />
 
-                {roleId === "nps" && (
+                {(roleId === "nps" || draft) && (
                   <FormField
                     control={form.control}
                     name="unit"
@@ -625,7 +746,7 @@ function CreateForm({
                         <Select
                           value={field.value}
                           onValueChange={field.onChange}
-                          disabled={busy}
+                          disabled={formBusy || roleId !== "nps"}
                         >
                           <FormControl>
                             <SelectTrigger className="bg-background h-11 w-full">
@@ -633,9 +754,9 @@ function CreateForm({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {units.map((option) => (
+                            {[...units, ...(draft?.unit && !units.includes(draft.unit as typeof units[number]) ? [draft.unit] : [])].map((option) => (
                               <SelectItem key={option} value={option}>
-                                {option}
+                                {option}{draft?.unit === option && !units.includes(option as typeof units[number]) ? " (import, periksa ULP)" : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -711,7 +832,7 @@ function CreateForm({
                         <SelectContent>
                           {tarifChoices.map((value) => (
                             <SelectItem key={value} value={value}>
-                                {tariffDisplayLabel(value)}
+                                {tariffDisplayLabel(value)}{draft?.tarif === value && !detailedTariffs.some((option) => option.tarif === value && option.jenis_sambungan === apiJenis) ? " (import, perlu diperbaiki)" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -749,7 +870,7 @@ function CreateForm({
                           <SelectContent>
                             {golonganLamaChoices.map((value) => (
                               <SelectItem key={value} value={value}>
-                                {value}
+                                {value}{draft?.golonganTarifLama === value && !detailedTariffs.some((option) => option.tarif === tarif && option.jenis_sambungan === apiJenis && option.golongan_tarif === value) ? " (import, perlu diperbaiki)" : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -786,7 +907,7 @@ function CreateForm({
                         <SelectContent>
                           {golonganChoices.map((value) => (
                             <SelectItem key={value} value={value}>
-                              {value}
+                                {value}{draft?.golonganTarif === value && !detailedTariffs.some((option) => option.tarif === tarif && option.jenis_sambungan === apiJenis && option.golongan_tarif === value) ? " (import, perlu diperbaiki)" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -834,6 +955,7 @@ function CreateForm({
                                 {exactPowerLabel(option)}
                               </SelectItem>
                             ))}
+                            {draft?.dayaLama && !dayaLamaChoices.some((option) => option.daya_min === draft.dayaLama) && <SelectItem value={String(draft.dayaLama)}>{draft.dayaLama} VA (import, perlu diperbaiki)</SelectItem>}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -881,6 +1003,7 @@ function CreateForm({
                               {exactPowerLabel(option)}
                             </SelectItem>
                           ))}
+                          {draft?.dayaBaru && !dayaChoices.some((option) => option.daya_min === draft.dayaBaru) && <SelectItem value={String(draft.dayaBaru)}>{draft.dayaBaru} VA (import, perlu diperbaiki)</SelectItem>}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -910,11 +1033,12 @@ function CreateForm({
                 />
               </div>
 
+              {savedNotice && <p role="status" className="text-success mt-4 text-sm">{savedNotice}</p>}
               {Boolean(requestError) && (
                 <ErrorNotice
                   error={requestError}
-                  onRetry={() => void form.handleSubmit(handleSubmit)()}
-                  retrying={busy}
+                  onRetry={draft ? undefined : () => void form.handleSubmit(handleSubmit)()}
+                  retrying={formBusy}
                 />
               )}
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -932,9 +1056,10 @@ function CreateForm({
                 >
                   <Link href={returnTo}>Batal</Link>
                 </Button>
+                {draft && <Button type="button" variant="outline" className="min-h-11" onClick={() => void handleSaveDraft()}>{savingDraft ? "Menyimpan..." : "Simpan draft"}</Button>}
                 <Button type="submit" className="min-h-11">
                   {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
-                  {busy ? "Menyimpan..." : "Simpan permohonan"}
+                  {busy ? "Menyimpan..." : draft ? "Lanjutkan" : "Simpan permohonan"}
                 </Button>
               </div>
             </fieldset>

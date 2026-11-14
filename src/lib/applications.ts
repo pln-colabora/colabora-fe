@@ -22,7 +22,7 @@ type PermohonanResponse = {
   tanggal_pembayaran?: string | null;
   nominal_pembayaran?: number | null;
   energize_status?: "temporary" | "permanent" | null;
-  current_stage: StageId;
+  current_stage: StageId | null;
   status: string;
   kebutuhan_tiang: boolean | null;
   perlu_pdkb: boolean | null;
@@ -44,8 +44,8 @@ type PermohonanResponse = {
   daya_lama?: number | null;
   pembatas_baru?: string | null;
   pembatas_lama?: string | null;
-  workflow_nodes: WorkflowNode[];
-  available_actions: AvailableAction[];
+  workflow_nodes?: WorkflowNode[] | null;
+  available_actions?: AvailableAction[] | null;
 };
 
 function toPositiveNumber(value: unknown) {
@@ -74,7 +74,7 @@ type ActivityLog = {
 };
 
 export function mapApplication(data: PermohonanResponse): Application {
-  const nodes = data.workflow_nodes ?? [];
+  const nodes = data.status === "draft" ? [] : data.workflow_nodes ?? [];
   const active = nodes.filter(
     (node) => node.status === "available" || node.status === "in_progress",
   );
@@ -91,7 +91,7 @@ export function mapApplication(data: PermohonanResponse): Application {
       : slaNode?.sla_status;
   // Active nodes may carry a deadline without a graded sla_status ("none");
   // surface that date so the SLA column is informative instead of just "—".
-  const deadline =
+  const deadline = data.status === "draft" ? null :
     data.sla_deadline ??
     slaNode?.sla_deadline ??
     active.find((node) => node.sla_deadline)?.sla_deadline ??
@@ -150,7 +150,7 @@ export function mapApplication(data: PermohonanResponse): Application {
     currentAction:
       active.map((node) => nodeActions[node.workflow_node]).find(Boolean) ??
       null,
-    currentStage: data.current_stage,
+    currentStage: data.current_stage ?? 1,
     status: data.status,
     rejected: data.status === "returned",
     completed: data.status === "completed",
@@ -167,7 +167,9 @@ export function mapApplication(data: PermohonanResponse): Application {
       remainingDays: data.sla_remaining_days ?? slaNode?.sla_remaining_days,
       calendarError: data.sla_calendar_error ?? slaNode?.sla_calendar_error,
       tone:
-        data.status === "completed"
+        data.status === "draft"
+          ? "safe"
+          : data.status === "completed"
           ? "done"
           : sla === "overdue"
             ? "late"
@@ -175,7 +177,9 @@ export function mapApplication(data: PermohonanResponse): Application {
               ? "due"
               : "safe",
       label:
-        data.status === "completed"
+        data.status === "draft"
+          ? "—"
+          : data.status === "completed"
           ? "Selesai"
           : sla === "overdue"
             ? "Terlambat"
@@ -193,26 +197,43 @@ export function mapApplication(data: PermohonanResponse): Application {
       deadline,
     },
     nodes,
-    availableActions: data.available_actions ?? [],
+    availableActions: data.status === "draft" ? [] : data.available_actions ?? [],
     history: [],
     documents: [],
   };
 }
 
 export async function getApplications() {
-  // The existing dashboard filters and totals cover the full visible list, not just page one.
+  // Keep draft imports out of the active dashboard while retaining its existing
+  // client-side filters and totals across every active page.
+  const statuses = ["in_progress", "completed", "returned"];
+  const groups = await Promise.all(statuses.map((status) => getApplicationsByStatus(status)));
+  return groups.flat().sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+}
+
+export async function getApplicationsByStatus(status: string, scope?: string, search?: string) {
   const applications: Application[] = [];
   let page = 1;
   let maxPage = 1;
   do {
+    const params = new URLSearchParams({status, page: String(page), per_page: "100"});
+    if (scope) params.set("scope", scope);
+    if (search) params.set("search", search);
     const response = await apiRequest<PermohonanResponse[]>(
-      `/api/permohonan?page=${page}&per_page=100`,
+      `/api/permohonan?${params.toString()}`,
     );
     applications.push(...response.data.map(mapApplication));
     maxPage = response.pagination?.max_page ?? 1;
     page++;
   } while (page <= maxPage);
   return applications;
+}
+
+export async function getDraftPage(page: number, search = "") {
+  const params = new URLSearchParams({ status: "draft", scope: "mine", page: String(page), per_page: "25" });
+  if (search) params.set("search", search);
+  const response = await apiRequest<PermohonanResponse[]>(`/api/permohonan?${params.toString()}`);
+  return { applications: response.data.map(mapApplication), pagination: response.pagination };
 }
 
 export async function getApplication(id: string) {
@@ -320,6 +341,42 @@ export type CreateApplicationRequest = {
   tanggal_pembayaran: string;
   nominal_pembayaran: number;
 };
+
+export type DraftApplicationRequest = Omit<CreateApplicationRequest, "evidence_files" | "jenis_pembayaran" | "tarif" | "golongan_tarif" | "daya_baru" | "tanggal_pembayaran" | "nominal_pembayaran" | "daya_lama" | "golongan_tarif_lama" | "pembatas_baru" | "pembatas_lama" | "ulp_unit"> & {
+  jenis_pembayaran: string;
+  tarif: string | null;
+  golongan_tarif: string | null;
+  daya_baru: number | null;
+  tanggal_pembayaran: string;
+  nominal_pembayaran: number | null;
+  daya_lama: number | null;
+  golongan_tarif_lama: string | null;
+  pembatas_baru: string | null;
+  pembatas_lama: string | null;
+  ulp_unit: string;
+};
+
+export async function importEIS(file: File) {
+  const body = new FormData();
+  body.set("file", file);
+  return (await apiRequest<PermohonanResponse[]>("/api/permohonan/import-eis", { method: "POST", data: body })).data.map(mapApplication);
+}
+
+export async function saveDraft(id: string, payload: DraftApplicationRequest) {
+  return mapApplication((await apiRequest<PermohonanResponse>(`/api/permohonan/${encodeURIComponent(id)}/draft`, { method: "PUT", data: payload })).data);
+}
+
+export async function continueDraft(id: string, files: File[]) {
+  const body = new FormData();
+  files.forEach((file) => body.append("evidence_files", file));
+  return mapApplication((await apiRequest<PermohonanResponse>(`/api/permohonan/${encodeURIComponent(id)}/draft/continue`, { method: "POST", data: body })).data);
+}
+
+export async function saveAndContinueDraft(id: string, payload: DraftApplicationRequest, files: File[], onSaved: () => void) {
+  await saveDraft(id, payload);
+  onSaved();
+  return continueDraft(id, files);
+}
 export async function createApplication(payload: CreateApplicationRequest) {
   // Multipart: the create endpoint binds the customer's evidence to the new
   // permohonan atomically, so files are sent alongside the fields.

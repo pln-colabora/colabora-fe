@@ -322,10 +322,98 @@ test("list follows pagination without requesting details per row", async () => {
   const rows = await applications.getApplications();
   assert.deepEqual(
     rows.map((row) => row.id),
-    ["id-1", "id-2"],
+    ["id-1", "id-4", "id-2", "id-5", "id-3", "id-6"],
   );
-  assert.equal(calls.length, 2);
-  assert.ok(calls.every((url) => url.includes("/api/permohonan?page=")));
+  assert.equal(calls.length, 6);
+  for (const status of ["in_progress", "completed", "returned"])
+    assert.equal(calls.filter((url) => url.includes(`status=${status}`)).length, 2);
+  assert.ok(calls.every((url) => url.includes("per_page=100")));
+});
+
+test("draft projection has no active node, action or SLA", () => {
+  const mapped = applications.mapApplication({
+    ...fixture,
+    status: "draft",
+    current_stage: null,
+    workflow_nodes: null,
+    available_actions: null,
+    jenis_pembayaran: "prabayar",
+  });
+  assert.equal(mapped.status, "draft");
+  assert.equal(mapped.jenisPembayaran, "prabayar");
+  assert.equal(mapped.currentAction, null);
+  assert.equal(mapped.sla.deadline, null);
+  assert.equal(mapped.sla.label, "—");
+  assert.deepEqual(mapped.nodes, []);
+  assert.deepEqual(mapped.availableActions, []);
+  assert.equal(workflow.getApplicationStatus(mapped), "Draft");
+});
+
+test("draft list requests mine scope and server pagination", async () => {
+  let requested;
+  global.fetch = async (url) => {
+    requested = url;
+    return json({ data: [{ ...fixture, status: "draft", workflow_nodes: [] }], status: "success", pagination: { page: 2, max_page: 3, total: 51 } });
+  };
+  const result = await applications.getDraftPage(2, "TEST");
+  assert.equal(result.applications.length, 1);
+  assert.equal(result.pagination.max_page, 3);
+  assert.match(requested, /status=draft/);
+  assert.match(requested, /scope=mine/);
+  assert.match(requested, /page=2/);
+  assert.match(requested, /search=TEST/);
+});
+
+test("import and continue send multipart files; draft save sends every field", async () => {
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url, ...options });
+    return json({ data: url.includes("import-eis") ? [] : fixture, status: "success" });
+  };
+  const xls = new File(["workbook"], "eis.xls", { type: "application/vnd.ms-excel" });
+  const evidence = new File(["evidence"], "proof.pdf", { type: "application/pdf" });
+  await applications.importEIS(xls);
+  const payload = {
+    jenis_permohonan: "Pasang Baru (PB)", jenis_sambungan: "JTR", jenis_pembayaran: "prabayar",
+    tarif: "rumah_tangga", golongan_tarif: "R1", golongan_tarif_lama: null,
+    daya_baru: 900, daya_lama: null, pembatas_baru: null, pembatas_lama: null,
+    ulp_unit: "ULP Taman", pelanggan_nama: "Test", pelanggan_alamat: "Test address",
+    pelanggan_no_hp: "08123456789", tanggal_pembayaran: "2026-09-09", nominal_pembayaran: 150000,
+  };
+  await applications.saveDraft("test-id", payload);
+  await applications.continueDraft("test-id", [evidence]);
+  assert.equal(calls[0].body.get("file"), xls);
+  assert.deepEqual(JSON.parse(calls[1].body), payload);
+  assert.equal(calls[1].method, "PUT");
+  assert.equal(calls[2].body.getAll("evidence_files")[0], evidence);
+  assert.equal(calls[2].method, "POST");
+});
+
+test("EIS row errors show row number and safe reason", async () => {
+  global.fetch = async () => json({ status: false, message: "failed import EIS", error: "row 4: duplicate permohonan" }, 400);
+  await assert.rejects(applications.importEIS(new File(["x"], "eis.xls")), /Baris 4: permohonan sudah ada/);
+});
+
+test("failed continuation leaves the saved draft visible to the caller", async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(url);
+    if (url.endsWith("/draft/continue"))
+      return json({ status: false, message: "failed continue draft", error: "draft has incomplete required fields" }, 400);
+    return json({ data: { ...fixture, status: "draft", workflow_nodes: [] }, status: "success" });
+  };
+  let saved = false;
+  await assert.rejects(
+    applications.saveAndContinueDraft("test-id", {
+      jenis_permohonan: "Pasang Baru (PB)", jenis_sambungan: "JTR", jenis_pembayaran: "prabayar",
+      tarif: null, golongan_tarif: null, golongan_tarif_lama: null,
+      daya_baru: null, daya_lama: null, pembatas_baru: null, pembatas_lama: null,
+      ulp_unit: "ULP Taman", pelanggan_nama: "Test", pelanggan_alamat: "Test address",
+      pelanggan_no_hp: "08123456789", tanggal_pembayaran: "", nominal_pembayaran: null,
+    }, [new File(["proof"], "proof.pdf")], () => { saved = true; }),
+  );
+  assert.equal(saved, true);
+  assert.deepEqual(calls.map((url) => url.split("/api/")[1]), ["permohonan/test-id/draft", "permohonan/test-id/draft/continue"]);
 });
 
 test("create posts multipart fields, evidence files, and bearer token", async () => {

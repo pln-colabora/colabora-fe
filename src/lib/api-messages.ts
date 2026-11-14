@@ -124,7 +124,21 @@ const exact: Record<string, string> = {
   "invalid workflow activity payload": "Data aktivitas tidak valid.",
 };
 
+const eisRowErrors: Record<string, string> = {
+  "duplicate in file": "duplikat dalam berkas.",
+  "duplicate permohonan": "permohonan sudah ada.",
+  "NAMAUP is outside caller ULP": "NAMAUP di luar ULP Anda.",
+  "customer name, phone, address, and NAMAUP are required": "data wajib belum lengkap.",
+  "JENIS_TRANSAKSI is not supported": "jenis transaksi tidak didukung.",
+  "PAKET_SAR must be Pascabayar or Prabayar": "PAKET_SAR harus Pascabayar atau Prabayar.",
+  "TGLBAYAR must be an Excel date or YYYY-MM-DD": "TGLBAYAR tidak valid.",
+};
+
 const patterns: Array<[RegExp, (...groups: string[]) => string]> = [
+  [/^row (\d+): (.+)$/, (row, reason) =>
+    `Baris ${row}: ${translateOne(reason) ?? eisRowErrors[reason] ?? "data tidak valid."}`],
+  [/^(TOTALBIAYA|DAYA|DAYA_LAMA) must be a positive whole number$/, (field) =>
+    `${field} harus bilangan bulat lebih dari nol.`],
   [/^(\w+) is required when (\w+) is set$/, (a, b) => `${label(a)} wajib diisi jika ${label(b).toLowerCase()} dipilih.`],
   [/^(\w+) is required$/, (a) => `${label(a)} wajib diisi.`],
   [/^(\w+) must be greater than zero$/, (a) => `${label(a)} harus lebih dari 0.`],

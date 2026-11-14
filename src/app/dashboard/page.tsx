@@ -287,6 +287,7 @@ function DashboardContent() {
           </div>
           <div className="flex flex-col gap-3 sm:items-end">
             {ready && canCreatePermohonan(roleId) ? (
+              <div className="flex flex-wrap gap-2">
               <Button asChild className="min-h-11 w-full sm:w-auto">
                 <Link
                   href={`/permohonan/baru?returnTo=${encodeURIComponent(returnTo)}`}
@@ -295,6 +296,9 @@ function DashboardContent() {
                   Permohonan baru
                 </Link>
               </Button>
+              <Button asChild variant="outline" className="min-h-11"><Link href="/permohonan/import-eis">Import EIS</Link></Button>
+              <Button asChild variant="outline" className="min-h-11"><Link href="/permohonan/draft">Lihat draft</Link></Button>
+              </div>
             ) : null}
           </div>
         </header>

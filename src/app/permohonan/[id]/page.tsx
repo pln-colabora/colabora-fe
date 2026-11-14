@@ -133,6 +133,17 @@ export default function ApplicationDetailPage() {
     );
   }
 
+  if (application.status === "draft") {
+    return <AppShell active="applications" roleId={roleId} user={user}>
+      <div className="mx-auto max-w-3xl py-6">
+        <Link href="/permohonan/draft" className="text-muted-foreground hover:text-foreground text-sm">← Daftar draft</Link>
+        <h1 className="font-display mt-6 text-2xl font-semibold">Draft {application.number}</h1>
+        <p className="text-muted-foreground mt-2 text-sm">Lengkapi data dan evidence sebelum memulai workflow permohonan.</p>
+        <Button asChild className="mt-6"><Link href={`/permohonan/${application.id}/draft`}>Lengkapi draft</Link></Button>
+      </div>
+    </AppShell>;
+  }
+
   const currentActivity = getActivity(application.currentAction);
   const owner = currentActivity
     ? getRole(getOwner(currentActivity, application))

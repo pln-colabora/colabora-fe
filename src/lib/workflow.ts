@@ -953,6 +953,7 @@ export function getApplicationStatus(
     (
       {
         in_progress: "Dalam proses",
+        draft: "Draft",
         returned: "PK dikembalikan",
         completed: "Selesai",
       } as Record<string, string>
