@@ -17,6 +17,7 @@ export type ExportRow = {
   location: string;
   requestType: string;
   connectionType: string;
+  paymentType: string;
   tarif: string;
   /** Power in VA as digits, or "" when the record has none. */
   dayaLama: string;
@@ -68,6 +69,12 @@ const columns: ExportColumn[] = [
   },
   { header: "Jenis Permohonan", width: 18, value: (row) => row.requestType },
   { header: "Jenis Sambungan", width: 18, value: (row) => row.connectionType },
+  {
+    header: "Jenis Pembayaran",
+    width: 18,
+    value: (row) => row.paymentType,
+    internalOnly: true,
+  },
   {
     header: "Tarif",
     width: 16,
@@ -162,6 +169,11 @@ export function buildExportRows(
       location: application.location,
       requestType: application.requestType,
       connectionType: application.connectionType,
+      paymentType: application.jenisPembayaran
+        ? application.jenisPembayaran === "prabayar"
+          ? "Prabayar"
+          : "Pascabayar"
+        : "",
       tarif: application.tarif
         ? (tarifLabels[application.tarif] ?? application.tarif)
         : "",

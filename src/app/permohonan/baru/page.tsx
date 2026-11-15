@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, LoaderCircle, LockKeyhole } from "lucide-react";
+import {
+  ArrowLeft,
+  FileSpreadsheet,
+  LoaderCircle,
+  LockKeyhole,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -43,6 +48,9 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import {
   createApplication,
   getTariffOptions,
+  saveAndContinueDraft,
+  saveDraft,
+  type DraftApplicationRequest,
   type TariffPowerOption,
 } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
@@ -50,7 +58,10 @@ import { getDashboardReturnPath } from "@/lib/navigation";
 import {
   getRole,
   exactTariffPowers,
+  normalizeGolongan,
+  tarifForGolongan,
   tarifLabels,
+  type Application,
   type RoleId,
 } from "@/lib/workflow";
 
@@ -102,12 +113,13 @@ const baseSchema = z.object({
     ),
   requestType: z.enum(requestTypes),
   connectionType: z.string().min(1, "Jenis sambungan wajib dipilih."),
-  unit: z.enum(units),
+  unit: z.string().min(1, "Unit / ULP wajib dipilih."),
   location: z
     .string()
     .trim()
     .min(2, "Lokasi minimal 2 karakter.")
     .max(255, "Lokasi maksimal 255 karakter."),
+  jenisPembayaran: z.enum(["pascabayar", "prabayar"], { error: "Jenis pembayaran wajib dipilih." }),
   tarif: z.string().min(1, "Tarif wajib dipilih."),
   golonganTarif: z.string().min(1, "Golongan tarif wajib dipilih."),
   golonganTarifLama: z.string(),
@@ -186,14 +198,32 @@ export default function ApplicationCreatePage() {
           Kembali ke daftar permohonan
         </Link>
 
-        <header className="mt-5 border-b pb-6">
-          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-            Permohonan PB/PD baru
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Catat data pelanggan dan kebutuhan sambungan untuk memulai proses
-            permohonan. Jenis sambungan mengikuti kewenangan peran Anda.
-          </p>
+        <header className="mt-5 flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+              Permohonan PB/PD baru
+            </h1>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Catat data pelanggan dan kebutuhan sambungan untuk memulai proses
+              permohonan. Jenis sambungan mengikuti kewenangan peran Anda.
+            </p>
+          </div>
+          {canCreatePermohonan(roleId) && (
+            <Button asChild variant="outline" className="min-h-11">
+              <Link
+                href="/permohonan/import-eis"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void confirmDiscard().then((confirmed) => {
+                    if (confirmed) router.push("/permohonan/import-eis");
+                  });
+                }}
+              >
+                <FileSpreadsheet aria-hidden="true" />
+                Import dari EIS
+              </Link>
+            </Button>
+          )}
         </header>
 
         {canCreatePermohonan(roleId) ? (
@@ -240,14 +270,16 @@ function Unauthorized({ roleId }: { roleId: RoleId }) {
   );
 }
 
-function CreateForm({
+export function CreateForm({
   roleId,
   returnTo,
   onDirtyChange,
+  draft,
 }: {
   roleId: RoleId;
   returnTo: string;
   onDirtyChange: (dirty: boolean) => void;
+  draft?: Application;
 }) {
   const connectionOptions = useMemo(() => jenisByRole[roleId] ?? [], [roleId]);
   const schema = useMemo(
@@ -285,23 +317,31 @@ function CreateForm({
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      customer: "",
-      phone: "",
-      requestType: requestTypes[0],
-      connectionType: connectionOptions[0] ?? "",
-      unit: units[0],
-      location: "",
-      tarif: "",
-      golonganTarif: "",
-      golonganTarifLama: "",
-      dayaBaru: "",
-      dayaLama: "",
-      paymentDate: "",
-      paymentAmount: "",
+      customer: draft?.customer ?? "",
+      phone: draft?.phone ?? "",
+      requestType: draft?.requestType ?? requestTypes[0],
+      connectionType: draft?.connectionType ?? connectionOptions[0] ?? "",
+      unit: draft?.unit ?? units[0],
+      location: draft?.location ?? "",
+      jenisPembayaran: draft?.jenisPembayaran,
+      // EIS imports carry only the golongan (column TARIF); derive tarif from it
+      // so the golongan and daya dropdowns can match the imported values.
+      tarif:
+        draft?.tarif ??
+        tarifForGolongan(normalizeGolongan(draft?.golonganTarif)),
+      golonganTarif: normalizeGolongan(draft?.golonganTarif),
+      golonganTarifLama: normalizeGolongan(draft?.golonganTarifLama),
+      dayaBaru: draft?.dayaBaru ? String(draft.dayaBaru) : "",
+      dayaLama: draft?.dayaLama ? String(draft.dayaLama) : "",
+      paymentDate: draft?.paymentDate ?? "",
+      paymentAmount: draft?.paymentAmount ? String(draft.paymentAmount) : "",
       files: [],
     },
   });
   const busy = form.formState.isSubmitting;
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [savedNotice, setSavedNotice] = useState("");
+  const formBusy = busy || savingDraft;
   const { confirmDiscard, dialog: unsavedDialog } = useUnsavedChanges(
     form.formState.isDirty,
   );
@@ -343,27 +383,38 @@ function CreateForm({
   const golonganTarifLama = form.watch("golonganTarifLama");
   const apiJenis = toApiJenis(connectionType);
 
+  // An EIS import fixes tarif, golongan and daya from the file, so for drafts
+  // they are matched against the whole catalogue regardless of jenis sambungan.
+  // Manual entry keeps the jenis -> tarif -> golongan -> daya order.
+  const isDraft = Boolean(draft);
+  const inTariffScope = useCallback(
+    (option: { jenis_sambungan: string }) =>
+      isDraft || option.jenis_sambungan === apiJenis,
+    [isDraft, apiJenis],
+  );
+  const usesApiTariffs = tariffs.some(
+    (option) => option.daya_label && option.golongan_tarif,
+  );
   const detailedTariffs = useMemo(() => {
-    const apiHasExactValues = tariffs.some(
-      (option) => option.daya_label && option.golongan_tarif,
-    );
-    if (apiHasExactValues) return tariffs;
+    if (usesApiTariffs) return tariffs;
     return exactTariffPowers.map((option) => ({
       ...option,
       jenis_sambungan: apiJenis,
       label: option.daya_label,
       daya_max: option.daya_min,
     }));
-  }, [tariffs, apiJenis]);
+  }, [tariffs, usesApiTariffs, apiJenis]);
 
   const tarifChoices = useMemo(() => {
     const present = new Set(
       detailedTariffs
-        .filter((o) => o.jenis_sambungan === apiJenis)
+        .filter(inTariffScope)
         .map((o) => o.tarif),
     );
-    return tarifOrder.filter((value) => present.has(value));
-  }, [detailedTariffs, apiJenis]);
+    const choices = tarifOrder.filter((value) => present.has(value));
+    if (draft?.tarif && !choices.includes(draft.tarif)) choices.push(draft.tarif);
+    return choices;
+  }, [detailedTariffs, inTariffScope, draft?.tarif]);
 
   const tariffPowerChoices = useMemo(() => {
     const seen = new Set<string>();
@@ -371,7 +422,7 @@ function CreateForm({
       .filter(
         (o) =>
           o.tarif === tarif &&
-          o.jenis_sambungan === apiJenis,
+          inTariffScope(o),
       )
       .filter((o) => {
         const key = `${o.daya_min}:${o.pembatas ?? ""}`;
@@ -382,12 +433,12 @@ function CreateForm({
       .sort(
         (a, b) => (a.daya_min ?? Infinity) - (b.daya_min ?? Infinity),
       );
-  }, [detailedTariffs, tarif, apiJenis]);
+  }, [detailedTariffs, tarif, inTariffScope]);
   const dayaChoices = tariffPowerChoices.filter(
     (option) => option.golongan_tarif === golonganTarif,
   );
 
-  const golonganChoices = useMemo(
+  const availableGolonganChoices = useMemo(
     () =>
       [
         ...new Set(
@@ -395,15 +446,23 @@ function CreateForm({
             .filter(
               (option) =>
                 option.tarif === tarif &&
-                option.jenis_sambungan === apiJenis &&
+                inTariffScope(option) &&
                 option.golongan_tarif,
             )
             .map((option) => option.golongan_tarif),
         ),
       ].sort(),
-    [detailedTariffs, tarif, apiJenis],
+    [detailedTariffs, tarif, inTariffScope],
   );
-  const golonganLamaChoices = golonganChoices;
+  const golonganChoices = [...availableGolonganChoices];
+  if (draft?.golonganTarif && !golonganChoices.includes(draft.golonganTarif))
+    golonganChoices.push(draft.golonganTarif);
+  const golonganLamaChoices = [...golonganChoices];
+  if (
+    draft?.golonganTarifLama &&
+    !golonganLamaChoices.includes(draft.golonganTarifLama)
+  )
+    golonganLamaChoices.push(draft.golonganTarifLama);
   const dayaLamaChoices = useMemo(
     () =>
       tariffPowerChoices.filter(
@@ -418,7 +477,198 @@ function CreateForm({
     (option) => String(option.daya_min) === form.getValues("dayaLama"),
   );
 
+  // Tarif, golongan and daya options are scoped to jenis sambungan. Changing it
+  // keeps every value that still exists for the new jenis and clears only the
+  // rest, so imported (EIS) values survive when jenis is filled in afterwards.
+  function keepValidTariffFields(jenis: string) {
+    const values = form.getValues();
+    const options = detailedTariffs.filter(
+      (option) =>
+        option.tarif === values.tarif &&
+        // The static fallback catalogue is the same for every jenis.
+        (option.jenis_sambungan === jenis || !usesApiTariffs),
+    );
+    const powers = (golongan: string) =>
+      options
+        .filter((option) => option.golongan_tarif === golongan)
+        .map((option) => String(option.daya_min));
+    if (!options.length) form.setValue("tarif", "");
+    for (const [golonganField, dayaField] of [
+      ["golonganTarif", "dayaBaru"],
+      ["golonganTarifLama", "dayaLama"],
+    ] as const) {
+      const available = powers(values[golonganField]);
+      if (!available.length) form.setValue(golonganField, "");
+      if (!available.includes(values[dayaField])) form.setValue(dayaField, "");
+    }
+  }
+
+  function draftPayload(values: FormValues, continuing = false): DraftApplicationRequest {
+    const oldPower = detailedTariffs.find(
+      (option) =>
+        option.tarif === values.tarif &&
+        option.jenis_sambungan === toApiJenis(values.connectionType) &&
+        option.golongan_tarif === values.golonganTarifLama &&
+        String(option.daya_min) === values.dayaLama,
+    );
+    const newPower = detailedTariffs.find(
+      (option) =>
+        option.tarif === values.tarif &&
+        option.jenis_sambungan === toApiJenis(values.connectionType) &&
+        option.golongan_tarif === values.golonganTarif &&
+        String(option.daya_min) === values.dayaBaru,
+    );
+    const oldUnchanged = values.dayaLama === String(draft?.dayaLama ?? "");
+    const newUnchanged = values.dayaBaru === String(draft?.dayaBaru ?? "");
+    return {
+      jenis_permohonan:
+        values.requestType === "Pasang baru"
+          ? "Pasang Baru (PB)"
+          : "Perubahan Daya (PD)",
+      jenis_sambungan: toApiJenis(values.connectionType),
+      jenis_pembayaran: values.jenisPembayaran ?? "",
+      pelanggan_nama: values.customer,
+      pelanggan_alamat: values.location,
+      pelanggan_no_hp: values.phone,
+      tanggal_pembayaran: values.paymentDate,
+      nominal_pembayaran: values.paymentAmount ? Number(values.paymentAmount) : null,
+      tarif: values.tarif || null,
+      golongan_tarif: values.golonganTarif || null,
+      golongan_tarif_lama:
+        values.requestType === "Perubahan daya"
+          ? values.golonganTarifLama || null
+          : continuing
+            ? null
+            : draft?.golonganTarifLama ?? null,
+      daya_baru: values.dayaBaru ? Number(values.dayaBaru) : null,
+      daya_lama:
+        values.requestType === "Perubahan daya" && values.dayaLama
+          ? Number(values.dayaLama)
+          : continuing
+            ? null
+            : draft?.dayaLama ?? null,
+      pembatas_baru:
+        newPower?.pembatas ??
+        (newUnchanged ? draft?.pembatasBaru : null) ??
+        null,
+      pembatas_lama:
+        values.requestType === "Perubahan daya"
+          ? oldPower?.pembatas ??
+            (oldUnchanged ? draft?.pembatasLama : null) ??
+            null
+          : continuing
+            ? null
+            : draft?.pembatasLama ?? null,
+      ulp_unit: values.unit,
+    };
+  }
+
+  async function handleSaveDraft() {
+    if (!draft) return;
+    setSavingDraft(true);
+    setRequestError(null);
+    setSavedNotice("");
+    try {
+      await saveDraft(draft.id, draftPayload(form.getValues()));
+      form.reset(form.getValues());
+      setSavedNotice("Draft berhasil disimpan.");
+      toast.success("Draft berhasil disimpan.");
+    } catch (error) {
+      setRequestError(error);
+      toast.error(presentApiError(error, "Gagal menyimpan draft.").message);
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  // Names exactly which imported value does not exist in the tariff catalogue,
+  // e.g. "Daya baru 23.000 VA tidak tersedia untuk golongan S1".
+  function importedPowerError(
+    golongan: string,
+    daya: string,
+    which: "baru" | "lama",
+  ): { field: "golongan" | "daya"; message: string } | null {
+    const golonganLabel = which === "baru" ? "Golongan tarif baru" : "Golongan tarif lama";
+    const dayaLabel = which === "baru" ? "Daya baru" : "Daya lama";
+    if (!golongan)
+      return { field: "golongan", message: `${golonganLabel} wajib dipilih.` };
+    const powers = tariffPowerChoices.filter(
+      (option) => option.golongan_tarif === golongan,
+    );
+    if (!powers.length)
+      return {
+        field: "golongan",
+        message: `${golonganLabel} ${golongan} tidak terdaftar untuk tarif ${tariffDisplayLabel(tarif) || "yang dipilih"}. Pilih golongan dari daftar.`,
+      };
+    if (!daya) return { field: "daya", message: `${dayaLabel} wajib dipilih.` };
+    if (powers.some((option) => String(option.daya_min) === daya)) return null;
+    const dayaText = `${new Intl.NumberFormat("id-ID").format(Number(daya))} VA`;
+    return {
+      field: "daya",
+      message: `${dayaLabel} ${dayaText} tidak tersedia untuk golongan ${golongan}. Pilih golongan lain atau daya yang tersedia.`,
+    };
+  }
+
+  const dayaBaruValue = form.watch("dayaBaru");
+  const dayaLamaValue = form.watch("dayaLama");
+  // Imported rows are checked as soon as the catalogue is loaded and again on
+  // every change, so mismatches are visible before the user presses save.
+  useEffect(() => {
+    if (!draft || tariffLoading || !detailedTariffs.length) return;
+    const checks = [
+      ["golonganTarif", "dayaBaru", importedPowerError(golonganTarif, dayaBaruValue, "baru")],
+      [
+        "golonganTarifLama",
+        "dayaLama",
+        requestType === "Perubahan daya"
+          ? importedPowerError(golonganTarifLama, dayaLamaValue, "lama")
+          : null,
+      ],
+    ] as const;
+    for (const [golonganField, dayaField, error] of checks) {
+      form.clearErrors([golonganField, dayaField]);
+      if (error)
+        form.setError(error.field === "golongan" ? golonganField : dayaField, {
+          message: error.message,
+        });
+    }
+    // importedPowerError reads the same watched values listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, tariffLoading, detailedTariffs, tarif, requestType, golonganTarif, golonganTarifLama, dayaBaruValue, dayaLamaValue]);
+
   async function handleSubmit(values: FormValues) {
+    if (draft) {
+      const newPowerError = importedPowerError(values.golonganTarif, values.dayaBaru, "baru");
+      const oldPowerError =
+        values.requestType === "Perubahan daya"
+          ? importedPowerError(values.golonganTarifLama, values.dayaLama, "lama")
+          : null;
+      if (newPowerError) form.setError(newPowerError.field === "golongan" ? "golonganTarif" : "dayaBaru", { message: newPowerError.message });
+      if (oldPowerError) form.setError(oldPowerError.field === "golongan" ? "golonganTarifLama" : "dayaLama", { message: oldPowerError.message });
+      if (newPowerError || oldPowerError) return;
+      if (
+        !(await confirmCreate({
+          title: "Lanjutkan draft ini?",
+          description: `Data draft ${draft.number} akan disimpan dan workflow PB/PD dimulai. Setelah itu permohonan tidak lagi berstatus draft.`,
+          confirmLabel: "Lanjutkan",
+        }))
+      )
+        return;
+      setRequestError(null);
+      setSavedNotice("");
+      try {
+        const application = await saveAndContinueDraft(draft.id, draftPayload(values, true), values.files, () => {
+          form.reset(values);
+          setSavedNotice("Perubahan draft sudah tersimpan.");
+        });
+        toast.success("Draft berhasil dilanjutkan.");
+        router.push(`/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`);
+      } catch (error) {
+        setRequestError(error);
+        toast.error(presentApiError(error, "Gagal melanjutkan draft.").message);
+      }
+      return;
+    }
     if (
       !(await confirmCreate({
         title: "Buat permohonan baru?",
@@ -440,6 +690,7 @@ function CreateForm({
             ? "Pasang Baru (PB)"
             : "Perubahan Daya (PD)",
         jenis_sambungan: toApiJenis(values.connectionType),
+        jenis_pembayaran: values.jenisPembayaran,
         tarif: values.tarif,
         golongan_tarif: values.golonganTarif,
         daya_baru: Number(values.dayaBaru),
@@ -479,7 +730,7 @@ function CreateForm({
       <CardContent className="p-5 sm:p-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} noValidate>
-            <fieldset className="min-w-0" disabled={busy}>
+            <fieldset className="min-w-0" disabled={formBusy}>
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -587,10 +838,7 @@ function CreateForm({
                         value={field.value}
                         onValueChange={(value) => {
                           field.onChange(value);
-                          // Tarif and daya options are scoped to jenis sambungan.
-                          form.setValue("tarif", "");
-                          form.setValue("dayaBaru", "");
-                          form.setValue("dayaLama", "");
+                          if (!draft) keepValidTariffFields(toApiJenis(value));
                         }}
                         disabled={busy}
                       >
@@ -612,7 +860,7 @@ function CreateForm({
                   )}
                 />
 
-                {roleId === "nps" && (
+                {(roleId === "nps" || draft) && (
                   <FormField
                     control={form.control}
                     name="unit"
@@ -622,7 +870,7 @@ function CreateForm({
                         <Select
                           value={field.value}
                           onValueChange={field.onChange}
-                          disabled={busy}
+                          disabled={formBusy || roleId !== "nps"}
                         >
                           <FormControl>
                             <SelectTrigger className="bg-background h-11 w-full">
@@ -630,9 +878,9 @@ function CreateForm({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {units.map((option) => (
+                            {[...units, ...(draft?.unit && !units.includes(draft.unit as typeof units[number]) ? [draft.unit] : [])].map((option) => (
                               <SelectItem key={option} value={option}>
-                                {option}
+                                {option}{draft?.unit === option && !units.includes(option as typeof units[number]) ? " (import, periksa ULP)" : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -663,6 +911,24 @@ function CreateForm({
 
                 <FormField
                   control={form.control}
+                  name="jenisPembayaran"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Jenis pembayaran</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange} disabled={busy}>
+                        <FormControl><SelectTrigger className="bg-background h-11 w-full"><SelectValue placeholder="Pilih jenis pembayaran" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="pascabayar">Pascabayar</SelectItem>
+                          <SelectItem value="prabayar">Prabayar</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="tarif"
                   render={({ field }) => (
                     <FormItem className="md:col-span-2">
@@ -682,7 +948,11 @@ function CreateForm({
                           <SelectTrigger className="bg-background h-11 w-full">
                             <SelectValue
                               placeholder={
-                                tariffLoading ? "Memuat tarif..." : "Pilih tarif"
+                                tariffLoading
+                                  ? "Memuat tarif..."
+                                  : !apiJenis && !draft
+                                    ? "Pilih jenis sambungan dulu"
+                                    : "Pilih tarif"
                               }
                             />
                           </SelectTrigger>
@@ -690,7 +960,7 @@ function CreateForm({
                         <SelectContent>
                           {tarifChoices.map((value) => (
                             <SelectItem key={value} value={value}>
-                                {tariffDisplayLabel(value)}
+                                {tariffDisplayLabel(value)}{draft?.tarif === value && !detailedTariffs.some((option) => option.tarif === value && inTariffScope(option)) ? " (import, perlu diperbaiki)" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -728,7 +998,7 @@ function CreateForm({
                           <SelectContent>
                             {golonganLamaChoices.map((value) => (
                               <SelectItem key={value} value={value}>
-                                {value}
+                                {value}{draft?.golonganTarifLama === value && !detailedTariffs.some((option) => option.tarif === tarif && inTariffScope(option) && option.golongan_tarif === value) ? " (import, perlu diperbaiki)" : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -765,7 +1035,7 @@ function CreateForm({
                         <SelectContent>
                           {golonganChoices.map((value) => (
                             <SelectItem key={value} value={value}>
-                              {value}
+                                {value}{draft?.golonganTarif === value && !detailedTariffs.some((option) => option.tarif === tarif && inTariffScope(option) && option.golongan_tarif === value) ? " (import, perlu diperbaiki)" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -813,6 +1083,7 @@ function CreateForm({
                                 {exactPowerLabel(option)}
                               </SelectItem>
                             ))}
+                            {draft?.dayaLama && !dayaLamaChoices.some((option) => option.daya_min === draft.dayaLama) && <SelectItem value={String(draft.dayaLama)}>{draft.dayaLama} VA (import, perlu diperbaiki)</SelectItem>}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -860,6 +1131,7 @@ function CreateForm({
                               {exactPowerLabel(option)}
                             </SelectItem>
                           ))}
+                          {draft?.dayaBaru && !dayaChoices.some((option) => option.daya_min === draft.dayaBaru) && <SelectItem value={String(draft.dayaBaru)}>{draft.dayaBaru} VA (import, perlu diperbaiki)</SelectItem>}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -889,11 +1161,12 @@ function CreateForm({
                 />
               </div>
 
+              {savedNotice && <p role="status" className="text-success mt-4 text-sm">{savedNotice}</p>}
               {Boolean(requestError) && (
                 <ErrorNotice
                   error={requestError}
-                  onRetry={() => void form.handleSubmit(handleSubmit)()}
-                  retrying={busy}
+                  onRetry={draft ? undefined : () => void form.handleSubmit(handleSubmit)()}
+                  retrying={formBusy}
                 />
               )}
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -911,9 +1184,10 @@ function CreateForm({
                 >
                   <Link href={returnTo}>Batal</Link>
                 </Button>
+                {draft && <Button type="button" variant="outline" className="min-h-11" onClick={() => void handleSaveDraft()}>{savingDraft ? "Menyimpan..." : "Simpan draft"}</Button>}
                 <Button type="submit" className="min-h-11">
                   {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}
-                  {busy ? "Menyimpan..." : "Simpan permohonan"}
+                  {busy ? "Menyimpan..." : draft ? "Lanjutkan" : "Simpan permohonan"}
                 </Button>
               </div>
             </fieldset>

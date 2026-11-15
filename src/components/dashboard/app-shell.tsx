@@ -12,6 +12,7 @@ import {
   ClipboardList,
   FilePlus2,
   House,
+  KeyRound,
   LogOut,
   Menu,
   PanelLeft,
@@ -29,6 +30,7 @@ import {
 import { getRole, type RoleId } from "@/lib/workflow";
 
 const SIDEBAR_STORAGE_KEY = "colabora:sidebar-collapsed";
+const PASSWORD_PATH = "/akun/kata-sandi";
 
 const baseDestinations = [
   {
@@ -77,7 +79,13 @@ export function canManageAccounts(roleId: RoleId) {
 
 type AppShellProps = {
   children: React.ReactNode;
-  active: "dashboard" | "applications" | "create" | "accounts" | "schedule";
+  active:
+    | "dashboard"
+    | "applications"
+    | "create"
+    | "accounts"
+    | "schedule"
+    | "password";
   roleId: RoleId;
   user?: User | null;
 };
@@ -394,6 +402,17 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                 <p className="text-muted-foreground mt-1 text-sm">
                   {role.label} — {user?.unit || "—"}
                 </p>
+                <div className="mt-3 border-t pt-3">
+                  <Link
+                    href={PASSWORD_PATH}
+                    onClick={(event) => handleNavigation(event, PASSWORD_PATH)}
+                    aria-current={active === "password" ? "page" : undefined}
+                    className="text-muted-foreground hover:bg-accent hover:text-foreground aria-[current=page]:text-foreground -mx-2 flex min-h-10 items-center gap-3 rounded-md px-2 text-sm font-medium transition-colors"
+                  >
+                    <KeyRound className="size-4 shrink-0" aria-hidden="true" />
+                    Ubah kata sandi
+                  </Link>
+                </div>
               </div>
             </details>
             <Button
@@ -460,10 +479,23 @@ export function AppShell({ children, active, roleId, user }: AppShellProps) {
                     ),
                   )}
                 </nav>
+                <Link
+                  href={PASSWORD_PATH}
+                  aria-current={active === "password" ? "page" : undefined}
+                  onClick={(event) =>
+                    handleNavigation(event, PASSWORD_PATH, () =>
+                      setMobileMenuOpen(false),
+                    )
+                  }
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground mt-4 flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium"
+                >
+                  <KeyRound className="size-4 shrink-0" aria-hidden="true" />
+                  Ubah kata sandi
+                </Link>
                 <Button
                   type="button"
                   variant="ghost"
-                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive mt-4 min-h-11 w-full justify-start gap-3 px-3 text-sm font-medium"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive min-h-11 w-full justify-start gap-3 px-3 text-sm font-medium"
                   onClick={handleLogout}
                 >
                   <LogOut className="size-4 shrink-0" aria-hidden="true" />

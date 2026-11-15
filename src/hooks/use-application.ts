@@ -39,7 +39,7 @@ export function useApplication(
         if (cancelled) return;
         setApplication(data);
         setLoading(false);
-        if (!includeRelated) return;
+        if (!includeRelated || data.status === "draft") return;
 
         setRelatedLoading(true);
         try {

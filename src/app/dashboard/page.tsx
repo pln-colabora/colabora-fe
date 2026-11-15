@@ -16,6 +16,7 @@ import {
   Clock3,
   FileText,
   FilePlus2,
+  FileSpreadsheet,
   ListTodo,
   MapPin,
   Search,
@@ -100,6 +101,7 @@ function DashboardContent() {
   const urlQuery = searchParams.get("q") ?? "";
   const statusFilter = searchParams.get("status") ?? "";
   const stageFilter = searchParams.get("stage") ?? "";
+  const paymentFilter = searchParams.get("payment") ?? "";
   const [searchQuery, setSearchQuery] = useState(urlQuery);
   const { user, error: sessionError } = useSession();
   const roleId = user?.role ?? "user";
@@ -157,12 +159,20 @@ function DashboardContent() {
     router.replace(`/dashboard?${params.toString()}`, { scroll: false });
   }
 
+  function handlePaymentChange(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "all") params.delete("payment");
+    else params.set("payment", value);
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  }
+
   function handleResetFilters() {
     setSearchQuery("");
     const params = new URLSearchParams(searchParams.toString());
     params.delete("q");
     params.delete("status");
     params.delete("stage");
+    params.delete("payment");
     router.replace(`/dashboard?${params.toString()}`, { scroll: false });
   }
 
@@ -191,6 +201,9 @@ function DashboardContent() {
       return false;
     }
     if (statusFilter && getApplicationStatus(application, roleId) !== statusFilter) {
+      return false;
+    }
+    if (paymentFilter && application.jenisPembayaran !== paymentFilter) {
       return false;
     }
     if (searchTerms.length === 0) {
@@ -240,6 +253,7 @@ function DashboardContent() {
       ? `Tahap: ${stages.find((item) => String(item.id) === stageFilter)?.shortLabel ?? stageFilter}`
       : null,
     statusFilter ? `Status: ${statusFilter}` : null,
+    paymentFilter ? `Pembayaran: ${paymentLabel(paymentFilter)}` : null,
     searchQuery.trim() ? `Pencarian: "${searchQuery.trim()}"` : null,
   ].filter((item): item is string => item !== null);
   const completedCount = roleScopedApplications.filter(
@@ -287,6 +301,7 @@ function DashboardContent() {
           </div>
           <div className="flex flex-col gap-3 sm:items-end">
             {ready && canCreatePermohonan(roleId) ? (
+              <div className="flex flex-wrap gap-2">
               <Button asChild className="min-h-11 w-full sm:w-auto">
                 <Link
                   href={`/permohonan/baru?returnTo=${encodeURIComponent(returnTo)}`}
@@ -295,6 +310,13 @@ function DashboardContent() {
                   Permohonan baru
                 </Link>
               </Button>
+              <Button asChild variant="outline" className="min-h-11">
+                <Link href="/permohonan/import-eis">
+                  <FileSpreadsheet aria-hidden="true" />
+                  Import EIS
+                </Link>
+              </Button>
+              </div>
             ) : null}
           </div>
         </header>
@@ -701,7 +723,26 @@ function DashboardContent() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {(searchQuery || statusFilter || stageFilter) && (
+                  <label htmlFor="payment-filter" className="text-sm">
+                    Pembayaran
+                  </label>
+                  <Select
+                    value={paymentFilter || "all"}
+                    onValueChange={handlePaymentChange}
+                  >
+                    <SelectTrigger
+                      id="payment-filter"
+                      className="bg-card h-11 w-40"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua</SelectItem>
+                      <SelectItem value="pascabayar">Pascabayar</SelectItem>
+                      <SelectItem value="prabayar">Prabayar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {(searchQuery || statusFilter || stageFilter || paymentFilter) && (
                     <Button
                       variant="ghost"
                       className="min-h-11"
@@ -1388,6 +1429,10 @@ function ActionOwnership({
       {owner ? `Menunggu ${owner.label}` : "Menunggu bagian lain"}
     </span>
   );
+}
+
+function paymentLabel(value: string) {
+  return value === "prabayar" ? "Prabayar" : "Pascabayar";
 }
 
 function isOwnedBy(application: Application) {

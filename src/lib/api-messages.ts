@@ -9,6 +9,7 @@ const fieldLabels: Record<string, string> = {
   golongan_tarif: "Golongan tarif",
   golongan_tarif_lama: "Golongan tarif lama",
   pembatas_lama: "Pembatas lama",
+  jenis_pembayaran: "Jenis pembayaran",
   tarif: "Tarif",
   jenis_permohonan: "Jenis permohonan",
   jenis_sambungan: "Jenis sambungan",
@@ -30,6 +31,8 @@ const fieldLabels: Record<string, string> = {
   document_ids: "Evidence",
   email: "Email",
   password: "Kata sandi",
+  current_password: "Kata sandi saat ini",
+  new_password: "Kata sandi baru",
   name: "Nama",
   role: "Peran",
 };
@@ -70,6 +73,8 @@ const exact: Record<string, string> = {
     "Sebagian evidence sudah terpakai. Unggah ulang berkasnya.",
   "one or more documents do not exist":
     "Sebagian evidence tidak ditemukan. Unggah ulang berkasnya.",
+  "file must be an XLS or XLSX up to 30 MB":
+    "Berkas EIS harus berformat .xls atau .xlsx dan maksimal 30 MB.",
   "file exceeds max upload size": "Ukuran berkas melebihi batas 30 MB.",
   "file type not allowed":
     "Format berkas tidak didukung. Gunakan PDF, JPG, PNG, XLS, atau XLSX.",
@@ -96,6 +101,7 @@ const exact: Record<string, string> = {
   "booking WO tidak dapat diubah melalui kalender":
     "Jadwal dari WO tidak dapat diubah melalui kalender.",
   "invalid credentials": "Email atau kata sandi tidak cocok.",
+  "current password is incorrect": "Kata sandi saat ini salah.",
   "invalid-email": "Format email tidak valid.",
   "account is not verified":
     "Akun belum diverifikasi. Hubungi pengelola akun.",
@@ -114,13 +120,29 @@ const exact: Record<string, string> = {
   "denied access": "Anda tidak memiliki izin untuk tindakan ini.",
   "vendor role already assigned": "Vendor untuk peran ini sudah ditugaskan.",
   "permohonan not found": "Permohonan tidak ditemukan.",
+  "draft not found": "Draft tidak ditemukan atau tidak dapat diakses.",
+  "draft cannot be deleted": "Draft sudah dilanjutkan atau memiliki data terkait sehingga tidak dapat dihapus.",
   "workflow node not found": "Aktivitas tidak ditemukan.",
   "document not found": "Dokumen tidak ditemukan.",
   "user not found": "Akun tidak ditemukan.",
   "invalid workflow activity payload": "Data aktivitas tidak valid.",
 };
 
+const eisRowErrors: Record<string, string> = {
+  "duplicate in file": "duplikat dalam berkas.",
+  "duplicate permohonan": "permohonan sudah ada.",
+  "NAMAUP is outside caller ULP": "NAMAUP di luar ULP Anda.",
+  "customer name, phone, address, and NAMAUP are required": "data wajib belum lengkap.",
+  "JENIS_TRANSAKSI is not supported": "jenis transaksi tidak didukung.",
+  "PAKET_SAR must be Pascabayar or Prabayar": "PAKET_SAR harus Pascabayar atau Prabayar.",
+  "TGLBAYAR must be an Excel date or YYYY-MM-DD": "TGLBAYAR tidak valid.",
+};
+
 const patterns: Array<[RegExp, (...groups: string[]) => string]> = [
+  [/^row (\d+): (.+)$/, (row, reason) =>
+    `Baris ${row}: ${translateOne(reason) ?? eisRowErrors[reason] ?? "data tidak valid."}`],
+  [/^(TOTALBIAYA|DAYA|DAYA_LAMA) must be a positive whole number$/, (field) =>
+    `${field} harus bilangan bulat lebih dari nol.`],
   [/^(\w+) is required when (\w+) is set$/, (a, b) => `${label(a)} wajib diisi jika ${label(b).toLowerCase()} dipilih.`],
   [/^(\w+) is required$/, (a) => `${label(a)} wajib diisi.`],
   [/^(\w+) must be greater than zero$/, (a) => `${label(a)} harus lebih dari 0.`],
