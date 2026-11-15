@@ -140,22 +140,35 @@ const powersByGolongan: Record<string, string[]> = {
   I4: ["30000000"],
 };
 
+const tarifByGolonganLetter: Record<string, string> = {
+  R: "rumah_tangga",
+  B: "bisnis",
+  S: "sosial",
+  P: "pemerintah",
+  I: "industri",
+};
+
+// tarif follows the golongan's leading letter (R1 -> rumah_tangga), the same
+// rule the API uses for its tariff catalogue.
+export function tarifForGolongan(golongan: string) {
+  return tarifByGolonganLetter[golongan[0]] ?? "";
+}
+
+// EIS exports may write golongan as "r3", "R-3" or "R 3"; the catalogue uses "R3".
+// Unknown codes are returned untouched so the form can flag them for correction.
+export function normalizeGolongan(value: string | undefined) {
+  if (!value) return "";
+  const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return compact in powersByGolongan ? compact : value;
+}
+
 export const exactTariffPowers: ExactTariffPower[] = Object.entries(
   powersByGolongan,
 ).flatMap(([golongan_tarif, values]) =>
   values.map((value) => {
     const row = exactPowers.find(([candidate]) => candidate === value);
     return {
-      tarif:
-        golongan_tarif[0] === "R"
-          ? "rumah_tangga"
-          : golongan_tarif[0] === "B"
-            ? "bisnis"
-            : golongan_tarif[0] === "S"
-              ? "sosial"
-              : golongan_tarif[0] === "P"
-                ? "pemerintah"
-                : "industri",
+      tarif: tarifForGolongan(golongan_tarif),
       golongan_tarif,
       daya_label: `${golongan_tarif === "I4" ? "> " : ""}${new Intl.NumberFormat("id-ID").format(Number(value))} VA`,
       daya_min: Number(value),

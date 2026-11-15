@@ -1287,3 +1287,14 @@ test("WO PDKB sends its optional nomor surat", async () => {
   };
   await applications.submitAction("test-id", { workflow_node: "wo_pdkb", method: "POST", path: "/api/permohonan/{id}/wo-pdkb" }, { nomor_surat: "001/PDKB/2026" }, ["doc-1"]);
 });
+
+test("imported golongan is normalised and gives its tarif", () => {
+  assert.equal(workflow.normalizeGolongan("r-3"), "R3");
+  assert.equal(workflow.normalizeGolongan("B 2"), "B2");
+  assert.equal(workflow.normalizeGolongan("X9"), "X9");
+  assert.equal(workflow.tarifForGolongan("R3"), "rumah_tangga");
+  assert.equal(workflow.tarifForGolongan("I2"), "industri");
+  assert.equal(workflow.tarifForGolongan(""), "");
+  const r3 = workflow.exactTariffPowers.filter((o) => o.golongan_tarif === "R3").map((o) => o.daya_min);
+  assert.ok(r3.includes(23000) && r3.includes(66000));
+});
