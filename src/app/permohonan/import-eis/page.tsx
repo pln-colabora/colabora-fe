@@ -84,7 +84,7 @@ export default function ImportEISPage() {
           >
             <div>
               <label htmlFor="eis-file" className="text-sm font-medium">
-                Berkas EIS (.xls, maksimal 10 MB)
+                Berkas EIS
               </label>
               <Input
                 id="eis-file"
