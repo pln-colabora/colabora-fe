@@ -1314,3 +1314,16 @@ test("imported golongan is normalised and gives its tarif", () => {
   const r3 = workflow.exactTariffPowers.filter((o) => o.golongan_tarif === "R3").map((o) => o.daya_min);
   assert.ok(r3.includes(23000) && r3.includes(66000));
 });
+
+test("export includes jenis pembayaran for internal roles only", () => {
+  const [prepaid, unknown] = exporter.buildExportRows(
+    [exportSample({ jenisPembayaran: "prabayar" }), exportSample()],
+    "admin",
+  );
+  assert.equal(prepaid.paymentType, "Prabayar");
+  assert.equal(unknown.paymentType, "");
+  const headers = (role) =>
+    exporter.getExportColumns(role).map((column) => column.header);
+  assert.ok(headers("admin").includes("Jenis Pembayaran"));
+  assert.ok(!headers("vendor-tiang").includes("Jenis Pembayaran"));
+});

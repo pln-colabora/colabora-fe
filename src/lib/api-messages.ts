@@ -73,6 +73,8 @@ const exact: Record<string, string> = {
     "Sebagian evidence sudah terpakai. Unggah ulang berkasnya.",
   "one or more documents do not exist":
     "Sebagian evidence tidak ditemukan. Unggah ulang berkasnya.",
+  "file must be an XLS or XLSX up to 30 MB":
+    "Berkas EIS harus berformat .xls atau .xlsx dan maksimal 30 MB.",
   "file exceeds max upload size": "Ukuran berkas melebihi batas 30 MB.",
   "file type not allowed":
     "Format berkas tidak didukung. Gunakan PDF, JPG, PNG, XLS, atau XLSX.",

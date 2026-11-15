@@ -6,7 +6,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, LoaderCircle, LockKeyhole } from "lucide-react";
+import {
+  ArrowLeft,
+  FileSpreadsheet,
+  LoaderCircle,
+  LockKeyhole,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -193,14 +198,32 @@ export default function ApplicationCreatePage() {
           Kembali ke daftar permohonan
         </Link>
 
-        <header className="mt-5 border-b pb-6">
-          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-            Permohonan PB/PD baru
-          </h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Catat data pelanggan dan kebutuhan sambungan untuk memulai proses
-            permohonan. Jenis sambungan mengikuti kewenangan peran Anda.
-          </p>
+        <header className="mt-5 flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+              Permohonan PB/PD baru
+            </h1>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Catat data pelanggan dan kebutuhan sambungan untuk memulai proses
+              permohonan. Jenis sambungan mengikuti kewenangan peran Anda.
+            </p>
+          </div>
+          {canCreatePermohonan(roleId) && (
+            <Button asChild variant="outline" className="min-h-11">
+              <Link
+                href="/permohonan/import-eis"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void confirmDiscard().then((confirmed) => {
+                    if (confirmed) router.push("/permohonan/import-eis");
+                  });
+                }}
+              >
+                <FileSpreadsheet aria-hidden="true" />
+                Import dari EIS
+              </Link>
+            </Button>
+          )}
         </header>
 
         {canCreatePermohonan(roleId) ? (
@@ -623,6 +646,14 @@ export function CreateForm({
       if (newPowerError) form.setError(newPowerError.field === "golongan" ? "golonganTarif" : "dayaBaru", { message: newPowerError.message });
       if (oldPowerError) form.setError(oldPowerError.field === "golongan" ? "golonganTarifLama" : "dayaLama", { message: oldPowerError.message });
       if (newPowerError || oldPowerError) return;
+      if (
+        !(await confirmCreate({
+          title: "Lanjutkan draft ini?",
+          description: `Data draft ${draft.number} akan disimpan dan workflow PB/PD dimulai. Setelah itu permohonan tidak lagi berstatus draft.`,
+          confirmLabel: "Lanjutkan",
+        }))
+      )
+        return;
       setRequestError(null);
       setSavedNotice("");
       try {

@@ -229,8 +229,8 @@ export async function getApplicationsByStatus(status: string, scope?: string, se
   return applications;
 }
 
-export async function getDraftPage(page: number, search = "") {
-  const params = new URLSearchParams({ status: "draft", scope: "mine", page: String(page), per_page: "25" });
+export async function getDraftPage(page: number, search = "", perPage = 25) {
+  const params = new URLSearchParams({ status: "draft", scope: "mine", page: String(page), per_page: String(perPage) });
   if (search) params.set("search", search);
   const response = await apiRequest<PermohonanResponse[]>(`/api/permohonan?${params.toString()}`);
   return { applications: response.data.map(mapApplication), pagination: response.pagination };
