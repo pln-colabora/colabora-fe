@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 import Link from "next/link";
 
+import { toast } from "sonner";
+
 import {
   AppShell,
   canCreatePermohonan,
@@ -11,8 +13,11 @@ import {
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
-import { getDraftPage } from "@/lib/applications";
+import { ApiError } from "@/lib/api";
+import { deleteDraft, getDraftPage } from "@/lib/applications";
+import { presentApiError } from "@/lib/error-utils";
 import type { Application } from "@/lib/workflow";
 
 export default function DraftListPage() {
@@ -26,6 +31,43 @@ export default function DraftListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [reload, setReload] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
+
+  async function handleDelete(item: Application) {
+    if (
+      deletingId ||
+      !(await confirm({
+        title: "Hapus draft ini?",
+        description: `Draft ${item.number} akan dihapus permanen dan tidak dapat dipulihkan.`,
+        confirmLabel: "Hapus draft",
+        destructive: true,
+      }))
+    )
+      return;
+
+    setDeletingId(item.id);
+    try {
+      await deleteDraft(item.id);
+      toast.success("Draft berhasil dihapus.");
+      if (items.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        setReload((value) => value + 1);
+      }
+    } catch (requestError) {
+      toast.error(
+        presentApiError(requestError, "Draft tidak dapat dihapus.").message,
+      );
+      if (
+        requestError instanceof ApiError &&
+        [404, 409].includes(requestError.status)
+      )
+        setReload((value) => value + 1);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     if (!user || !canCreatePermohonan(roleId)) return;
@@ -141,12 +183,23 @@ export default function DraftListPage() {
                         <td className="p-3">{item.unit}</td>
                         <td className="p-3">Draft</td>
                         <td className="p-3">
-                          <Link
-                            className="text-primary underline-offset-2 hover:underline"
-                            href={`/permohonan/${item.id}/draft`}
-                          >
-                            Lengkapi draft
-                          </Link>
+                          <div className="flex items-center gap-3">
+                            <Link
+                              className="text-primary underline-offset-2 hover:underline"
+                              href={`/permohonan/${item.id}/draft`}
+                            >
+                              Lengkapi draft
+                            </Link>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="text-destructive min-h-10 hover:text-destructive"
+                              disabled={deletingId !== null}
+                              onClick={() => void handleDelete(item)}
+                            >
+                              {deletingId === item.id ? "Menghapus..." : "Hapus"}
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -192,6 +245,7 @@ export default function DraftListPage() {
           </>
         )}
       </div>
+      {dialog}
     </AppShell>
   );
 }

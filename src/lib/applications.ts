@@ -366,6 +366,10 @@ export async function saveDraft(id: string, payload: DraftApplicationRequest) {
   return mapApplication((await apiRequest<PermohonanResponse>(`/api/permohonan/${encodeURIComponent(id)}/draft`, { method: "PUT", data: payload })).data);
 }
 
+export async function deleteDraft(id: string) {
+  await apiRequest<null>(`/api/permohonan/${encodeURIComponent(id)}/draft`, { method: "DELETE" });
+}
+
 export async function continueDraft(id: string, files: File[]) {
   const body = new FormData();
   files.forEach((file) => body.append("evidence_files", file));

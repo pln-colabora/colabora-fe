@@ -389,6 +389,22 @@ test("import and continue send multipart files; draft save sends every field", a
   assert.equal(calls[2].method, "POST");
 });
 
+test("delete draft sends authenticated DELETE without a body and reports conflicts", async () => {
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url, ...options });
+    if (calls.length === 1)
+      return json({ status: true, message: "draft deleted", data: null });
+    return json({ status: false, message: "failed delete draft", error: "draft cannot be deleted" }, 409);
+  };
+  await applications.deleteDraft("draft/id");
+  assert.match(calls[0].url, /\/api\/permohonan\/draft%2Fid\/draft$/);
+  assert.equal(calls[0].method, "DELETE");
+  assert.equal(calls[0].body, undefined);
+  assert.match(calls[0].headers.Authorization, /^Bearer /);
+  await assert.rejects(applications.deleteDraft("draft/id"), /Draft sudah dilanjutkan/);
+});
+
 test("EIS row errors show row number and safe reason", async () => {
   global.fetch = async () => json({ status: false, message: "failed import EIS", error: "row 4: duplicate permohonan" }, 400);
   await assert.rejects(applications.importEIS(new File(["x"], "eis.xls")), /Baris 4: permohonan sudah ada/);
