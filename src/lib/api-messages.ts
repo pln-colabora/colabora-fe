@@ -118,6 +118,8 @@ const exact: Record<string, string> = {
   "denied access": "Anda tidak memiliki izin untuk tindakan ini.",
   "vendor role already assigned": "Vendor untuk peran ini sudah ditugaskan.",
   "permohonan not found": "Permohonan tidak ditemukan.",
+  "draft not found": "Draft tidak ditemukan atau tidak dapat diakses.",
+  "draft cannot be deleted": "Draft sudah dilanjutkan atau memiliki data terkait sehingga tidak dapat dihapus.",
   "workflow node not found": "Aktivitas tidak ditemukan.",
   "document not found": "Dokumen tidak ditemukan.",
   "user not found": "Akun tidak ditemukan.",
