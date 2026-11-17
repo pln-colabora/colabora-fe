@@ -145,8 +145,8 @@ export function BulkContinueDialog({
         onOpenChange(value);
       }}
     >
-      <AlertDialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl gap-0 overflow-hidden p-0">
-        <AlertDialogHeader className="border-b px-5 pt-5 pb-4 text-left sm:px-6">
+      <AlertDialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <AlertDialogHeader className="shrink-0 border-b px-6 pt-6 pb-4 text-left">
           <AlertDialogTitle>Lanjutkan {drafts.length} draft</AlertDialogTitle>
           <AlertDialogDescription>
             Jenis sambungan dan evidence di bawah dipakai untuk semua draft
@@ -154,7 +154,7 @@ export function BulkContinueDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="max-h-[calc(90dvh-11rem)] space-y-5 overflow-y-auto px-5 py-4 sm:px-6">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <div>
             <label htmlFor="bulk-connection" className="text-sm font-medium">
               Jenis sambungan
@@ -240,7 +240,7 @@ export function BulkContinueDialog({
           )}
         </div>
 
-        <AlertDialogFooter className="border-t px-5 py-4 sm:px-6">
+        <AlertDialogFooter className="bg-muted/40 shrink-0 gap-3 border-t px-6 py-4">
           <Button
             type="button"
             variant="outline"
