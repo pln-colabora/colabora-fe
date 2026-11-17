@@ -370,6 +370,11 @@ export async function deleteDraft(id: string) {
   await apiRequest<null>(`/api/permohonan/${encodeURIComponent(id)}/draft`, { method: "DELETE" });
 }
 
+// Super-user only; the backend enforces the role.
+export async function deleteApplication(id: string) {
+  await apiRequest<null>(`/api/permohonan/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export async function continueDraft(id: string, files: File[]) {
   const body = new FormData();
   files.forEach((file) => body.append("evidence_files", file));
