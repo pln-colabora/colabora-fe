@@ -53,7 +53,11 @@ import {
   type DraftApplicationRequest,
   type TariffPowerOption,
 } from "@/lib/applications";
-import { connectionTypesByRole, toApiJenis } from "@/lib/draft-continue";
+import {
+  connectionGolonganProblem,
+  connectionTypesByRole,
+  toApiJenis,
+} from "@/lib/draft-continue";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
 import {
@@ -302,7 +306,19 @@ export function CreateForm({
             path: ["dayaBaru"],
             message: "Daya baru harus berbeda dari daya lama.",
           },
-        ),
+        )
+        .superRefine((values, context) => {
+          const problem = connectionGolonganProblem(
+            values.connectionType,
+            values.golonganTarif,
+          );
+          if (problem)
+            context.addIssue({
+              code: "custom",
+              path: ["golonganTarif"],
+              message: problem,
+            });
+        }),
     [connectionOptions],
   );
   const router = useRouter();

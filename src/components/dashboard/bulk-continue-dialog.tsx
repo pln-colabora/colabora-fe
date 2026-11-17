@@ -25,6 +25,7 @@ import {
 import { continueDraft, saveDraft } from "@/lib/applications";
 import {
   bulkDraftPayload,
+  connectionGolonganProblem,
   connectionTypesByRole,
   draftContinueProblem,
 } from "@/lib/draft-continue";
@@ -62,8 +63,25 @@ export function BulkContinueDialog({
   const [outcomes, setOutcomes] = useState<Map<string, Outcome>>(new Map());
 
   const problems = useMemo(
-    () => new Map(drafts.map((draft) => [draft.id, draftContinueProblem(draft)])),
-    [drafts],
+    () =>
+      new Map(
+        drafts.map((draft) => {
+          const dataProblem = draftContinueProblem(draft);
+          const connectionProblem = connectionGolonganProblem(
+            connectionType,
+            draft.golonganTarif,
+          );
+          return [
+            draft.id,
+            dataProblem
+              ? `${dataProblem} Perbaiki lewat Lengkapi.`
+              : connectionProblem
+                ? `${connectionProblem} Proses draft ini terpisah.`
+                : null,
+          ];
+        }),
+      ),
+    [drafts, connectionType],
   );
   const ready = drafts.filter(
     (draft) => !problems.get(draft.id) && outcomes.get(draft.id)?.state !== "done",
@@ -205,8 +223,8 @@ export function BulkContinueDialog({
                           : outcome?.state === "done"
                             ? "Berhasil dilanjutkan."
                             : problem
-                              ? `${problem} Perbaiki lewat Lengkapi.`
-                              : draft.location}
+                              ? problem
+                              : `${draft.golonganTarif ?? "—"} · ${draft.dayaBaru ? `${draft.dayaBaru.toLocaleString("id-ID")} VA` : "—"} · ${draft.location}`}
                       </p>
                     </div>
                   </li>

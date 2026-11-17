@@ -17,6 +17,32 @@ export const connectionTypesByRole: Partial<Record<RoleId, string[]>> = {
 export const toApiJenis = (connectionType: string) =>
   connectionType === "JTM / Gardu" ? "JTM/Gardu" : connectionType;
 
+// Golongan supplied at medium (B3, I3, S3, P2) or high (I4) voltage, per the
+// PLN tariff table. Every other golongan is a low-voltage customer.
+const nonLowVoltageGolongan = new Set(["B3", "I3", "S3", "P2", "I4"]);
+
+/**
+ * Whether the requested (new) golongan fits the jenis sambungan: PLG TM serves
+ * medium/high-voltage customers only, JTR and JTM / Gardu low-voltage ones.
+ * JTR vs JTM / Gardu depends on the network at the site, so it is not checked.
+ */
+export function connectionGolonganProblem(
+  connectionType: string,
+  golongan: string | undefined,
+): string | null {
+  const code = normalizeGolongan(golongan);
+  // Unknown codes are reported by the catalogue check, not guessed here.
+  const known = exactTariffPowers.some((option) => option.golongan_tarif === code);
+  if (!connectionType || !known) return null;
+  const plgTm = connectionType.startsWith("PLG TM");
+  const nonLowVoltage = nonLowVoltageGolongan.has(code);
+  if (plgTm && !nonLowVoltage)
+    return `Golongan ${code} adalah pelanggan tegangan rendah. PLG TM hanya untuk golongan B3, I3, S3, P2, atau I4.`;
+  if (!plgTm && nonLowVoltage)
+    return `Golongan ${code} adalah pelanggan tegangan menengah/tinggi. Gunakan jenis sambungan PLG TM, bukan ${connectionType}.`;
+  return null;
+}
+
 function findPower(golongan: string | undefined, daya: number | undefined) {
   const code = normalizeGolongan(golongan);
   return exactTariffPowers.find(

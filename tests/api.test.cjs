@@ -1354,3 +1354,15 @@ test("bulk draft continue checks each imported draft and builds its payload", ()
   assert.equal(pb.daya_lama, null);
   assert.equal(pb.golongan_tarif_lama, null);
 });
+
+test("jenis sambungan must match the voltage level of the new golongan", () => {
+  const { connectionGolonganProblem: check } = load("@/lib/draft-continue");
+  assert.equal(check("JTR", "S2"), null);
+  assert.equal(check("JTM / Gardu", "r-1"), null);
+  assert.equal(check("PLG TM <5 GWNG", "B3"), null);
+  assert.equal(check("PLG TM >5 GWNG", "I4"), null);
+  assert.match(check("JTR", "B3"), /tegangan menengah\/tinggi\. Gunakan jenis sambungan PLG TM/);
+  assert.match(check("PLG TM <5 GWNG", "S1"), /Golongan S1 adalah pelanggan tegangan rendah/);
+  assert.equal(check("JTR", "X9"), null);
+  assert.equal(check("", "B3"), null);
+});
