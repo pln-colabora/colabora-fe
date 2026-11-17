@@ -128,6 +128,7 @@ export default function DraftListPage() {
               ) : null}
             </div>
             <DraftTable
+                roleId={roleId}
               items={items}
               loading={loading}
               error={error}

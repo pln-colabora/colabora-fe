@@ -222,6 +222,7 @@ export default function ImportEISPage() {
                 </Button>
               </div>
               <DraftTable
+                roleId={roleId}
                 items={drafts}
                 loading={draftsLoading}
                 error={draftsError}

@@ -53,6 +53,7 @@ import {
   type DraftApplicationRequest,
   type TariffPowerOption,
 } from "@/lib/applications";
+import { connectionTypesByRole, toApiJenis } from "@/lib/draft-continue";
 import { presentApiError } from "@/lib/error-utils";
 import { getDashboardReturnPath } from "@/lib/navigation";
 import {
@@ -65,20 +66,11 @@ import {
   type RoleId,
 } from "@/lib/workflow";
 
-const jenisByRole: Partial<Record<RoleId, string[]>> = {
-  "pelayanan-pelanggan": ["JTR", "JTM / Gardu"],
-  nps: ["PLG TM <5 GWNG", "PLG TM >5 GWNG"],
-};
-
 const requestTypes = ["Pasang baru", "Perubahan daya"] as const;
 const units = ["ULP Taman", "ULP Menganti", "ULP Karang Pilang"] as const;
 
 // Tarif options follow the order of the shared label map.
 const tarifOrder = Object.keys(tarifLabels);
-
-// Form uses display names; the tarif endpoint and create payload use the API name.
-const toApiJenis = (connectionType: string) =>
-  connectionType === "JTM / Gardu" ? "JTM/Gardu" : connectionType;
 
 const MAX_FILE_SIZE = 30 * 1024 * 1024;
 const acceptedFile = /\.(pdf|jpe?g|png|xlsx?)$/i;
@@ -281,7 +273,7 @@ export function CreateForm({
   onDirtyChange: (dirty: boolean) => void;
   draft?: Application;
 }) {
-  const connectionOptions = useMemo(() => jenisByRole[roleId] ?? [], [roleId]);
+  const connectionOptions = useMemo(() => connectionTypesByRole[roleId] ?? [], [roleId]);
   const schema = useMemo(
     () =>
       baseSchema
