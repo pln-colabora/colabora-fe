@@ -1327,3 +1327,48 @@ test("export includes jenis pembayaran for internal roles only", () => {
   assert.ok(headers("admin").includes("Jenis Pembayaran"));
   assert.ok(!headers("vendor-tiang").includes("Jenis Pembayaran"));
 });
+
+test("bulk draft continue checks each imported draft and builds its payload", () => {
+  const drafts = load("@/lib/draft-continue");
+  const base = {
+    id: "d1", number: "PBPD-2026-0030", customer: "DRA SITU RUSPITA", phone: "0812",
+    location: "Jl. Uji", unit: "ULP Taman", requestType: "Perubahan daya",
+    paymentDate: "2026-11-11", paymentAmount: 863000, jenisPembayaran: "prabayar",
+    golonganTarif: "b-2", dayaBaru: 105000, golonganTarifLama: "R3", dayaLama: 11000,
+  };
+  assert.equal(drafts.draftContinueProblem(base), null);
+  assert.equal(
+    drafts.draftContinueProblem({ ...base, golonganTarif: "S1", dayaBaru: 23000 }),
+    "Daya 23.000 VA tidak tersedia untuk golongan S1.",
+  );
+  assert.equal(drafts.draftContinueProblem({ ...base, jenisPembayaran: undefined }), "Jenis pembayaran kosong.");
+  const payload = drafts.bulkDraftPayload(base, "JTM / Gardu");
+  assert.equal(payload.jenis_sambungan, "JTM/Gardu");
+  assert.equal(payload.jenis_permohonan, "Perubahan Daya (PD)");
+  assert.equal(payload.tarif, "bisnis");
+  assert.equal(payload.golongan_tarif, "B2");
+  assert.equal(payload.pembatas_baru, "3x160");
+  assert.equal(payload.golongan_tarif_lama, "R3");
+  assert.equal(payload.pembatas_lama, "1x50");
+  const pb = drafts.bulkDraftPayload({ ...base, requestType: "Pasang baru" }, "JTR");
+  assert.equal(pb.daya_lama, null);
+  assert.equal(pb.golongan_tarif_lama, null);
+});
+
+test("jenis sambungan must match the voltage level of the new golongan", () => {
+  const { connectionGolonganProblem: check } = load("@/lib/draft-continue");
+  assert.equal(check("JTR", "S2"), null);
+  assert.equal(check("JTM / Gardu", "r-1"), null);
+  assert.equal(check("PLG TM <5 GWNG", "B3"), null);
+  assert.equal(check("PLG TM >5 GWNG", "I4"), null);
+  assert.match(check("JTR", "B3"), /tegangan menengah\/tinggi\. Gunakan jenis sambungan PLG TM/);
+  assert.match(check("PLG TM <5 GWNG", "S1"), /Golongan S1 adalah pelanggan tegangan rendah/);
+  assert.equal(check("JTR", "X9"), null);
+  assert.equal(check("", "B3"), null);
+});
+
+test("payment date keeps only the calendar date from draft timestamps", () => {
+  const app = applications.mapApplication({ ...fixture, tanggal_pembayaran: "2026-10-30T00:00:00Z" });
+  assert.equal(app.paymentDate, "2026-10-30");
+  assert.equal(applications.mapApplication({ ...fixture, tanggal_pembayaran: null }).paymentDate, undefined);
+});

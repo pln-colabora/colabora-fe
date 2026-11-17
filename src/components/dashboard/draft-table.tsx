@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 
 import Link from "next/link";
 
-import { LoaderCircle, PencilLine, Trash2 } from "lucide-react";
+import { ArrowRight, LoaderCircle, PencilLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BulkContinueDialog } from "@/components/dashboard/bulk-continue-dialog";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,7 +15,7 @@ import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { ApiError } from "@/lib/api";
 import { deleteDraft } from "@/lib/applications";
 import { presentApiError } from "@/lib/error-utils";
-import type { Application } from "@/lib/workflow";
+import type { Application, RoleId } from "@/lib/workflow";
 
 // Draft rows shared by the Import EIS page (latest drafts) and the full draft
 // list. The caller owns loading; this component owns deleting rows, one at a
@@ -24,6 +25,7 @@ export function DraftTable({
   loading,
   error,
   emptyText,
+  roleId,
   onRetry,
   onDeleted,
 }: {
@@ -31,9 +33,16 @@ export function DraftTable({
   loading: boolean;
   error: unknown;
   emptyText: string;
+  roleId: RoleId;
   onRetry: () => void;
+  /** Rows left the list (deleted or continued into the workflow). */
   onDeleted: (count: number) => void;
 }) {
+  // Snapshot of the rows being continued: the table reloads while the dialog
+  // still shows each row's result.
+  const [continueDrafts, setContinueDrafts] = useState<Application[] | null>(
+    null,
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -133,6 +142,21 @@ export function DraftTable({
   return (
     <>
       {dialog}
+      <BulkContinueDialog
+        open={continueDrafts !== null}
+        onOpenChange={(open) => {
+          if (!open) setContinueDrafts(null);
+        }}
+        drafts={continueDrafts ?? []}
+        roleId={roleId}
+        onFinished={(continuedIds) => {
+          setSelected(
+            (previous) =>
+              new Set([...previous].filter((id) => !continuedIds.includes(id))),
+          );
+          onDeleted(continuedIds.length);
+        }}
+      />
       {Boolean(error) && <ErrorNotice error={error} onRetry={onRetry} />}
       {selected.size > 0 && (
         <div
@@ -149,6 +173,17 @@ export function DraftTable({
               onClick={() => setSelected(new Set())}
             >
               Batal pilih
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                setContinueDrafts(items.filter((item) => selected.has(item.id)))
+              }
+            >
+              Lanjutkan {selected.size} draft
+              <ArrowRight aria-hidden="true" />
             </Button>
             <Button
               type="button"
