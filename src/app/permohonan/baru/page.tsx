@@ -789,10 +789,24 @@ export function CreateForm({
                       <FormItem>
                         <FormLabel>Nominal pembayaran (Rp)</FormLabel>
                         <FormControl>
+                          {/* The form keeps plain digits for validation and the
+                              API; only the field shows thousands separators. */}
                           <Input
                             inputMode="numeric"
-                            placeholder="150000"
+                            placeholder="150.000"
                             {...field}
+                            value={
+                              field.value
+                                ? Number(field.value).toLocaleString("id-ID")
+                                : ""
+                            }
+                            onChange={(event) =>
+                              field.onChange(
+                                event.target.value
+                                  .replace(/\D/g, "")
+                                  .replace(/^0+/, ""),
+                              )
+                            }
                           />
                         </FormControl>
                         <FormMessage />
