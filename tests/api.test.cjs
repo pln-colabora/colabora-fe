@@ -1366,3 +1366,9 @@ test("jenis sambungan must match the voltage level of the new golongan", () => {
   assert.equal(check("JTR", "X9"), null);
   assert.equal(check("", "B3"), null);
 });
+
+test("payment date keeps only the calendar date from draft timestamps", () => {
+  const app = applications.mapApplication({ ...fixture, tanggal_pembayaran: "2026-10-30T00:00:00Z" });
+  assert.equal(app.paymentDate, "2026-10-30");
+  assert.equal(applications.mapApplication({ ...fixture, tanggal_pembayaran: null }).paymentDate, undefined);
+});

@@ -143,7 +143,9 @@ export function mapApplication(data: PermohonanResponse): Application {
     dayaBaru: toPositiveNumber(data.daya_baru ?? createInputs.daya_baru),
     dayaLama: toPositiveNumber(data.daya_lama ?? createInputs.daya_lama),
     requestedAt: data.request_date ?? "",
-    paymentDate: data.tanggal_pembayaran ?? undefined,
+    // Drafts return a full timestamp ("2026-10-30T00:00:00Z") while the draft
+    // and create endpoints accept only a date, so keep the calendar date.
+    paymentDate: data.tanggal_pembayaran?.slice(0, 10) || undefined,
     paymentAmount: data.nominal_pembayaran ?? undefined,
     energizeStatus: data.energize_status ?? undefined,
     updatedAt: latestCompletedAt ?? "—",
