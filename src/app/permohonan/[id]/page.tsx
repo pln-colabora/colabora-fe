@@ -28,6 +28,7 @@ import {
 
 import { ActivityExportButton } from "@/components/dashboard/activity-export-button";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { DeleteApplicationButton } from "@/components/dashboard/delete-application-button";
 import { ErrorNotice } from "@/components/dashboard/error-notice";
 import { DetailSkeleton } from "@/components/dashboard/page-skeletons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
@@ -201,6 +202,13 @@ export default function ApplicationDetailPage() {
               <p className="text-muted-foreground mt-2 font-mono text-xs">
                 {application.number}
               </p>
+              {roleId === "super-user" && (
+                <DeleteApplicationButton
+                  id={application.id}
+                  number={application.number}
+                  returnTo={returnTo}
+                />
+              )}
             </div>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4 lg:text-right">
               <HeaderFact
