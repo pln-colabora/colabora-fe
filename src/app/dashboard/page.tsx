@@ -849,6 +849,9 @@ function DashboardContent() {
                         <th className="px-4 py-3 font-medium">Tanggal</th>
                       )}
                       <th className="px-4 py-3 font-medium">SLA</th>
+                      {!isHome && (
+                        <th className="px-4 py-3 font-medium">HPL</th>
+                      )}
                       <th className="px-4 py-3">
                         <span className="sr-only">Aksi</span>
                       </th>
@@ -1338,6 +1341,13 @@ function ApplicationRow({
       <td className="px-4 py-3">
         <SlaIndicator application={application} roleId={roleId} />
       </td>
+      {!compact && (
+        <td className="px-4 py-3 whitespace-nowrap">
+          {application.hplDays === undefined
+            ? "—"
+            : `${application.hplDays} hari`}
+        </td>
+      )}
       <td className="px-4 py-3 text-right">
         <Link
           href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`}

@@ -33,6 +33,7 @@ type PermohonanResponse = {
   sla_basis?: string;
   sla_remaining_days?: number | null;
   sla_calendar_error?: string;
+  hpl_days?: number | null;
   // Create inputs. The API returns them at the top level (null on records made
   // before they were captured) although the published schema omits them; the
   // permohonan node payload is kept as a fallback.
@@ -147,6 +148,7 @@ export function mapApplication(data: PermohonanResponse): Application {
     // and create endpoints accept only a date, so keep the calendar date.
     paymentDate: data.tanggal_pembayaran?.slice(0, 10) || undefined,
     paymentAmount: data.nominal_pembayaran ?? undefined,
+    hplDays: data.hpl_days ?? undefined,
     energizeStatus: data.energize_status ?? undefined,
     updatedAt: latestCompletedAt ?? "—",
     currentAction:
