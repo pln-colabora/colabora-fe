@@ -204,6 +204,8 @@ export type ApplicationSummary = {
   requestedAt: string;
   paymentDate?: string;
   paymentAmount?: number;
+  // Working days since payment, stopping when the request finishes (list endpoint only).
+  hplDays?: number;
   energizeStatus?: "temporary" | "permanent";
   currentAction: ActionId | null;
   decisions: WorkflowDecisions;
