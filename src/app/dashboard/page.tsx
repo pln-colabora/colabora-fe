@@ -829,7 +829,7 @@ function DashboardContent() {
                 tabIndex={0}
               >
                 <table
-                  className={`w-full table-auto border-collapse text-sm ${isHome ? "min-w-[960px]" : "min-w-[1360px]"}`}
+                  className={`w-full table-auto border-collapse text-sm ${isHome ? "min-w-[1040px]" : "min-w-[1360px]"}`}
                 >
                   <thead className="bg-muted/60 text-muted-foreground">
                     <tr className="border-b text-left text-sm">
@@ -849,9 +849,7 @@ function DashboardContent() {
                         <th className="px-4 py-3 font-medium">Tanggal</th>
                       )}
                       <th className="px-4 py-3 font-medium">SLA</th>
-                      {!isHome && (
-                        <th className="px-4 py-3 font-medium">HPL</th>
-                      )}
+                      <th className="px-4 py-3 font-medium">HPL</th>
                       <th className="px-4 py-3">
                         <span className="sr-only">Aksi</span>
                       </th>
@@ -1156,6 +1154,10 @@ function setDashboardStage(query: string, stage: string) {
   return `/dashboard?${params.toString()}`;
 }
 
+function hplLabel(application: Application) {
+  return application.hplDays === undefined ? "—" : `${application.hplDays} hari`;
+}
+
 function ApplicationListItem({
   application,
   roleId,
@@ -1201,6 +1203,10 @@ function ApplicationListItem({
           <dd className="mt-1">
             <SlaIndicator application={application} roleId={roleId} />
           </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground text-sm">HPL</dt>
+          <dd className="mt-1">{hplLabel(application)}</dd>
         </div>
       </dl>
 
@@ -1341,13 +1347,7 @@ function ApplicationRow({
       <td className="px-4 py-3">
         <SlaIndicator application={application} roleId={roleId} />
       </td>
-      {!compact && (
-        <td className="px-4 py-3 whitespace-nowrap">
-          {application.hplDays === undefined
-            ? "—"
-            : `${application.hplDays} hari`}
-        </td>
-      )}
+      <td className="px-4 py-3 whitespace-nowrap">{hplLabel(application)}</td>
       <td className="px-4 py-3 text-right">
         <Link
           href={`/permohonan/${application.id}?returnTo=${encodeURIComponent(returnTo)}`}
